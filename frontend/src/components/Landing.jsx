@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Ico } from "./Ico.jsx";
 
 export function Landing({ onSelect, hasSupabase }) {
@@ -8,6 +8,46 @@ export function Landing({ onSelect, hasSupabase }) {
   const [err, setErr] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [installPromptEvent, setInstallPromptEvent] = useState(null);
+  const [showIosInstallHelp, setShowIosInstallHelp] = useState(false);
+  const [installingApp, setInstallingApp] = useState(false);
+
+  const isStandalone = typeof window !== "undefined"
+    && ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator?.standalone === true);
+  const isIosDevice = typeof window !== "undefined"
+    && /iphone|ipad|ipod/i.test(window.navigator?.userAgent || "");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+  }, []);
+
+  const canShowInstallButton = !isStandalone && (!!installPromptEvent || isIosDevice);
+
+  const handleInstallApp = async () => {
+    if (installPromptEvent) {
+      setInstallingApp(true);
+      try {
+        await installPromptEvent.prompt();
+        await installPromptEvent.userChoice;
+        setInstallPromptEvent(null);
+      } finally {
+        setInstallingApp(false);
+      }
+      return;
+    }
+
+    if (isIosDevice) {
+      setShowIosInstallHelp((current) => !current);
+    }
+  };
 
   const handle = async () => {
     if (!email || !pwd) {
@@ -118,6 +158,22 @@ export function Landing({ onSelect, hasSupabase }) {
         </button>
         <div className="landing-title">Campus Ghana</div>
         <div className="landing-sub">School Management & BECE Mock Placement System</div>
+        {canShowInstallButton && (
+          <div className="landing-install-wrap">
+            <button className="landing-install-btn" onClick={handleInstallApp} disabled={installingApp}>
+              <span className="landing-install-icon"><Ico name="download" size={18} color="#fff" /></span>
+              <span>
+                <strong>{installingApp ? "Preparing install..." : "Download App"}</strong>
+                <small>{installPromptEvent ? "Install Campus Ghana on this device" : "Add Campus Ghana to your home screen"}</small>
+              </span>
+            </button>
+            {showIosInstallHelp && !installPromptEvent && (
+              <div className="landing-install-help">
+                On iPhone or iPad, tap the browser share button and choose <strong>Add to Home Screen</strong> to install the app.
+              </div>
+            )}
+          </div>
+        )}
         <div className="portal-grid">
           <button className="portal-btn" onClick={() => setMode("admin")}>
             <div className="portal-btn-icon"><Ico name="schools" size={24} color="#1a56db" /></div>

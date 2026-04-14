@@ -9,6 +9,9 @@ export const DEFAULT_SETTINGS = {
   twoFactorAdmins: false, enforcePasswordRotation: false,
   backupFrequency: "daily", backupTime: "02:00", auditLogsEnabled: true,
   auditRetentionDays: 180, apiRateLimitPerMin: 120,
+  roleDefinitions: [],
+  roleMetaOverrides: {},
+  rolePrivileges: {},
 };
 
 export const getGrade = (score) => {

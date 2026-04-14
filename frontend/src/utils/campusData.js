@@ -6,6 +6,17 @@ export function isProfilesTableMissingError(error) {
   return error.status === 404 || error.code === "PGRST205" || error.code === "42P01" || msg.includes("profiles");
 }
 
+export function isMissingTableError(error, tableName = "") {
+  if (!error) return false;
+  const msg = String(error.message || "").toLowerCase();
+  const target = String(tableName || "").toLowerCase();
+  return error.status === 404
+    || error.code === "PGRST205"
+    || error.code === "42P01"
+    || msg.includes("could not find the table")
+    || (target && msg.includes(target));
+}
+
 export function isMissingColumnError(error) {
   if (!error) return false;
   const msg = String(error.message || "").toLowerCase();
@@ -16,8 +27,11 @@ export function normalizeSchoolRow(s, i = 0) {
   return {
     id: s?.id ?? i + 1,
     name: s?.name || s?.school_name || "Unnamed School",
+    location: s?.location || s?.district || "",
     region: s?.region || "Unknown",
     category: String(s?.category || "C"),
+    type: s?.type || s?.school_type || "Mixed",
+    active: typeof s?.active === "boolean" ? s.active : true,
     cutoff: Number(s?.cutoff ?? s?.cut_off ?? 0),
     slots: Number(s?.slots ?? s?.capacity ?? 0),
   };
@@ -120,6 +134,7 @@ export function normalizeTeacherRow(teacher, i = 0) {
   return {
     id: teacher?.id ?? i + 1,
     name: teacher?.name || teacher?.full_name || "Unknown Teacher",
+    role: teacher?.role || teacher?.user_role || "teacher",
     subject: teacher?.subject || teacher?.department || "General",
     class: teacher?.class || teacher?.classes || teacher?.assigned_class || "-",
     phone: teacher?.phone || teacher?.contact || "-",

@@ -1,12 +1,14 @@
 export const APP_SESSION_KEY = "campus_portal_session";
 export const ADMIN_TAB_KEY = "admin_active_tab";
 export const STUDENT_TAB_KEY = "student_active_tab";
+export const SCHOOL_ADMIN_TAB_KEY = "school_admin_active_tab";
 
 let appSessionMemory = null;
 
 const tabMemory = {
   [ADMIN_TAB_KEY]: "dashboard",
   [STUDENT_TAB_KEY]: "dashboard",
+  [SCHOOL_ADMIN_TAB_KEY]: "dashboard",
 };
 
 export function getSessionUserEmail() {

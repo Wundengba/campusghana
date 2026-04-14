@@ -24,6 +24,7 @@ import {
   fetchStudentSelection,
   hasRealTableError,
   isMissingColumnError,
+  isMissingTableError,
   isProfilesTableMissingError,
   normalizeEventRow,
   normalizeFeeRow,
@@ -41,6 +42,7 @@ import {
 } from "./src/utils/campusData.js";
 import {
   ADMIN_TAB_KEY,
+  SCHOOL_ADMIN_TAB_KEY,
   STUDENT_TAB_KEY,
   getSessionUserEmail,
   readAppSession,
@@ -50,6 +52,69 @@ import {
 } from "./src/utils/sessionState.js";
 
 let profilesTableAvailable = true;
+
+const normalizeRoleKey = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+const normalizeSchoolIdentity = (value) => String(value || "").trim().toLowerCase();
+const isSchoolScopedAccount = (record) => !!(record && (record.registered_school_id != null || String(record.managed_school_name || "").trim()));
+const resolvePortalFromAccount = (record, fallback = "student") => {
+  if (isSchoolScopedAccount(record)) return "school-admin";
+  const roleKey = normalizeRoleKey(record?.role || fallback);
+  return roleKey === "student" ? "student" : "admin";
+};
+
+const BASE_ROLE_CATALOG = [
+  { key: "super_admin", label: "Super Admin", color: "#1d4ed8", note: "Full platform control" },
+  { key: "admin", label: "Admin", color: "#0f766e", note: "School and operations management" },
+  { key: "school_admin", label: "School Admin", color: "#7c3aed", note: "School-scoped operations" },
+  { key: "teacher", label: "Teacher", color: "#d97706", note: "Academic records and attendance" },
+  { key: "staff", label: "Staff", color: "#475569", note: "Support and office workflows" },
+  { key: "student", label: "Student", color: "#dc2626", note: "Self-service access only" },
+];
+
+const DEFAULT_ROLE_MANAGE_FLAGS = {
+  super_admin: true,
+  admin: false,
+  school_admin: false,
+  teacher: false,
+  staff: false,
+  student: false,
+};
+
+const buildRoleCatalog = (cfg = null) => {
+  const roleMetaOverrides = cfg?.roleMetaOverrides || {};
+  const customRoles = Array.isArray(cfg?.roleDefinitions) ? cfg.roleDefinitions : [];
+  return [
+    ...BASE_ROLE_CATALOG.map((role) => ({ ...role, ...(roleMetaOverrides?.[role.key] || {}) })),
+    ...customRoles,
+  ];
+};
+
+const canManageRoles = (cfg = null, roleKey = "") => {
+  const normalizedRoleKey = normalizeRoleKey(roleKey);
+  const storedValue = cfg?.rolePrivileges?.[normalizedRoleKey]?.["roles.manage"];
+  if (typeof storedValue === "boolean") return storedValue;
+  return !!DEFAULT_ROLE_MANAGE_FLAGS[normalizedRoleKey];
+};
+
+const getAssignableRoles = (cfg = null, actorRole = "", scope = "teacher") => {
+  const allRoles = buildRoleCatalog(cfg);
+  if (canManageRoles(cfg, normalizeRoleKey(actorRole))) return allRoles;
+  const allowedKeys = scope === "school-admin" ? ["school_admin"] : ["teacher", "staff"];
+  const filteredRoles = allRoles.filter((role) => allowedKeys.includes(role.key));
+  return filteredRoles.length ? filteredRoles : allRoles;
+};
+
+const getRoleMeta = (cfg = null, roleKey = "") => {
+  const normalizedRoleKey = normalizeRoleKey(roleKey);
+  const catalogRole = buildRoleCatalog(cfg).find((role) => role.key === normalizedRoleKey);
+  if (catalogRole) return catalogRole;
+  return {
+    key: normalizedRoleKey,
+    label: String(normalizedRoleKey || "user").replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+    color: "#475569",
+    note: "",
+  };
+};
 
 // STYLES
 const css = `
@@ -90,6 +155,24 @@ const css = `
   .landing-logo img { width:100%; height:100%; object-fit:cover; }
   .landing-title { font-size:1.75rem; font-weight:800; color:#0f172a; margin-bottom:4px; }
   .landing-sub { color:#64748b; margin-bottom:20px; font-size:.92rem; }
+  .landing-install-wrap { display:grid; gap:8px; margin:0 0 16px; }
+  .landing-install-btn {
+    width:100%; border:none; border-radius:16px; padding:14px 16px; cursor:pointer;
+    display:flex; align-items:center; gap:12px; text-align:left;
+    background:linear-gradient(135deg,#0f766e 0%,#1d4ed8 100%); color:#fff;
+    box-shadow:0 16px 30px rgba(29,78,216,.18); transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+  }
+  .landing-install-btn:hover { transform:translateY(-1px); box-shadow:0 18px 34px rgba(29,78,216,.24); }
+  .landing-install-btn:disabled { cursor:wait; opacity:.82; }
+  .landing-install-icon {
+    width:40px; height:40px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.22);
+  }
+  .landing-install-btn strong { display:block; font-size:.95rem; font-weight:800; }
+  .landing-install-btn small { display:block; margin-top:2px; font-size:.76rem; line-height:1.45; color:rgba(255,255,255,.86); }
+  .landing-install-help {
+    padding:11px 12px; border-radius:14px; background:#f8fafc; border:1px solid #dbeafe; color:#475569; font-size:.78rem; line-height:1.5;
+  }
   .portal-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px; }
   .portal-btn { padding:16px 14px; border-radius:14px; border:2px solid #e2e8f0; background:#f8fafc;
     cursor:pointer; transition:all .2s; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; }
@@ -128,17 +211,12 @@ const css = `
     background:linear-gradient(135deg,#1a56db 0%,#1e3a8a 100%);
     display:flex; align-items:center; justify-content:space-between; padding:0 20px;
     box-shadow:0 2px 20px rgba(26,86,219,.4); }
-  .topbar-left { display:flex; align-items:center; gap:12px; flex:1; min-width:0; }
+  .topbar-left { display:flex; align-items:center; gap:12px; flex:1; min-width:0; padding-left:42px; }
   .topbar-logo { width:60px; height:60px; border-radius:14px; overflow:hidden; border:2px solid rgba(255,255,255,.3); }
   .brand-btn { background:none; border:none; padding:0; cursor:pointer; display:flex; align-items:center; justify-content:center; }
   .topbar-logo img { width:100%; height:100%; object-fit:cover; }
   .topbar-name { color:#fff; font-weight:800; font-size:1rem; }
-  .topbar-search { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.15);
-    border:1px solid rgba(255,255,255,.25); border-radius:8px; padding:0 12px; flex:1 1 52vw; max-width:none; min-width:0; margin-left:4px; }
-  .topbar-search input { background:none; border:none; outline:none; color:#fff; font-family:var(--font);
-    font-size:.875rem; width:100%; padding:8px 0; }
-  .topbar-search input::placeholder { color:rgba(255,255,255,.6); }
-  .topbar-right { display:flex; align-items:center; gap:8px; min-width:0; flex-shrink:0; }
+  .topbar-right { display:flex; align-items:center; gap:8px; min-width:0; flex:0 1 auto; }
   .topbar-actions {
     display:flex;
     align-items:center;
@@ -148,10 +226,14 @@ const css = `
     border-radius:12px;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
     overflow:hidden;
+    max-width:100%;
   }
   .topbar-btn { background:transparent; border:none;
     color:#fff; width:36px; height:36px; border-radius:8px; cursor:pointer; display:flex;
-    align-items:center; justify-content:center; position:relative; transition:background .2s; }
+    align-items:center; justify-content:center; position:relative; transition:background .2s; flex:0 0 auto; }
+  .topbar-app-btn { width:44px; padding:0 6px; }
+  .topbar-app-logo { width:28px; height:28px; border-radius:8px; overflow:hidden; border:1px solid rgba(255,255,255,.24); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .topbar-app-logo img { width:100%; height:100%; object-fit:cover; display:block; }
   .topbar-actions .topbar-btn { border-radius:0; }
   .topbar-actions .topbar-btn + .topbar-btn { box-shadow:-1px 0 0 rgba(255,255,255,.14); }
   .topbar-btn:hover { background:rgba(255,255,255,.25); }
@@ -162,7 +244,7 @@ const css = `
     border:2px solid rgba(255,255,255,.3); color:#fff; display:flex; align-items:center;
     justify-content:center; font-weight:700; font-size:.8rem; cursor:pointer; }
   .menu-btn { background:none; border:none; color:#fff; cursor:pointer; display:flex;
-    align-items:center; justify-content:center; padding:4px; }
+    align-items:center; justify-content:center; padding:4px; position:absolute; left:20px; top:50%; transform:translateY(-50%); z-index:2; }
 
   body.dark-mode .topbar-actions {
     background:rgba(15,23,42,.2);
@@ -221,11 +303,7 @@ const css = `
   }
   body.dark-mode .bottom-nav-item { color:#9fb2cf; }
   body.dark-mode .bottom-nav-item:hover { background:#1a2740; }
-  body.dark-mode .bottom-nav-item.active {
-    color:#dbeafe;
-    background: linear-gradient(135deg,rgba(29,78,216,.28),rgba(30,58,138,.22));
-    box-shadow: inset 0 0 0 1px rgba(59,130,246,.35);
-  }
+  body.dark-mode .bottom-nav-item.active { color:#9fb2cf; background:none; box-shadow:none; }
   body.dark-mode .alert-info { background:#10233d; color:#bfdbfe; border-color:#1e3a8a; }
   body.dark-mode .alert-warning { background:#3a2c10; color:#fde68a; border-color:#a16207; }
   body.dark-mode .alert-success { background:#10261b; color:#bbf7d0; border-color:#166534; }
@@ -263,7 +341,7 @@ const css = `
   .nav-item:not(.active) svg { opacity:.88; }
   .nav-item:hover svg, .nav-item.active svg { opacity:1; transition:opacity .15s; filter:drop-shadow(0 1px 2px rgba(30,58,138,.18)); }
   .bottom-nav-item svg { opacity:.9; transition:opacity .15s, filter .15s; }
-  .bottom-nav-item:hover svg, .bottom-nav-item.active svg { opacity:1; filter:drop-shadow(0 1px 2px rgba(30,58,138,.18)); }
+  .bottom-nav-item:hover svg, .bottom-nav-item.active svg { opacity:1; filter:none; }
   
   .main { flex:1; margin-left:var(--sidebar-w); padding:24px; min-height:calc(100vh - var(--topbar-h)); overflow-x:hidden; }
   .main.full { margin-left:0; }
@@ -273,10 +351,862 @@ const css = `
   .stats-grid-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .stats-grid-4-compact { grid-template-columns:repeat(4,minmax(0,1fr)); }
   .results-visual-grid-wide { grid-template-columns:1.2fr 1fr 1fr; }
-  .enroll-layout { display:flex; gap:24px; align-items:flex-start; margin-bottom:16px; }
-  .enroll-photo-col { display:flex; flex-direction:column; align-items:center; gap:8px; width:110px; flex:0 0 110px; }
-  .enroll-photo-frame { width:100px; height:120px; border-radius:10px; border:2px dashed #cbd5e1; overflow:hidden; background:#f8fafc; display:flex; align-items:center; justify-content:center; }
-  .enroll-photo-input { font-size:11px; width:100px; }
+  .enroll-shell { display:grid; gap:18px; }
+  .enroll-hero {
+    background:linear-gradient(145deg,#0f172a 0%,#163a7a 58%,#1d4ed8 100%);
+    color:#fff;
+    border-radius:22px;
+    padding:24px 26px;
+    box-shadow:0 24px 46px rgba(15,23,42,.22);
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    overflow:hidden;
+    position:relative;
+  }
+  .enroll-hero::after {
+    content:"";
+    position:absolute;
+    inset:auto -70px -90px auto;
+    width:220px;
+    height:220px;
+    border-radius:50%;
+    background:radial-gradient(circle,rgba(255,255,255,.2),rgba(255,255,255,0));
+    pointer-events:none;
+  }
+  .enroll-hero-copy { position:relative; z-index:1; max-width:680px; }
+  .enroll-hero-eyebrow { font-size:.72rem; font-weight:800; letter-spacing:.22em; text-transform:uppercase; color:#bfdbfe; margin-bottom:10px; }
+  .enroll-hero-title { font-size:1.85rem; font-weight:900; letter-spacing:-.03em; line-height:1.05; }
+  .enroll-hero-sub { margin-top:10px; max-width:56ch; color:rgba(226,232,240,.92); font-size:.96rem; line-height:1.55; }
+  .enroll-hero-pills { position:relative; z-index:1; display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; align-self:flex-end; }
+  .enroll-hero-pill {
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 12px;
+    border-radius:999px;
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.16);
+    color:#eff6ff;
+    font-size:.78rem;
+    font-weight:700;
+    backdrop-filter:blur(10px);
+  }
+  .enroll-panel { display:grid; grid-template-columns:minmax(200px,228px) minmax(0,1fr); gap:18px; align-items:start; }
+  .enroll-sidebar {
+    background:linear-gradient(180deg,#f8fbff 0%,#eef6ff 100%);
+    border:1px solid #dbe7f5;
+    border-radius:20px;
+    padding:18px;
+    box-shadow:0 18px 34px rgba(15,23,42,.08);
+    display:grid;
+    gap:16px;
+  }
+  .enroll-photo-card {
+    background:#fff;
+    border:1px solid #dbe7f5;
+    border-radius:18px;
+    padding:16px;
+    display:grid;
+    gap:12px;
+    box-shadow:0 10px 24px rgba(15,23,42,.06);
+    min-width:0;
+    overflow:hidden;
+  }
+  .enroll-photo-head { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+  .enroll-photo-head > div { min-width:0; }
+  .enroll-photo-title { font-size:.92rem; font-weight:800; color:#0f172a; }
+  .enroll-photo-meta { font-size:.76rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .enroll-photo-col { display:flex; flex-direction:column; align-items:center; gap:10px; min-width:0; }
+  .enroll-photo-frame {
+    width:min(100%, 152px);
+    aspect-ratio:4 / 5;
+    border-radius:18px;
+    border:1px solid #c7d8ee;
+    overflow:hidden;
+    background:linear-gradient(180deg,#eff6ff 0%,#dbeafe 100%);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    margin:0 auto;
+  }
+  .enroll-photo-empty {
+    padding:14px;
+    text-align:center;
+    color:#64748b;
+    font-size:.76rem;
+    line-height:1.4;
+    display:grid;
+    gap:8px;
+    place-items:center;
+  }
+  .enroll-photo-empty-copy { display:grid; gap:4px; }
+  .enroll-photo-empty-title { font-size:.84rem; font-weight:800; color:#0f172a; }
+  .enroll-photo-empty-sub { max-width:16ch; color:#64748b; font-size:.72rem; line-height:1.45; }
+  .enroll-photo-empty-badge {
+    width:42px;
+    height:42px;
+    border-radius:12px;
+    background:rgba(255,255,255,.78);
+    color:#1d4ed8;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 10px 22px rgba(29,78,216,.12);
+  }
+  .enroll-photo-input {
+    position:absolute;
+    width:1px;
+    height:1px;
+    padding:0;
+    margin:-1px;
+    overflow:hidden;
+    clip:rect(0,0,0,0);
+    white-space:nowrap;
+    border:0;
+  }
+  .enroll-upload-stack {
+    display:grid;
+    gap:6px;
+    min-width:0;
+    width:100%;
+    justify-items:center;
+  }
+  .enroll-upload-trigger {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-height:38px;
+    padding:9px 12px;
+    border-radius:12px;
+    background:linear-gradient(180deg,#2563eb 0%,#1d4ed8 100%);
+    border:1px solid #1d4ed8;
+    color:#fff;
+    font-size:.78rem;
+    font-weight:800;
+    cursor:pointer;
+    box-shadow:0 10px 18px rgba(37,99,235,.18);
+    transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    width:min(100%, 152px);
+    text-align:center;
+  }
+  .enroll-upload-trigger:hover {
+    transform:translateY(-1px);
+    box-shadow:0 14px 24px rgba(37,99,235,.24);
+    border-color:#1e40af;
+  }
+  .enroll-upload-meta {
+    display:grid;
+    gap:2px;
+    min-width:0;
+    text-align:center;
+    max-width:152px;
+  }
+  .enroll-upload-file {
+    font-size:.68rem;
+    font-weight:700;
+    color:#334155;
+    min-width:0;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+    line-height:1.35;
+  }
+  .enroll-upload-caption { font-size:.68rem; color:#64748b; line-height:1.4; min-width:0; }
+  .enroll-upload-note { font-size:.72rem; color:#64748b; line-height:1.5; }
+  .enroll-mini-stats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .enroll-mini-stat {
+    background:#fff;
+    border:1px solid #dbe7f5;
+    border-radius:16px;
+    padding:12px;
+    box-shadow:0 8px 20px rgba(15,23,42,.05);
+  }
+  .enroll-mini-label { font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:#64748b; font-weight:700; }
+  .enroll-mini-value { margin-top:6px; font-size:1rem; font-weight:800; color:#0f172a; }
+  .enroll-guidance {
+    background:#0f172a;
+    color:#e2e8f0;
+    border-radius:18px;
+    padding:16px;
+    display:grid;
+    gap:10px;
+  }
+  .enroll-guidance-title { font-size:.88rem; font-weight:800; color:#fff; }
+  .enroll-guidance-list { display:grid; gap:10px; }
+  .enroll-guidance-item { display:flex; align-items:flex-start; gap:10px; font-size:.78rem; line-height:1.5; }
+  .enroll-guidance-dot {
+    width:20px;
+    height:20px;
+    border-radius:999px;
+    background:rgba(59,130,246,.2);
+    color:#bfdbfe;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+    margin-top:1px;
+    font-size:.7rem;
+    font-weight:800;
+  }
+  .enroll-form-card { border-radius:20px; padding:0; overflow:hidden; }
+  .enroll-form-head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+    padding:20px 22px;
+    border-bottom:1px solid #e2e8f0;
+    background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
+  }
+  .enroll-form-kicker { font-size:.74rem; text-transform:uppercase; letter-spacing:.16em; color:#64748b; font-weight:800; margin-bottom:8px; }
+  .enroll-form-title { font-size:1.2rem; font-weight:800; color:#0f172a; }
+  .enroll-form-sub { margin-top:6px; color:#64748b; font-size:.86rem; line-height:1.5; max-width:52ch; }
+  .enroll-form-status {
+    padding:8px 12px;
+    border-radius:999px;
+    background:#ecfeff;
+    color:#0f766e;
+    border:1px solid #a5f3fc;
+    font-size:.74rem;
+    font-weight:800;
+    white-space:nowrap;
+  }
+  .enroll-form-body { padding:22px; display:grid; gap:18px; }
+  .enroll-section {
+    border:1px solid #e2e8f0;
+    border-radius:18px;
+    padding:18px;
+    background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);
+  }
+  .enroll-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+  .enroll-section-title { font-size:.96rem; font-weight:800; color:#0f172a; }
+  .enroll-section-sub { margin-top:4px; font-size:.8rem; color:#64748b; line-height:1.45; }
+  .enroll-section-badge {
+    padding:7px 10px;
+    border-radius:999px;
+    background:#eff6ff;
+    color:#1d4ed8;
+    font-size:.72rem;
+    font-weight:800;
+    border:1px solid #bfdbfe;
+    white-space:nowrap;
+  }
+  .enroll-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 16px; }
+  .enroll-fields .form-group { margin:0; }
+  .enroll-fields .form-group.full { grid-column:1 / -1; }
+  .enroll-actions {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:0 22px 22px;
+  }
+  .enroll-actions-note { font-size:.8rem; color:#64748b; max-width:42ch; line-height:1.5; }
+  .enroll-actions-row { display:flex; gap:12px; }
+  .enroll-success-card {
+    background:linear-gradient(160deg,#ecfeff 0%,#eff6ff 100%);
+    border:1px solid #bfdbfe;
+    border-radius:22px;
+    padding:28px;
+    box-shadow:0 20px 40px rgba(15,23,42,.08);
+    display:grid;
+    gap:14px;
+    max-width:640px;
+  }
+  .enroll-success-title { font-size:1.35rem; font-weight:900; color:#0f172a; }
+  .enroll-success-sub { color:#475569; line-height:1.6; }
+  .students-shell { display:grid; gap:18px; }
+  .students-hero {
+    background:linear-gradient(135deg,#0f172a 0%,#153a75 52%,#0284c7 100%);
+    border-radius:22px;
+    padding:24px 26px;
+    color:#fff;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    position:relative;
+    overflow:hidden;
+    box-shadow:0 24px 46px rgba(15,23,42,.22);
+  }
+  .students-hero::after {
+    content:"";
+    position:absolute;
+    inset:auto -40px -80px auto;
+    width:200px;
+    height:200px;
+    border-radius:50%;
+    background:radial-gradient(circle,rgba(255,255,255,.2),rgba(255,255,255,0));
+    pointer-events:none;
+  }
+  .students-hero-copy,
+  .students-hero-actions { position:relative; z-index:1; }
+  .students-hero-kicker { font-size:.72rem; font-weight:800; letter-spacing:.22em; text-transform:uppercase; color:#bfdbfe; margin-bottom:10px; }
+  .students-hero-title { font-size:1.85rem; font-weight:900; letter-spacing:-.03em; line-height:1.05; }
+  .students-hero-sub { margin-top:10px; max-width:58ch; color:rgba(226,232,240,.92); font-size:.95rem; line-height:1.55; }
+  .students-hero-actions { display:grid; gap:10px; justify-items:end; min-width:220px; }
+  .students-hero-note {
+    padding:11px 12px;
+    border-radius:16px;
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.16);
+    font-size:.78rem;
+    color:#eff6ff;
+    line-height:1.5;
+    max-width:260px;
+  }
+  .students-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+  .students-summary-card {
+    background:#fff;
+    border:1px solid #dbe7f5;
+    border-radius:18px;
+    padding:16px;
+    box-shadow:0 14px 30px rgba(15,23,42,.06);
+  }
+  .students-summary-label { font-size:.72rem; text-transform:uppercase; letter-spacing:.1em; color:#64748b; font-weight:700; }
+  .students-summary-value { margin-top:8px; font-size:1.45rem; font-weight:900; color:#0f172a; }
+  .students-summary-sub { margin-top:6px; font-size:.78rem; color:#64748b; }
+  .students-toolbar {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding:16px 18px;
+    background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
+    border:1px solid #dbe7f5;
+    border-radius:20px;
+    box-shadow:0 14px 30px rgba(15,23,42,.06);
+  }
+  .students-toolbar-copy { min-width:0; }
+  .students-toolbar-title { font-size:1rem; font-weight:800; color:#0f172a; }
+  .students-toolbar-sub { margin-top:4px; font-size:.82rem; color:#64748b; }
+  .students-toolbar-actions { display:flex; gap:12px; align-items:center; flex:1; justify-content:flex-end; }
+  .students-search { max-width:320px; margin:0; }
+  .students-table-card { overflow:hidden; border-radius:20px; }
+  .students-table-head {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:18px 20px;
+    border-bottom:1px solid #e2e8f0;
+    background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);
+  }
+  .students-table-title { font-size:1rem; font-weight:800; color:#0f172a; }
+  .students-table-sub { margin-top:4px; font-size:.8rem; color:#64748b; }
+  .students-table-status { font-size:.74rem; font-weight:800; color:#0f766e; background:#ecfeff; border:1px solid #a5f3fc; padding:8px 12px; border-radius:999px; }
+  .students-avatar,
+  .students-avatar-placeholder {
+    width:40px;
+    height:40px;
+    border-radius:12px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    flex-shrink:0;
+  }
+  .students-avatar { border:1px solid #dbeafe; object-fit:cover; }
+  .students-avatar-placeholder { background:#dbeafe; color:#1e40af; border:1px solid #bfdbfe; font-weight:800; font-size:.74rem; }
+  .students-name-cell strong { display:block; font-size:.92rem; color:#0f172a; }
+  .students-name-cell span { display:block; margin-top:3px; font-size:.76rem; color:#64748b; }
+  .students-id-cell { font-weight:700; color:#1e3a8a; }
+  .students-empty-state {
+    background:linear-gradient(160deg,#f8fbff 0%,#eff6ff 100%);
+    border:1px dashed #bfdbfe;
+    border-radius:20px;
+    padding:24px;
+    text-align:center;
+    color:#475569;
+  }
+  .school-reg-shell { display:grid; gap:18px; }
+  .school-reg-hero {
+    background:linear-gradient(135deg,#0f172a 0%,#115e59 58%,#0f766e 100%);
+    color:#fff;
+    border-radius:22px;
+    padding:24px 26px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    box-shadow:0 24px 46px rgba(15,23,42,.2);
+  }
+  .school-reg-hero-copy { max-width:62ch; }
+  .school-reg-kicker { font-size:.72rem; font-weight:800; letter-spacing:.22em; text-transform:uppercase; color:#99f6e4; margin-bottom:10px; }
+  .school-reg-title { font-size:1.85rem; font-weight:900; letter-spacing:-.03em; line-height:1.05; }
+  .school-reg-sub { margin-top:10px; color:rgba(240,253,250,.9); font-size:.94rem; line-height:1.55; }
+  .school-reg-chip {
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 12px;
+    border-radius:999px;
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.16);
+    color:#ecfeff;
+    font-size:.78rem;
+    font-weight:700;
+    white-space:nowrap;
+  }
+  .school-reg-grid { display:grid; grid-template-columns:minmax(220px,260px) minmax(0,1fr); gap:18px; align-items:start; }
+  .school-reg-side {
+    background:linear-gradient(180deg,#f8fffe 0%,#eefcf9 100%);
+    border:1px solid #ccebe4;
+    border-radius:20px;
+    padding:18px;
+    display:grid;
+    gap:14px;
+    box-shadow:0 16px 32px rgba(15,23,42,.06);
+  }
+  .school-reg-stat {
+    background:#fff;
+    border:1px solid #d8eee8;
+    border-radius:16px;
+    padding:14px;
+  }
+  .school-reg-stat-label { font-size:.72rem; text-transform:uppercase; letter-spacing:.1em; color:#64748b; font-weight:700; }
+  .school-reg-stat-value { margin-top:8px; font-size:1.2rem; font-weight:900; color:#0f172a; }
+  .school-reg-note {
+    background:#0f172a;
+    color:#e2e8f0;
+    border-radius:16px;
+    padding:16px;
+    font-size:.8rem;
+    line-height:1.6;
+  }
+  .school-reg-form-card { border-radius:20px; overflow:hidden; }
+  .school-reg-head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+    padding:20px 22px;
+    border-bottom:1px solid #e2e8f0;
+    background:linear-gradient(180deg,#ffffff 0%,#f8fffe 100%);
+  }
+  .school-reg-head-title { font-size:1.16rem; font-weight:800; color:#0f172a; }
+  .school-reg-head-sub { margin-top:6px; color:#64748b; font-size:.84rem; line-height:1.5; max-width:56ch; }
+  .school-reg-section { padding:20px 22px 0; }
+  .school-reg-section + .school-reg-section { padding-top:18px; }
+  .school-reg-section-title { font-size:.95rem; font-weight:800; color:#0f172a; margin-bottom:6px; }
+  .school-reg-section-sub { font-size:.8rem; color:#64748b; line-height:1.45; margin-bottom:14px; }
+  .school-reg-switch {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 14px;
+    border:1px solid #dbe7f5;
+    border-radius:14px;
+    background:#f8fafc;
+  }
+  .school-reg-switch-copy { min-width:0; }
+  .school-reg-switch-title { font-size:.84rem; font-weight:700; color:#0f172a; }
+  .school-reg-switch-sub { font-size:.74rem; color:#64748b; margin-top:4px; }
+  .school-reg-actions {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:22px;
+  }
+  .school-reg-actions-note { font-size:.8rem; color:#64748b; line-height:1.5; max-width:44ch; }
+  .school-reg-actions-row { display:flex; gap:12px; }
+  .school-reg-success {
+    max-width:620px;
+    background:linear-gradient(155deg,#ecfeff 0%,#eef2ff 46%,#fdf2f8 100%);
+    border:1px solid #a5f3fc;
+    border-radius:22px;
+    padding:28px;
+    display:grid;
+    gap:14px;
+    box-shadow:0 22px 44px rgba(14,116,144,.14);
+  }
+  .school-reg-summary-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+  .school-reg-summary-card {
+    background:linear-gradient(145deg,#ffffff 0%,#ecfeff 42%,#eef2ff 100%);
+    border:1px solid #bfdbfe;
+    border-radius:18px;
+    padding:16px;
+    box-shadow:0 16px 32px rgba(59,130,246,.12);
+    position:relative;
+    overflow:hidden;
+  }
+  .school-reg-summary-card::after {
+    content:"";
+    position:absolute;
+    inset:auto -34px -40px auto;
+    width:118px;
+    height:118px;
+    border-radius:50%;
+    background:radial-gradient(circle,rgba(59,130,246,.18),rgba(168,85,247,0));
+    pointer-events:none;
+  }
+  .school-reg-summary-label { font-size:.72rem; text-transform:uppercase; letter-spacing:.1em; color:#64748b; font-weight:700; }
+  .school-reg-summary-value { margin-top:8px; font-size:1.35rem; font-weight:900; color:#172554; }
+  .school-reg-summary-sub { margin-top:6px; font-size:.8rem; color:#475569; line-height:1.45; }
+  .school-reg-toolbar {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding:16px 18px;
+    background:linear-gradient(120deg,#eff6ff 0%,#ecfeff 52%,#fdf2f8 100%);
+    border:1px solid #c7d2fe;
+    border-radius:18px;
+    box-shadow:0 16px 32px rgba(99,102,241,.12);
+  }
+  .school-reg-toolbar-copy { min-width:0; }
+  .school-reg-toolbar-title { font-size:1rem; font-weight:800; color:#312e81; }
+  .school-reg-toolbar-sub { margin-top:4px; font-size:.82rem; color:#475569; line-height:1.5; }
+  .registered-school-list { display:grid; gap:16px; }
+  .registered-school-card {
+    border-radius:20px;
+    overflow:hidden;
+    border:1px solid #cbd5f5;
+    box-shadow:0 18px 36px rgba(99,102,241,.1);
+    background:linear-gradient(180deg,#ffffff 0%,#fcfcff 100%);
+  }
+  .registered-school-head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+    padding:18px 20px;
+    border-bottom:1px solid #dbeafe;
+    background:linear-gradient(120deg,#eff6ff 0%,#ecfeff 58%,#fef3c7 100%);
+  }
+  .registered-school-meta { display:grid; gap:4px; }
+  .registered-school-title { font-size:1rem; font-weight:800; color:#1e1b4b; }
+  .registered-school-sub { font-size:.8rem; color:#475569; }
+  .registered-school-badges { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  .registered-school-body { padding:18px 20px 20px; display:grid; gap:16px; }
+  .registered-school-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+  .registered-school-stat { background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%); border:1px solid #dbeafe; border-radius:14px; padding:12px; }
+  .registered-school-stat label { display:block; font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:#6366f1; font-weight:700; margin-bottom:6px; }
+  .registered-school-stat strong { font-size:.92rem; color:#0f172a; }
+  .school-admin-block { display:grid; gap:12px; }
+  .school-admin-block-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .school-admin-block-sub { font-size:.8rem; color:#64748b; line-height:1.45; margin-top:4px; }
+  .school-admin-list { display:grid; gap:10px; }
+  .school-admin-row {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 14px;
+    border:1px solid #dbeafe;
+    border-radius:14px;
+    background:linear-gradient(135deg,#ffffff 0%,#f8fbff 100%);
+  }
+  .school-admin-row-copy { min-width:0; }
+  .school-admin-row-copy strong { display:block; color:#0f172a; }
+  .school-admin-row-copy span { display:block; margin-top:4px; font-size:.78rem; color:#64748b; overflow-wrap:anywhere; }
+  .school-admin-form {
+    display:grid;
+    gap:12px;
+    padding:14px;
+    border:1px solid #c7d2fe;
+    border-radius:16px;
+    background:linear-gradient(135deg,#eef2ff 0%,#ecfeff 100%);
+  }
+  .school-admin-form-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .school-admin-form-title { font-size:.9rem; font-weight:800; color:#0f172a; }
+  .school-admin-form-sub { margin-top:4px; font-size:.78rem; color:#64748b; }
+  .school-workspace-shell { display:grid; gap:18px; }
+  .school-workspace-hero {
+    background:linear-gradient(130deg,#1d4ed8 0%,#0891b2 34%,#10b981 67%,#f59e0b 100%);
+    border-radius:22px;
+    padding:24px 26px;
+    color:#fff;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    box-shadow:0 26px 52px rgba(37,99,235,.24);
+    position:relative;
+    overflow:hidden;
+  }
+  .school-workspace-hero::after {
+    content:"";
+    position:absolute;
+    inset:auto -60px -80px auto;
+    width:220px;
+    height:220px;
+    border-radius:50%;
+    background:radial-gradient(circle,rgba(255,255,255,.24),rgba(255,255,255,0));
+    pointer-events:none;
+  }
+  .school-workspace-hero::before {
+    content:"";
+    position:absolute;
+    inset:-30% auto auto -8%;
+    width:220px;
+    height:220px;
+    border-radius:50%;
+    background:radial-gradient(circle,rgba(255,255,255,.18),rgba(255,255,255,0));
+    pointer-events:none;
+  }
+  .school-workspace-copy, .school-workspace-meta { position:relative; z-index:1; }
+  .school-workspace-kicker { font-size:.72rem; font-weight:800; letter-spacing:.22em; text-transform:uppercase; color:#fef3c7; margin-bottom:10px; }
+  .school-workspace-title { font-size:1.85rem; font-weight:900; letter-spacing:-.03em; line-height:1.05; }
+  .school-workspace-sub { margin-top:10px; color:rgba(255,255,255,.94); font-size:.94rem; line-height:1.55; max-width:58ch; }
+  .school-workspace-meta { display:grid; gap:10px; justify-items:end; min-width:220px; }
+  .school-workspace-chip {
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 12px;
+    border-radius:999px;
+    background:rgba(255,255,255,.18);
+    border:1px solid rgba(255,255,255,.24);
+    color:#ecfeff;
+    font-size:.78rem;
+    font-weight:700;
+  }
+  .school-workspace-note {
+    max-width:280px;
+    padding:12px 14px;
+    border-radius:16px;
+    background:rgba(255,255,255,.16);
+    border:1px solid rgba(255,255,255,.22);
+    color:#ecfeff;
+    font-size:.8rem;
+    line-height:1.5;
+  }
+  .school-workspace-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; }
+  .school-workspace-summary-card {
+    background:linear-gradient(145deg,#ffffff 0%,#eff6ff 40%,#ecfeff 100%);
+    border:1px solid #bfdbfe;
+    border-radius:18px;
+    padding:16px;
+    box-shadow:0 16px 32px rgba(14,165,233,.12);
+    position:relative;
+    overflow:hidden;
+  }
+  .school-workspace-summary-card::after {
+    content:"";
+    position:absolute;
+    inset:auto -34px -42px auto;
+    width:122px;
+    height:122px;
+    border-radius:50%;
+    background:radial-gradient(circle,rgba(16,185,129,.2),rgba(59,130,246,0));
+    pointer-events:none;
+  }
+  .school-workspace-summary-label { font-size:.72rem; text-transform:uppercase; letter-spacing:.1em; color:#0f766e; font-weight:700; }
+  .school-workspace-summary-value { margin-top:8px; font-size:1.3rem; font-weight:900; color:#1e3a8a; }
+  .school-workspace-summary-sub { margin-top:6px; font-size:.78rem; color:#475569; line-height:1.45; }
+  .school-workspace-grid { display:grid; grid-template-columns:1.1fr .9fr; gap:18px; align-items:start; }
+  .school-workspace-panel {
+    background:linear-gradient(145deg,#ffffff 0%,#f8fbff 48%,#fefce8 100%);
+    border:1px solid #dbeafe;
+    border-radius:20px;
+    padding:18px;
+    box-shadow:0 16px 34px rgba(59,130,246,.1);
+  }
+  .school-workspace-panel-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+  .school-workspace-panel-title { font-size:1rem; font-weight:800; color:#312e81; }
+  .school-workspace-panel-sub { margin-top:4px; font-size:.82rem; color:#475569; line-height:1.5; }
+  .school-insight-stack { display:grid; gap:18px; }
+  .school-profile-list { display:grid; gap:10px; }
+  .school-profile-row {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 0;
+    border-bottom:1px solid #dbeafe;
+  }
+  .school-profile-row span { color:#475569; font-size:.82rem; }
+  .school-profile-row strong { color:#1e293b; text-align:right; }
+  .school-profile-row:last-child { border-bottom:none; }
+  .school-admin-mini-list { display:grid; gap:10px; }
+  .school-admin-mini-row {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 14px;
+    border-radius:14px;
+    border:1px solid #dbeafe;
+    background:linear-gradient(135deg,#ffffff 0%,#f8fbff 100%);
+  }
+  .school-admin-mini-copy strong { display:block; color:#1e1b4b; }
+  .school-admin-mini-copy span { display:block; margin-top:4px; font-size:.78rem; color:#475569; overflow-wrap:anywhere; }
+  .school-activity-empty { color:#475569; font-size:.86rem; }
+  .school-workspace-footnote {
+    background:linear-gradient(120deg,#eef2ff 0%,#ecfeff 52%,#fef9c3 100%);
+    border:1px solid #c7d2fe;
+    border-radius:18px;
+    padding:16px 18px;
+    color:#334155;
+    line-height:1.6;
+  }
+  .school-settings-shell { display:grid; gap:18px; }
+  .school-settings-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; align-items:start; }
+  .school-settings-card {
+    background:linear-gradient(145deg,#ffffff 0%,#f8fbff 40%,#ecfeff 100%);
+    border:1px solid #bfdbfe;
+    border-radius:20px;
+    padding:18px;
+    box-shadow:0 18px 36px rgba(14,165,233,.1);
+  }
+  .school-settings-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+  .school-settings-title { font-size:1rem; font-weight:800; color:#1d4ed8; }
+  .school-settings-sub { margin-top:4px; font-size:.82rem; color:#475569; line-height:1.5; }
+  .school-settings-form-grid { display:grid; gap:14px; }
+  .school-settings-switch {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 14px;
+    border:1px solid #c7d2fe;
+    border-radius:14px;
+    background:linear-gradient(135deg,#eef2ff 0%,#ecfeff 100%);
+  }
+  .school-settings-switch-title { font-size:.84rem; font-weight:700; color:#1e3a8a; }
+  .school-settings-switch-sub { margin-top:4px; font-size:.76rem; color:#475569; line-height:1.45; }
+  .role-priv-shell { display:grid; gap:18px; }
+  .role-priv-overview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+  .role-priv-stat {
+    position:relative;
+    overflow:hidden;
+    border-radius:20px;
+    border:1px solid #dbeafe;
+    padding:18px;
+    background:linear-gradient(145deg,#ffffff 0%,#eff6ff 48%,#ecfeff 100%);
+    box-shadow:0 18px 36px rgba(59,130,246,.12);
+  }
+  .role-priv-stat::after {
+    content:"";
+    position:absolute;
+    inset:auto -28px -34px auto;
+    width:110px;
+    height:110px;
+    border-radius:50%;
+    background:radial-gradient(circle,rgba(59,130,246,.18),rgba(59,130,246,0));
+    pointer-events:none;
+  }
+  .role-priv-stat-label { position:relative; z-index:1; font-size:.72rem; text-transform:uppercase; letter-spacing:.12em; font-weight:800; color:#64748b; }
+  .role-priv-stat-value { position:relative; z-index:1; margin-top:10px; font-size:1.65rem; font-weight:900; color:#0f172a; letter-spacing:-.03em; }
+  .role-priv-stat-sub { position:relative; z-index:1; margin-top:6px; color:#475569; font-size:.82rem; line-height:1.5; }
+  .role-priv-layout { display:grid; grid-template-columns:minmax(280px,320px) minmax(0,1fr); gap:18px; align-items:start; }
+  .role-priv-sidebar,
+  .role-priv-toolbar,
+  .role-priv-group-card,
+  .role-priv-summary-card {
+    background:linear-gradient(145deg,#ffffff 0%,#f8fbff 45%,#eef6ff 100%);
+    border:1px solid #dbeafe;
+    border-radius:22px;
+    box-shadow:0 18px 38px rgba(15,23,42,.08);
+  }
+  .role-priv-sidebar { padding:18px; display:grid; gap:14px; }
+  .role-priv-sidebar-head { display:grid; gap:6px; }
+  .role-priv-sidebar-title { font-size:1rem; font-weight:900; color:#0f172a; }
+  .role-priv-sidebar-sub { color:#64748b; font-size:.82rem; line-height:1.5; }
+  .role-priv-role-list { display:grid; gap:10px; }
+  .role-priv-role-card {
+    width:100%;
+    border:1px solid #dbeafe;
+    border-radius:18px;
+    padding:14px 15px;
+    background:#fff;
+    text-align:left;
+    cursor:pointer;
+    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+    display:grid;
+    gap:8px;
+  }
+  .role-priv-role-card:hover { transform:translateY(-1px); box-shadow:0 14px 28px rgba(59,130,246,.1); }
+  .role-priv-role-card.active { box-shadow:0 18px 32px rgba(59,130,246,.14); }
+  .role-priv-role-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .role-priv-role-name { font-size:.96rem; font-weight:900; }
+  .role-priv-role-note { color:#64748b; font-size:.78rem; line-height:1.45; }
+  .role-priv-role-count { display:inline-flex; align-items:center; gap:6px; width:max-content; padding:6px 10px; border-radius:999px; font-size:.74rem; font-weight:800; background:#eff6ff; color:#1d4ed8; }
+  .role-priv-create-card { display:grid; gap:12px; padding:14px; border:1px dashed #bfdbfe; border-radius:18px; background:linear-gradient(135deg,#eff6ff 0%,#f8fbff 100%); }
+  .role-priv-create-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .role-priv-create-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .role-priv-create-key { display:inline-flex; align-items:center; gap:6px; width:max-content; padding:6px 10px; border-radius:999px; background:#dbeafe; color:#1d4ed8; font-size:.72rem; font-weight:800; }
+  .role-priv-create-help { color:#475569; font-size:.76rem; line-height:1.45; }
+  .role-priv-create-title { font-size:.92rem; font-weight:900; color:#1d4ed8; }
+  .role-priv-create-sub { color:#64748b; font-size:.78rem; line-height:1.45; }
+  .role-priv-role-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .role-priv-role-meta { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; font-size:.72rem; font-weight:800; }
+  .role-priv-role-meta.system { background:#e2e8f0; color:#334155; }
+  .role-priv-role-meta.custom { background:#dcfce7; color:#166534; }
+  .role-priv-main { display:grid; gap:16px; }
+  .role-priv-toolbar { padding:18px 20px; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+  .role-priv-toolbar-copy { display:grid; gap:6px; min-width:0; }
+  .role-priv-toolbar-kicker { font-size:.72rem; text-transform:uppercase; letter-spacing:.14em; font-weight:800; color:#64748b; }
+  .role-priv-toolbar-title { font-size:1.2rem; font-weight:900; letter-spacing:-.03em; }
+  .role-priv-toolbar-sub { color:#64748b; font-size:.84rem; line-height:1.55; max-width:62ch; }
+  .role-priv-toolbar-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  .role-priv-content { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:16px; align-items:start; }
+  .role-priv-groups { display:grid; gap:16px; }
+  .role-priv-group-card { padding:18px; display:grid; gap:14px; }
+  .role-priv-group-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+  .role-priv-group-title { font-size:1rem; font-weight:900; color:#0f172a; }
+  .role-priv-group-sub { margin-top:4px; color:#64748b; font-size:.8rem; line-height:1.5; }
+  .role-priv-group-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .role-priv-items { display:grid; gap:10px; }
+  .role-priv-item {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:14px 15px;
+    border-radius:16px;
+    border:1px solid #e2e8f0;
+    background:#fff;
+    cursor:pointer;
+    transition:border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
+  }
+  .role-priv-item:hover { transform:translateY(-1px); box-shadow:0 12px 24px rgba(15,23,42,.08); }
+  .role-priv-item.active { border-color:var(--role-accent,#1d4ed8); background:linear-gradient(135deg,rgba(255,255,255,.98) 0%, var(--role-soft,#eff6ff) 100%); }
+  .role-priv-item-copy { min-width:0; }
+  .role-priv-item-title { font-weight:800; color:#0f172a; font-size:.9rem; }
+  .role-priv-item-meta { margin-top:4px; font-size:.75rem; color:#64748b; text-transform:uppercase; letter-spacing:.08em; font-weight:700; }
+  .role-priv-item-toggle { flex-shrink:0; }
+  .role-priv-summary-column { display:grid; gap:16px; }
+  .role-priv-summary-card { padding:18px; display:grid; gap:12px; }
+  .role-priv-summary-title { font-size:.98rem; font-weight:900; color:#0f172a; }
+  .role-priv-summary-sub { color:#64748b; font-size:.8rem; line-height:1.5; }
+  .role-priv-chip-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .role-priv-chip { display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:.76rem; font-weight:800; }
+  .role-priv-chip-group { color:#64748b; font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; }
+  .role-priv-empty { color:#64748b; font-size:.84rem; line-height:1.5; }
+  .role-priv-summary-list { display:grid; gap:10px; }
+  .role-priv-summary-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid #eaf2ff; }
+  .role-priv-summary-row:last-child { border-bottom:none; }
+  .role-priv-summary-name { font-weight:800; }
+  .role-priv-summary-count { color:#475569; font-size:.82rem; font-weight:700; }
+  .role-priv-save-card { padding:18px; display:grid; gap:12px; background:linear-gradient(135deg,#eef2ff 0%,#ecfeff 100%); border:1px solid #c7d2fe; border-radius:22px; box-shadow:0 18px 38px rgba(99,102,241,.12); }
+  .role-priv-save-title { font-size:1rem; font-weight:900; color:#1e3a8a; }
+  .role-priv-save-sub { color:#475569; font-size:.82rem; line-height:1.55; }
+  .role-priv-promo-card { padding:18px; display:grid; gap:12px; background:linear-gradient(135deg,#fffbeb 0%,#fff7ed 100%); border:1px solid #fed7aa; border-radius:22px; box-shadow:0 18px 38px rgba(245,158,11,.12); }
+  .role-priv-promo-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .role-priv-promo-title { font-size:1rem; font-weight:900; color:#9a3412; }
+  .role-priv-promo-sub { color:#7c2d12; font-size:.82rem; line-height:1.55; }
+  .role-priv-promo-selected { display:grid; gap:10px; padding:12px 14px; border-radius:16px; border:1px solid #fdba74; background:rgba(255,255,255,.78); }
+  .role-priv-promo-selected-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .role-priv-promo-selected-name { font-size:.92rem; font-weight:900; color:#7c2d12; }
+  .role-priv-promo-selected-meta { color:#9a3412; font-size:.78rem; line-height:1.5; }
+  .role-priv-promo-badges { display:flex; gap:8px; flex-wrap:wrap; }
+  .role-priv-promo-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:#fff; border:1px solid #fed7aa; color:#9a3412; font-size:.72rem; font-weight:800; }
+  .role-priv-promo-list { display:grid; gap:8px; max-height:280px; overflow:auto; padding-right:4px; }
+  .role-priv-promo-item { width:100%; text-align:left; padding:12px 14px; border-radius:16px; border:1px solid #fed7aa; background:#fff; display:grid; gap:8px; cursor:pointer; transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+  .role-priv-promo-item:hover { transform:translateY(-1px); box-shadow:0 12px 24px rgba(245,158,11,.12); }
+  .role-priv-promo-item.active { border-color:#ea580c; box-shadow:0 16px 30px rgba(245,158,11,.16); }
+  .role-priv-promo-item-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .role-priv-promo-item-name { font-size:.88rem; font-weight:800; color:#7c2d12; }
+  .role-priv-promo-item-email { color:#9a3412; font-size:.76rem; word-break:break-word; }
+  .role-priv-promo-item-meta { display:flex; gap:8px; flex-wrap:wrap; }
+  .role-priv-promo-note { color:#9a3412; font-size:.76rem; line-height:1.5; }
   .messages-page { display:flex; flex-direction:column; height:calc(100vh - 120px); overflow:hidden; }
   .messages-layout { display:grid; grid-template-columns:minmax(220px,280px) minmax(0,1fr); gap:0; flex:1; overflow:hidden; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
   .messages-composer { display:flex; gap:8px; flex-shrink:0; }
@@ -633,8 +1563,7 @@ const css = `
     color:#64748b; gap:1px; border-radius:8px; transition:all .2s; position:relative; }
   .bottom-nav-item span { font-weight:700; letter-spacing:.1px; }
   .bottom-nav-item:hover { background:#eef5ff; transform:translateY(-1px); }
-  .bottom-nav-item.active { color:var(--primary); background:linear-gradient(135deg,rgba(232,241,255,.95),rgba(219,234,254,.8)); box-shadow:inset 0 0 0 1px rgba(199,221,255,.9); }
-  .bottom-nav-item.active::before { content:''; position:absolute; left:11px; right:11px; top:4px; height:2px; background:var(--primary); border-radius:99px; opacity:.85; }
+  .bottom-nav-item.active { color:#64748b; background:none; box-shadow:none; }
   
   .fade-in { animation: fadeIn .3s ease; }
   @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
@@ -654,29 +1583,21 @@ const css = `
     .sidebar { transform:translateX(-100%); z-index:110; }
     .sidebar:not(.closed) { transform:translateX(0); box-shadow:4px 0 24px rgba(15,23,42,.18); }
     .bottom-nav { display:block; }
-    .main { padding-bottom:80px; }
+    .main { padding-bottom:calc(80px + env(safe-area-inset-bottom)); }
   }
 
   @media (max-width:767px) {
     :root { --topbar-h: 58px; }
     .topbar { padding:0 10px; gap:8px; }
-    .topbar-left { gap:6px; flex:1; min-width:0; }
-    .topbar-search { display:none; }
-    .topbar-search.topbar-search-mobile {
-      display:flex;
-      position:fixed;
+    .topbar-left { gap:6px; flex:1; min-width:0; padding-left:34px; }
+    .menu-btn {
+      position:absolute;
       left:10px;
-      right:10px;
-      top:calc(var(--topbar-h) + 8px);
-      margin-left:0;
-      min-width:0;
-      padding:0 10px;
-      z-index:130;
-      box-shadow:0 10px 24px rgba(15,23,42,.18);
-      backdrop-filter:blur(10px);
+      top:50%;
+      transform:translateY(-50%);
+      z-index:2;
     }
-    .topbar-search.topbar-search-mobile input { font-size:.8rem; padding:7px 0; }
-    .topbar-right { gap:6px; max-width:52vw; }
+    .topbar-right { gap:6px; max-width:none; margin-left:auto; }
     .topbar-actions { max-width:100%; }
     .desktop-only-action { display:none; }
     .bell-mobile-visible { display:flex; }
@@ -685,7 +1606,7 @@ const css = `
 
     .sidebar { width:min(280px,85vw); padding-bottom:80px; }
 
-    .main { padding:14px 10px 82px; }
+    .main { padding:14px 10px calc(82px + env(safe-area-inset-bottom)); }
 
     .page-header { padding:16px 18px; margin-bottom:16px; }
     .page-title { font-size:1.3rem; }
@@ -747,12 +1668,50 @@ const css = `
 
     .landing-box { padding:22px 18px; border-radius:18px; }
     .landing-title { font-size:1.45rem; }
+    .landing-install-btn { padding:13px 14px; }
     .portal-btn { padding:13px 10px; }
+    .enroll-panel { grid-template-columns:1fr; }
+    .enroll-hero { flex-direction:column; padding:20px 18px; }
+    .enroll-hero-title { font-size:1.55rem; }
+    .enroll-hero-pills { justify-content:flex-start; }
     .enroll-layout { flex-direction:column; gap:16px; }
     .enroll-photo-col { width:100%; flex-basis:auto; align-items:flex-start; }
+    .enroll-form-head,
+    .enroll-actions { padding-left:18px; padding-right:18px; }
+    .enroll-form-body { padding:18px; }
+    .enroll-fields { grid-template-columns:1fr; }
+    .enroll-actions { flex-direction:column; align-items:stretch; }
+    .enroll-actions-row { width:100%; }
+    .enroll-actions-row .btn { flex:1; justify-content:center; }
+    .enroll-mini-stats { grid-template-columns:1fr 1fr; }
+    .students-hero { flex-direction:column; padding:20px 18px; }
+    .students-hero-title { font-size:1.55rem; }
+    .students-hero-actions { justify-items:start; min-width:0; }
+    .students-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .students-toolbar { flex-direction:column; align-items:stretch; }
+    .students-toolbar-actions { width:100%; justify-content:stretch; }
+    .students-search { max-width:none; width:100%; }
+    .students-toolbar-actions .btn { justify-content:center; }
+    .role-priv-overview,
+    .role-priv-content,
+    .role-priv-layout { grid-template-columns:1fr; }
+    .role-priv-toolbar,
+    .role-priv-group-head { flex-direction:column; }
+    .role-priv-toolbar-actions,
+    .role-priv-group-actions { justify-content:flex-start; }
+    .school-reg-hero { flex-direction:column; padding:20px 18px; }
+    .school-reg-title { font-size:1.55rem; }
+    .school-reg-grid { grid-template-columns:1fr; }
+    .school-reg-head,
+    .school-reg-section,
+    .school-reg-actions { padding-left:18px; padding-right:18px; }
+    .school-reg-actions { flex-direction:column; align-items:stretch; }
+    .school-reg-actions-row { width:100%; }
+    .school-reg-actions-row .btn { flex:1; justify-content:center; }
+    .registered-school-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 
     .selection-card { padding:11px 12px; }
-    .bottom-nav { height:58px; padding:3px 5px; }
+    .bottom-nav { height:calc(58px + env(safe-area-inset-bottom)); padding:3px 5px calc(3px + env(safe-area-inset-bottom)); }
     .bottom-nav-item { font-size:.6rem; gap:1px; }
     .bottom-nav-item span { font-size:.58rem; }
   }
@@ -766,7 +1725,7 @@ const css = `
     .page-header { padding:12px 14px; }
     .page-title { font-size:1.15rem; }
 
-    .main { padding:10px 8px 78px; }
+    .main { padding:10px 8px calc(78px + env(safe-area-inset-bottom)); }
     .card-padded { padding:12px; }
 
     .profile-header { padding:14px; gap:10px; }
@@ -788,6 +1747,8 @@ const css = `
     .landing-box { padding:18px 14px; }
     .landing-title { font-size:1.25rem; }
     .landing-logo { width:54px; height:54px; }
+    .landing-install-btn { padding:12px 13px; gap:10px; }
+    .landing-install-icon { width:36px; height:36px; }
 
     .btn { padding:8px 12px; }
     .btn-sm { padding:6px 10px; font-size:.76rem; }
@@ -796,17 +1757,113 @@ const css = `
     .modal-title { font-size:1rem; }
 
     .topbar { padding:0 8px; }
-    .topbar-left { gap:4px; }
-    .topbar-search.topbar-search-mobile { left:8px; right:8px; padding:0 8px; }
-    .topbar-search.topbar-search-mobile input { font-size:.75rem; }
-    .topbar-right { gap:4px; }
+    .topbar-left { gap:4px; padding-left:30px; }
+    .menu-btn { left:8px; }
+    .topbar-right { gap:4px; max-width:calc(100% - 32px); }
     .topbar-actions { border-radius:10px; }
     .portal-grid { grid-template-columns:1fr; }
     .stats-grid-3,
     .stats-grid-4-compact { grid-template-columns:1fr; }
+    .role-priv-sidebar,
+    .role-priv-toolbar,
+    .role-priv-group-card,
+    .role-priv-summary-card,
+    .role-priv-save-card { padding:14px; border-radius:18px; }
+    .role-priv-item { padding:12px; }
+    .role-priv-role-card { padding:12px; }
     .mobile-record-head { flex-direction:column; }
     .mobile-record-identity { width:100%; }
     .metric-row-count { margin-left:auto; }
+  }
+
+  @media (max-width:430px) {
+    .topbar { padding:0 7px; }
+    .topbar-left { gap:4px; padding-left:28px; }
+    .menu-btn { left:7px; }
+    .topbar-right { gap:4px; max-width:calc(100% - 28px); }
+    .topbar-btn { width:30px; height:30px; }
+    .topbar-app-btn { width:38px; padding:0 4px; }
+    .topbar-app-logo { width:22px; height:22px; }
+
+    .main { padding:10px 8px calc(80px + env(safe-area-inset-bottom)); }
+    .page-header { padding:12px 14px; }
+    .page-title { font-size:1.12rem; }
+    .page-sub { font-size:.76rem; }
+
+    .stats-grid,
+    .stats-grid-3,
+    .stats-grid-4-compact,
+    .portal-grid { grid-template-columns:1fr; }
+
+    .results-bar-row { grid-template-columns:minmax(0,76px) 1fr 34px; gap:6px; font-size:.72rem; }
+    .messages-bubble { max-width:92%; }
+    .metric-row-badge { min-width:0; }
+    .metric-row-count { width:auto; margin-left:auto; }
+    .subject-progress-label { min-width:110px; }
+    .subject-progress-value { width:36px; }
+
+    .bottom-nav { height:calc(56px + env(safe-area-inset-bottom)); padding:3px 4px calc(3px + env(safe-area-inset-bottom)); }
+    .bottom-nav-grid { gap:2px; }
+    .bottom-nav-item { font-size:.56rem; }
+    .bottom-nav-item span { font-size:.54rem; }
+    .enroll-hero { padding:18px 16px; border-radius:18px; }
+    .enroll-hero-title { font-size:1.38rem; }
+    .enroll-sidebar { padding:14px; border-radius:18px; }
+    .enroll-photo-card,
+    .enroll-guidance,
+    .enroll-section { border-radius:16px; }
+    .enroll-form-head,
+    .enroll-form-body,
+    .enroll-actions { padding-left:14px; padding-right:14px; }
+    .enroll-form-head { flex-direction:column; }
+    .enroll-actions-row { flex-direction:column; }
+    .enroll-actions-row .btn { width:100%; }
+    .enroll-mini-stats { grid-template-columns:1fr; }
+    .students-hero { padding:18px 16px; border-radius:18px; }
+    .students-hero-title { font-size:1.38rem; }
+    .students-summary-grid { grid-template-columns:1fr; }
+    .students-toolbar { padding:14px; border-radius:18px; }
+    .students-toolbar-actions { flex-direction:column; }
+    .students-toolbar-actions .btn { width:100%; }
+    .students-table-head { flex-direction:column; align-items:flex-start; padding:14px; }
+    .school-reg-hero { padding:18px 16px; border-radius:18px; }
+    .school-reg-title { font-size:1.36rem; }
+    .school-reg-side { padding:14px; border-radius:18px; }
+    .school-reg-head { flex-direction:column; padding:16px 14px; }
+    .school-reg-section { padding-left:14px; padding-right:14px; }
+    .school-reg-actions { padding:18px 14px 14px; }
+    .school-reg-actions-row { flex-direction:column; }
+    .school-reg-actions-row .btn { width:100%; }
+    .registered-school-head,
+    .registered-school-body { padding:14px; }
+    .registered-school-grid { grid-template-columns:1fr; }
+    .school-admin-row,
+    .school-admin-form-head { flex-direction:column; align-items:flex-start; }
+  }
+
+  @media (max-width:399px) {
+    .topbar { padding:0 6px; }
+    .topbar-left { padding-left:26px; }
+    .menu-btn { left:6px; }
+    .topbar-right { gap:3px; max-width:calc(100% - 28px); }
+    .topbar-actions { border-radius:9px; }
+    .topbar-btn { width:28px; height:28px; }
+    .topbar-app-btn { width:34px; padding:0 4px; }
+    .topbar-app-logo { width:20px; height:20px; border-radius:6px; }
+    .notif-badge { width:14px; height:14px; font-size:.52rem; top:-3px; right:-3px; }
+    .page-actions-row { gap:8px; }
+    .page-actions-row .form-control,
+    .page-actions-row .btn { flex-basis:100%; width:100%; }
+    .results-donut { width:104px; height:104px; }
+    .results-donut::after { width:62px; height:62px; }
+    .results-donut-center strong { font-size:1rem; }
+    .results-donut-center span { font-size:.66rem; }
+    .subject-progress-row { gap:8px; }
+    .subject-progress-label,
+    .subject-progress-value { font-size:.76rem; }
+    .card-padded { padding:10px; }
+    .modal-card { padding:10px; border-radius:14px; }
+    th, td { padding:6px; font-size:.76rem; }
   }
 
   @media (min-width:1024px) {
@@ -927,24 +1984,186 @@ function ActionStatusModal({ state, onClose }) {
   );
 }
 
+const buildStudentDraft = (student = null) => ({
+  full_name: student?.full_name || student?.name || "",
+  index: student?.index || student?.index_number || student?.index_no || "",
+  class: student?.class || student?.class_name || "JHS 3A",
+  region: student?.region || "Ashanti",
+  aggregate: String(student?.aggregate ?? 0),
+  status: student?.status || "pending",
+  photo_url: student?.photo_url || "",
+});
+
+const normalizeStudentRecord = (student = {}, fallbackIndex = 0) => ({
+  id: student.id ?? fallbackIndex + 1,
+  full_name: student.full_name || student.name || "Unnamed Student",
+  index: student.index || student.index_number || student.index_no || `AUTO${fallbackIndex + 1}`,
+  class: student.class || student.class_name || "JHS 3A",
+  region: student.region || "Unknown",
+  aggregate: Number(student.aggregate ?? 0),
+  status: student.status || "pending",
+  email: student.email || null,
+  photo_url: resolveStudentPhotoUrl(student),
+  created_at: student.created_at || null,
+  updated_at: student.updated_at || null,
+});
+
+const buildTeacherDraft = (teacher = null) => ({
+  name: teacher?.name || teacher?.full_name || "",
+  role: normalizeRoleKey(teacher?.role || teacher?.user_role || "teacher") || "teacher",
+  subject: teacher?.subject || "",
+  class: teacher?.class || teacher?.class_name || "",
+  phone: teacher?.phone || "",
+});
+
+function StudentEditorModal({ open, title, draft, saving, onChange, onClose, onSave }) {
+  if (!open) return null;
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <div className="modal-title">{title}</div>
+            <div className="modal-sub">Update the core student record used across admissions, attendance, fees, and school reporting.</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="form-grid">
+          <div className="form-group"><label className="form-label">Full Name</label><input className="form-control" value={draft.full_name} onChange={(e) => onChange("full_name", e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Student ID</label><input className="form-control" value={draft.index} onChange={(e) => onChange("index", e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Class</label><select className="form-control" value={draft.class} onChange={(e) => onChange("class", e.target.value)}>{["JHS 3A", "JHS 3B", "JHS 3C"].map((value) => <option key={value}>{value}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Region</label><select className="form-control" value={draft.region} onChange={(e) => onChange("region", e.target.value)}>{GHANA_REGIONS.map((value) => <option key={value}>{value}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Aggregate</label><input type="number" min="0" className="form-control" value={draft.aggregate} onChange={(e) => onChange("aggregate", e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Status</label><select className="form-control" value={draft.status} onChange={(e) => onChange("status", e.target.value)}><option value="pending">pending</option><option value="confirmed">confirmed</option><option value="active">active</option></select></div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}><label className="form-label">Photo URL</label><input className="form-control" value={draft.photo_url} onChange={(e) => onChange("photo_url", e.target.value)} placeholder="Optional photo URL" /></div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="btn btn-blue" onClick={onSave} disabled={saving}>{saving ? "Saving..." : "Save Student"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeacherEditorModal({ open, title, draft, roleOptions, saving, onChange, onClose, onSave }) {
+  if (!open) return null;
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <div className="modal-title">{title}</div>
+            <div className="modal-sub">Create or update the teacher profile used in academic and school operations.</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="form-grid">
+          <div className="form-group"><label className="form-label">Teacher Name</label><input className="form-control" value={draft.name} onChange={(e) => onChange("name", e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Role</label><select className="form-control" value={draft.role} onChange={(e) => onChange("role", e.target.value)}>{roleOptions.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Subject</label><input className="form-control" value={draft.subject} onChange={(e) => onChange("subject", e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Class</label><input className="form-control" value={draft.class} onChange={(e) => onChange("class", e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Phone</label><input className="form-control" value={draft.phone} onChange={(e) => onChange("phone", e.target.value)} /></div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="btn btn-blue" onClick={onSave} disabled={saving}>{saving ? "Saving..." : "Save Teacher"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // STUDENTS LIST
-function StudentsPage({ onEnroll, studentsData }) {
+function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnrollAction = true, heroKicker = "Admissions Registry", heroTitle = "Student records, cleaned up and ready for action", heroSub = "Review the current intake pipeline, search across enrolled learners quickly, and move straight into adding a new student without leaving the admissions workspace.", heroNote = "Live list view for JHS 3 records across class grouping, region origin, and aggregate readiness.", directoryTitle = "Student directory", directorySub = "Search by name or student ID, then review class placement and aggregate status at a glance.", emptyRemoteMessage = "No student rows are currently available from Supabase." }) {
   const [search, setSearch] = useState("");
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [studentDraft, setStudentDraft] = useState(() => buildStudentDraft());
+  const [savingStudent, setSavingStudent] = useState(false);
+  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
   const isMobile = useIsMobileLayout();
   const students = studentsData?.length ? sortStudentsByIndex(studentsData) : [];
   const filtered = students.filter(s => s.full_name.toLowerCase().includes(search.toLowerCase()) || String(s.index).includes(search));
   const initialsFor = (name) => String(name || "ST").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const excellentCount = students.filter((student) => Number(student.aggregate || 0) > 0 && Number(student.aggregate || 0) <= 8).length;
+  const pendingCount = students.filter((student) => student.status === "pending").length;
+  const regionsCovered = new Set(students.map((student) => student.region).filter(Boolean)).size;
+  const canEditStudents = typeof onEditStudent === "function";
+
+  const openStudentEditor = (student) => {
+    setEditingStudent(student);
+    setStudentDraft(buildStudentDraft(student));
+  };
+
+  const saveStudentEdit = async () => {
+    if (!editingStudent || !studentDraft.full_name.trim() || !studentDraft.index.trim()) {
+      setStatusModal({ open: true, type: "failure", title: "Student Update Failed", message: "Student name and ID are required." });
+      return;
+    }
+
+    setSavingStudent(true);
+    try {
+      await onEditStudent?.(editingStudent, studentDraft);
+      setEditingStudent(null);
+      setStatusModal({ open: true, type: "success", title: "Student Saved", message: "Student record updated successfully." });
+    } catch (error) {
+      setStatusModal({ open: true, type: "failure", title: "Student Update Failed", message: error?.message || "Could not save the student record." });
+    } finally {
+      setSavingStudent(false);
+    }
+  };
   return (
     <div className="fade-in">
-      <div className="page-header">
-        <div className="page-title">Students</div>
-        <div className="page-sub">All enrolled JHS 3 students</div>
-      </div>
-      {!students.length && <div className="alert alert-warning">No student rows are currently available from Supabase.</div>}
-      <div className="page-actions-row">
-        <input className="form-control" placeholder="Search students..." value={search} onChange={e=>setSearch(e.target.value)}/>
-        <button className="btn btn-blue" onClick={onEnroll}><Ico name="enroll" size={16} color="#fff"/> Enroll Student</button>
-      </div>
+      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((current) => ({ ...current, open: false }))} />
+      <div className="students-shell">
+        <div className="students-hero">
+          <div className="students-hero-copy">
+            <div className="students-hero-kicker">{heroKicker}</div>
+            <div className="students-hero-title">{heroTitle}</div>
+            <div className="students-hero-sub">{heroSub}</div>
+          </div>
+          <div className="students-hero-actions">
+            {showEnrollAction && <button className="btn btn-blue" onClick={onEnroll}><Ico name="enroll" size={16} color="#fff"/> Enroll Student</button>}
+            <div className="students-hero-note">{heroNote}</div>
+          </div>
+        </div>
+
+        <div className="students-summary-grid">
+          <div className="students-summary-card">
+            <div className="students-summary-label">Total Students</div>
+            <div className="students-summary-value">{students.length}</div>
+            <div className="students-summary-sub">All records currently available</div>
+          </div>
+          <div className="students-summary-card">
+            <div className="students-summary-label">Search Results</div>
+            <div className="students-summary-value">{filtered.length}</div>
+            <div className="students-summary-sub">Matching the current filter</div>
+          </div>
+          <div className="students-summary-card">
+            <div className="students-summary-label">Aggregate 8 Or Better</div>
+            <div className="students-summary-value">{excellentCount}</div>
+            <div className="students-summary-sub">High-priority placement candidates</div>
+          </div>
+          <div className="students-summary-card">
+            <div className="students-summary-label">Regions Covered</div>
+            <div className="students-summary-value">{regionsCovered}</div>
+            <div className="students-summary-sub">Origin regions represented</div>
+          </div>
+        </div>
+
+        {!students.length && <div className="alert alert-warning">{emptyRemoteMessage}</div>}
+
+        <div className="students-toolbar">
+          <div className="students-toolbar-copy">
+            <div className="students-toolbar-title">{directoryTitle}</div>
+            <div className="students-toolbar-sub">{directorySub}</div>
+          </div>
+          <div className="students-toolbar-actions">
+            <input className="form-control students-search" placeholder="Search students..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            {showEnrollAction && <button className="btn btn-blue" onClick={onEnroll}><Ico name="enroll" size={16} color="#fff"/> Enroll Student</button>}
+          </div>
+        </div>
+
       {isMobile ? (
         <div className="mobile-record-list">
           {filtered.map((s, i) => (
@@ -965,13 +2184,23 @@ function StudentsPage({ onEnroll, studentsData }) {
                 <div className="mobile-record-item"><label>Class</label><span>{s.class}</span></div>
                 <div className="mobile-record-item"><label>Region</label><span>{s.region}</span></div>
               </div>
+              {canEditStudents && <div className="mobile-record-actions"><button className="btn btn-outline" onClick={() => openStudentEditor(s)}>Edit</button></div>}
             </div>
           ))}
+          {!filtered.length && <div className="students-empty-state">No students match the current search. Try a different name or student ID.</div>}
         </div>
       ) : (
-      <div className="card table-wrap">
+      <div className="card students-table-card">
+        <div className="students-table-head">
+          <div>
+            <div className="students-table-title">Admissions ledger</div>
+            <div className="students-table-sub">{filtered.length} visible record{filtered.length === 1 ? "" : "s"} with class, region, and aggregate tracking.</div>
+          </div>
+          <div className="students-table-status">{pendingCount} pending review</div>
+        </div>
+        <div className="table-wrap">
         <table className="students-table">
-          <thead><tr><th>#</th><th data-col="photo"><span className="students-th-label">Photo</span></th><th data-col="name"><span className="students-th-label">Name</span></th><th data-col="student-id"><span className="students-th-label">Student ID</span></th><th data-col="class"><span className="students-th-label">Class</span></th><th data-col="region"><span className="students-th-label">Region</span></th><th data-col="aggregate"><span className="students-th-label">Aggregate</span></th></tr></thead>
+          <thead><tr><th>#</th><th data-col="photo"><span className="students-th-label">Photo</span></th><th data-col="name"><span className="students-th-label">Name</span></th><th data-col="student-id"><span className="students-th-label">Student ID</span></th><th data-col="class"><span className="students-th-label">Class</span></th><th data-col="region"><span className="students-th-label">Region</span></th><th data-col="aggregate"><span className="students-th-label">Aggregate</span></th>{canEditStudents && <th><span className="students-th-label">Actions</span></th>}</tr></thead>
           <tbody>
             {filtered.map((s,i)=>(
               <tr key={s.id}>
@@ -981,40 +2210,56 @@ function StudentsPage({ onEnroll, studentsData }) {
                     <img
                       src={s.photo_url}
                       alt={s.full_name}
-                      style={{width:36,height:36,borderRadius:10,objectFit:"cover",border:"1px solid #dbeafe",display:"block"}}
+                      className="students-avatar"
                     />
                   ) : (
-                    <div style={{width:36,height:36,borderRadius:10,background:"#dbeafe",color:"#1e40af",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:".72rem",border:"1px solid #bfdbfe"}}>
+                    <div className="students-avatar-placeholder">
                       {initialsFor(s.full_name)}
                     </div>
                   )}
                 </td>
-                <td><strong>{s.full_name}</strong></td>
+                <td className="students-name-cell"><strong>{s.full_name}</strong><span>Status: {s.status || "pending"}</span></td>
                 <td className="students-id-cell">{s.index}</td>
                 <td>{s.class}</td>
                 <td>{s.region}</td>
                 <td className="students-aggregate-cell"><span className="grade-chip" style={s.aggregate<=8?{background:"#dcfce7",color:"#16a34a"}:s.aggregate<=12?{background:"#dbeafe",color:"#1e40af"}:{background:"#fef3c7",color:"#d97706"}}>{s.aggregate}</span></td>
+                {canEditStudents && <td><button className="btn btn-outline btn-sm" onClick={() => openStudentEditor(s)}>Edit</button></td>}
               </tr>
             ))}
           </tbody>
         </table>
+        {!filtered.length && <div className="students-empty-state" style={{margin:16}}>No students match the current search. Try a different name or student ID.</div>}
+        </div>
       </div>
       )}
+      </div>
+      <StudentEditorModal
+        open={!!editingStudent}
+        title="Edit Student"
+        draft={studentDraft}
+        saving={savingStudent}
+        onChange={(key, value) => setStudentDraft((current) => ({ ...current, [key]: value }))}
+        onClose={() => !savingStudent && setEditingStudent(null)}
+        onSave={saveStudentEdit}
+      />
     </div>
   );
 }
 
 // ENROLL
-function EnrollPage({ onBack }) {
+function EnrollPage({ onBack, registeredSchoolId = null }) {
   const [form, setForm] = useState({name:"",index:"",dob:"",class:"JHS 3A",region:"Ashanti",guardian:"",phone:"",photoUrl:""});
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoFileName, setPhotoFileName] = useState("");
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const completionCount = [form.name, form.index, form.dob, form.class, form.region, form.guardian, form.phone].filter((value) => String(value || "").trim()).length;
 
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    setPhotoFileName(file.name);
     const reader = new FileReader();
     reader.onload = (ev) => {
       setPhotoPreview(ev.target.result);
@@ -1049,6 +2294,7 @@ function EnrollPage({ onBack }) {
         region: student.region,
         aggregate: student.aggregate,
         status: student.status,
+        ...(registeredSchoolId != null ? { registered_school_id: registeredSchoolId } : {}),
         dob: form.dob || null,
         guardian: form.guardian || null,
         phone: form.phone || null,
@@ -1057,6 +2303,11 @@ function EnrollPage({ onBack }) {
 
       const { error } = await supabase.from("students").insert(payload);
       if (error && isMissingColumnError(error)) {
+        if (registeredSchoolId != null) {
+          alert("School-scoped student enrollment requires backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.");
+          setSaving(false);
+          return;
+        }
         // Fallback for schemas without photo_url column.
         const { photo_url, ...fallbackPayload } = payload;
         await supabase.from("students").insert(fallbackPayload);
@@ -1069,48 +2320,159 @@ function EnrollPage({ onBack }) {
 
   if (done) return (
     <div className="fade-in">
-      <div className="alert alert-success" style={{marginBottom:16}}>Student enrolled successfully!</div>
-      <button className="btn btn-outline" onClick={onBack}>{"<- Back to Students"}</button>
+      <div className="enroll-success-card">
+        <div className="alert alert-success" style={{marginBottom:0}}>Student enrolled successfully!</div>
+        <div className="enroll-success-title">Admissions record created</div>
+        <div className="enroll-success-sub">The student profile has been added and is ready for scores, placement updates, and guardian communication workflows.</div>
+        <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+          <button className="btn btn-outline" onClick={onBack}>{"<- Back to Students"}</button>
+        </div>
+      </div>
     </div>
   );
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Enroll New Student</div></div>
-      <div className="card card-padded">
-        <div className="enroll-layout">
-          {/* Photo column */}
-          <div className="enroll-photo-col">
-            <div className="enroll-photo-frame">
-              {photoPreview
-                ? <img src={photoPreview} alt="Preview" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                : <span style={{fontSize:12,color:"#94a3b8",textAlign:"center",padding:4}}>No photo</span>
-              }
-            </div>
-            <label className="form-label" style={{marginBottom:0}}>Photo</label>
-            <input type="file" accept="image/*" className="enroll-photo-input" onChange={handlePhotoChange}/>
+      <div className="enroll-shell">
+        <div className="enroll-hero">
+          <div className="enroll-hero-copy">
+            <div className="enroll-hero-eyebrow">Admissions Desk</div>
+            <div className="enroll-hero-title">Enroll a student with a cleaner intake workflow</div>
+            <div className="enroll-hero-sub">Capture the core identity, placement, and guardian details in one professional screen that feels consistent with an admissions office, not a demo form.</div>
           </div>
-          {/* Fields grid */}
-          <div className="form-grid" style={{flex:1}}>
-            <div className="form-group"><label className="form-label">Full Name</label><input className="form-control" value={form.name} onChange={e=>set("name",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Student ID</label><input className="form-control" value={form.index} onChange={e=>set("index",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Date of Birth</label><input type="date" className="form-control" value={form.dob} onChange={e=>set("dob",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Class</label>
-              <select className="form-control" value={form.class} onChange={e=>set("class",e.target.value)}>
-                {["JHS 3A","JHS 3B","JHS 3C"].map(c=><option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="form-group"><label className="form-label">Region</label>
-              <select className="form-control" value={form.region} onChange={e=>set("region",e.target.value)}>
-                {GHANA_REGIONS.map(r=><option key={r}>{r}</option>)}
-              </select>
-            </div>
-            <div className="form-group"><label className="form-label">Guardian Name</label><input className="form-control" value={form.guardian} onChange={e=>set("guardian",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Phone</label><input className="form-control" value={form.phone} onChange={e=>set("phone",e.target.value)}/></div>
+          <div className="enroll-hero-pills">
+            <span className="enroll-hero-pill"><Ico name="students" size={14} color="#bfdbfe"/> Student record</span>
+            <span className="enroll-hero-pill"><Ico name="confirmed" size={14} color="#bfdbfe"/> Ready for placement</span>
+            <span className="enroll-hero-pill"><Ico name="profile" size={14} color="#bfdbfe"/> Guardian linked</span>
           </div>
         </div>
-        <div style={{display:"flex",gap:12,justifyContent:"center"}}>
-          <button className="btn btn-blue" onClick={enrollStudent} disabled={saving}>{saving ? "Saving..." : "Enroll Student"}</button>
-          <button className="btn btn-outline" onClick={onBack}>Cancel</button>
+
+        <div className="enroll-panel">
+          <aside className="enroll-sidebar">
+            <div className="enroll-photo-card">
+              <div className="enroll-photo-head">
+                <div>
+                  <div className="enroll-photo-title">Profile Preview</div>
+                  <div className="enroll-photo-meta">Admissions card snapshot</div>
+                </div>
+                <span className="enroll-section-badge">{completionCount}/7 fields</span>
+              </div>
+              <div className="enroll-photo-col">
+                <div className="enroll-photo-frame">
+                  {photoPreview ? (
+                    <img src={photoPreview} alt="Preview" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                  ) : (
+                    <div className="enroll-photo-empty">
+                      <div className="enroll-photo-empty-badge"><Ico name="profile" size={20} color="#1d4ed8"/></div>
+                      <div className="enroll-photo-empty-copy">
+                        <div className="enroll-photo-empty-title">Photo not uploaded</div>
+                        <div className="enroll-photo-empty-sub">Add a clear passport-style image for the student record.</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="enroll-upload-stack">
+                  <input id="student-photo-upload" type="file" accept="image/*" className="enroll-photo-input" onChange={handlePhotoChange}/>
+                  <label htmlFor="student-photo-upload" className="enroll-upload-trigger"><Ico name="upload" size={14} color="#fff"/> {photoPreview ? "Replace photo" : "Upload photo"}</label>
+                  <div className="enroll-upload-meta">
+                    <div className="enroll-upload-file">{photoFileName || "No file selected"}</div>
+                    <div className="enroll-upload-caption">PNG or JPG. Centered portrait preferred.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="enroll-mini-stats">
+              <div className="enroll-mini-stat">
+                <div className="enroll-mini-label">Class</div>
+                <div className="enroll-mini-value">{form.class}</div>
+              </div>
+              <div className="enroll-mini-stat">
+                <div className="enroll-mini-label">Region</div>
+                <div className="enroll-mini-value">{form.region}</div>
+              </div>
+            </div>
+
+            <div className="enroll-guidance">
+              <div className="enroll-guidance-title">Before you save</div>
+              <div className="enroll-guidance-list">
+                <div className="enroll-guidance-item"><span className="enroll-guidance-dot">1</span><span>Use the official student ID format so later score imports and attendance records match cleanly.</span></div>
+                <div className="enroll-guidance-item"><span className="enroll-guidance-dot">2</span><span>Confirm the guardian phone number now to reduce corrections during fees and announcement workflows.</span></div>
+                <div className="enroll-guidance-item"><span className="enroll-guidance-dot">3</span><span>Choose the correct class and region up front so placement dashboards stay accurate.</span></div>
+              </div>
+            </div>
+          </aside>
+
+          <div className="card enroll-form-card">
+            <div className="enroll-form-head">
+              <div>
+                <div className="enroll-form-kicker">Student Intake Form</div>
+                <div className="enroll-form-title">Core admission details</div>
+                <div className="enroll-form-sub">Enter the student profile once, then let the rest of the portal reuse it across academics, communication, and reporting.</div>
+              </div>
+              <div className="enroll-form-status">Draft ready</div>
+            </div>
+
+            <div className="enroll-form-body">
+              <section className="enroll-section">
+                <div className="enroll-section-head">
+                  <div>
+                    <div className="enroll-section-title">Identity</div>
+                    <div className="enroll-section-sub">Basic student information used everywhere else in the portal.</div>
+                  </div>
+                  <span className="enroll-section-badge">Required</span>
+                </div>
+                <div className="enroll-fields">
+                  <div className="form-group"><label className="form-label">Full Name</label><input className="form-control" placeholder="e.g. Ama Owusu Mensah" value={form.name} onChange={e=>set("name",e.target.value)}/></div>
+                  <div className="form-group"><label className="form-label">Student ID</label><input className="form-control" placeholder="e.g. CG-2026-014" value={form.index} onChange={e=>set("index",e.target.value)}/></div>
+                  <div className="form-group"><label className="form-label">Date of Birth</label><input type="date" className="form-control" value={form.dob} onChange={e=>set("dob",e.target.value)}/></div>
+                  <div className="form-group"><label className="form-label">Parent/Guardian Name</label><input className="form-control" placeholder="Parent or guardian full name" value={form.guardian} onChange={e=>set("guardian",e.target.value)}/></div>
+                </div>
+              </section>
+
+              <section className="enroll-section">
+                <div className="enroll-section-head">
+                  <div>
+                    <div className="enroll-section-title">Academic Class Placement</div>
+                    <div className="enroll-section-sub">Assign the student to the right learning group and origin region for reporting.</div>
+                  </div>
+                  <span className="enroll-section-badge">Placement</span>
+                </div>
+                <div className="enroll-fields">
+                  <div className="form-group"><label className="form-label">Class</label>
+                    <select className="form-control" value={form.class} onChange={e=>set("class",e.target.value)}>
+                      {["JHS 3A","JHS 3B","JHS 3C"].map(c=><option key={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group"><label className="form-label">Region</label>
+                    <select className="form-control" value={form.region} onChange={e=>set("region",e.target.value)}>
+                      {GHANA_REGIONS.map(r=><option key={r}>{r}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </section>
+
+              <section className="enroll-section">
+                <div className="enroll-section-head">
+                  <div>
+                    <div className="enroll-section-title">Family contact</div>
+                    <div className="enroll-section-sub">Keep one reliable guardian contact on file for fees, notices, and attendance follow-up.</div>
+                  </div>
+                  <span className="enroll-section-badge">Contact</span>
+                </div>
+                <div className="enroll-fields">
+                  <div className="form-group full"><label className="form-label">Phone</label><input className="form-control" placeholder="Guardian or student phone" value={form.phone} onChange={e=>set("phone",e.target.value)}/></div>
+                </div>
+              </section>
+            </div>
+
+            <div className="enroll-actions">
+              <div className="enroll-actions-note">Required fields are validated before save. Once enrolled, the record can be used for scores, attendance, announcements, and placement updates.</div>
+              <div className="enroll-actions-row">
+                <button className="btn btn-outline" onClick={onBack}>Cancel</button>
+                <button className="btn btn-blue" onClick={enrollStudent} disabled={saving}>{saving ? "Saving..." : "Enroll Student"}</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1279,7 +2641,7 @@ function AnalyticsPage({ studentsData, schoolsData, selectionsData, scoreTableIn
 }
 
 // â”€â”€â”€ ATTENDANCE (Admin) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function AttendancePage({ studentsData, tableInfo }) {
+function AttendancePage({ studentsData, tableInfo, registeredSchoolId = null }) {
   const hasAttendanceError = hasRealTableError(tableInfo);
   const isMobile = useIsMobileLayout();
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -1300,7 +2662,9 @@ function AttendancePage({ studentsData, tableInfo }) {
         return;
       }
       setLoadingMarks(true);
-      const { data, error } = await supabase.from("attendance").select("*").eq("date", date);
+      let query = supabase.from("attendance").select("*").eq("date", date);
+      if (registeredSchoolId != null) query = query.eq("registered_school_id", registeredSchoolId);
+      const { data, error } = await query;
       if (!error && Array.isArray(data) && data.length) {
         const next = Object.fromEntries(rows.map(s => [s.id, "Present"]));
         data.forEach((record) => {
@@ -1329,6 +2693,7 @@ function AttendancePage({ studentsData, tableInfo }) {
         const payload = rows.map((student) => ({
           student_id: student.id,
           index_number: student.index || student.index_number || null,
+          ...(registeredSchoolId != null ? { registered_school_id: registeredSchoolId } : {}),
           date,
           status: marks[student.id] || "Present",
         }));
@@ -1544,14 +2909,631 @@ function SchoolsPage({ schoolsData }) {
   );
 }
 
+function RegisteredSchoolsPage({ schools, admins, onRegisterNew, onCreateSchoolAdmin, setupError = "", currentUser = null }) {
+  const { cfg: globalCfg } = useContext(SettingsContext);
+  const isMobile = useIsMobileLayout();
+  const [expandedSchoolId, setExpandedSchoolId] = useState(null);
+  const [forms, setForms] = useState({});
+  const [savingSchoolId, setSavingSchoolId] = useState(null);
+  const [pageError, setPageError] = useState("");
+  const activeCount = schools.filter((school) => school.active).length;
+  const totalAdmins = admins.length;
+  const schoolAdminRoleOptions = getAssignableRoles(globalCfg, currentUser?.role || "admin", "school-admin");
+  const defaultSchoolAdminRole = schoolAdminRoleOptions.find((role) => role.key === "school_admin")?.key || schoolAdminRoleOptions[0]?.key || "school_admin";
+
+  const setForm = (schoolId, key, value) => {
+    setForms((current) => ({
+      ...current,
+      [schoolId]: {
+        full_name: "",
+        email: "",
+        phone: "",
+        password: "",
+        role: defaultSchoolAdminRole,
+        ...current[schoolId],
+        [key]: value,
+      },
+    }));
+  };
+
+  const createAdmin = async (school) => {
+    const form = forms[school.id] || { full_name: "", email: "", phone: "", password: "", role: defaultSchoolAdminRole };
+    if (!form.full_name.trim() || !form.email.trim() || !form.password.trim()) {
+      setPageError("Full name, email, and password are required to create a school admin.");
+      return;
+    }
+
+    setSavingSchoolId(school.id);
+    setPageError("");
+    try {
+      await onCreateSchoolAdmin(school, form);
+      setForms((current) => ({ ...current, [school.id]: { full_name: "", email: "", phone: "", password: "", role: defaultSchoolAdminRole } }));
+      setExpandedSchoolId(null);
+    } catch (err) {
+      setPageError(String(err?.message || "Unable to create the school admin right now."));
+    } finally {
+      setSavingSchoolId(null);
+    }
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="school-reg-shell">
+        <div className="school-reg-hero">
+          <div className="school-reg-hero-copy">
+            <div className="school-reg-kicker">Super Admin Registry</div>
+            <div className="school-reg-title">Registered schools and school admins</div>
+            <div className="school-reg-sub">Manage registered schools separately from the admissions placement list, and assign a dedicated admin account to each school.</div>
+          </div>
+          <div className="school-reg-chip"><Ico name="schools" size={14} color="#99f6e4"/> {schools.length} registered schools</div>
+        </div>
+
+        <div className="school-reg-summary-grid">
+          <div className="school-reg-summary-card">
+            <div className="school-reg-summary-label">Registered Schools</div>
+            <div className="school-reg-summary-value">{schools.length}</div>
+            <div className="school-reg-summary-sub">Every school tenant currently onboarded to the platform.</div>
+          </div>
+          <div className="school-reg-summary-card">
+            <div className="school-reg-summary-label">Active Schools</div>
+            <div className="school-reg-summary-value">{activeCount}</div>
+            <div className="school-reg-summary-sub">Schools available for active use and school-admin access.</div>
+          </div>
+          <div className="school-reg-summary-card">
+            <div className="school-reg-summary-label">School Admins</div>
+            <div className="school-reg-summary-value">{totalAdmins}</div>
+            <div className="school-reg-summary-sub">Admin accounts assigned across all registered schools.</div>
+          </div>
+        </div>
+
+        <div className="school-reg-toolbar">
+          <div className="school-reg-toolbar-copy">
+            <div className="school-reg-toolbar-title">Registry operations</div>
+            <div className="school-reg-toolbar-sub">Review school onboarding status, assign school admins, and keep each school record organized from one place.</div>
+          </div>
+          <button className="btn btn-blue" onClick={onRegisterNew}><Ico name="enroll" size={16} color="#fff"/> Register School</button>
+        </div>
+
+        {(setupError || pageError) && <div className="alert alert-warning">{setupError || pageError}</div>}
+
+        {!schools.length ? (
+          <div className="students-empty-state">No registered schools yet. Use Register School to create the first school tenant and assign its admin.</div>
+        ) : (
+          <div className="registered-school-list">
+            {schools.map((school) => {
+              const schoolAdmins = admins.filter((admin) => String(admin.registered_school_id) === String(school.id));
+              const form = forms[school.id] || { full_name: "", email: "", phone: "", password: "", role: defaultSchoolAdminRole };
+              const open = expandedSchoolId === school.id;
+              return (
+                <div key={school.id} className="card registered-school-card">
+                  <div className="registered-school-head">
+                    <div className="registered-school-meta">
+                      <div className="registered-school-title">{school.name}</div>
+                      <div className="registered-school-sub">{school.location ? `${school.location}, ` : ""}{school.region} • {school.type || "Mixed"}</div>
+                    </div>
+                    <div className="registered-school-badges" style={isMobile ? { justifyContent: "flex-start" } : undefined}>
+                      <span className={`badge ${school.category === "A" ? "badge-warning" : school.category === "B" ? "badge-blue" : "badge-success"}`}>Grade {school.category}</span>
+                      <span className={`badge ${school.active ? "badge-success" : "badge-gray"}`}>{school.active ? "Active" : "Inactive"}</span>
+                    </div>
+                  </div>
+                  <div className="registered-school-body">
+                    <div className="registered-school-grid">
+                      <div className="registered-school-stat"><label>Grade</label><strong>{school.category || "-"}</strong></div>
+                      <div className="registered-school-stat"><label>School Type</label><strong>{school.type || "-"}</strong></div>
+                      <div className="registered-school-stat"><label>Admins</label><strong>{schoolAdmins.length}</strong></div>
+                      <div className="registered-school-stat"><label>Region</label><strong>{school.region || "-"}</strong></div>
+                    </div>
+
+                    <div className="school-admin-block">
+                      <div className="school-admin-block-head">
+                        <div>
+                          <div className="school-reg-section-title" style={{ marginBottom: 0 }}>School Admins</div>
+                          <div className="school-admin-block-sub">Access management for this school tenant and its operational workspace.</div>
+                        </div>
+                      </div>
+                      <div className="school-admin-list">
+                        {schoolAdmins.map((admin) => (
+                          <div key={admin.id} className="school-admin-row">
+                            <div className="school-admin-row-copy">
+                              <strong>{admin.full_name}</strong>
+                              <span>{admin.email}</span>
+                              <span>{admin.phone || "No phone added"}</span>
+                              <span>{getRoleMeta(globalCfg, admin.role || defaultSchoolAdminRole).label}</span>
+                            </div>
+                            <span className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}>{admin.status || "active"}</span>
+                          </div>
+                        ))}
+                        {!schoolAdmins.length && <div className="students-empty-state" style={{ padding: 16 }}>No admin assigned yet for this school.</div>}
+                      </div>
+
+                      {open ? (
+                        <div className="school-admin-form">
+                          <div className="school-admin-form-head">
+                            <div>
+                              <div className="school-admin-form-title">Create school admin</div>
+                              <div className="school-admin-form-sub">This admin can sign in with the credentials created here.</div>
+                            </div>
+                            <button className="btn btn-outline btn-sm" onClick={() => setExpandedSchoolId(null)}>Close</button>
+                          </div>
+                          <div className="form-grid">
+                            <div className="form-group"><label className="form-label">Full Name</label><input className="form-control" value={form.full_name} onChange={(e) => setForm(school.id, "full_name", e.target.value)} /></div>
+                            <div className="form-group"><label className="form-label">Email</label><input className="form-control" type="email" value={form.email} onChange={(e) => setForm(school.id, "email", e.target.value)} /></div>
+                            <div className="form-group"><label className="form-label">Role</label><select className="form-control" value={form.role} onChange={(e) => setForm(school.id, "role", e.target.value)}>{schoolAdminRoleOptions.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}</select></div>
+                            <div className="form-group"><label className="form-label">Phone</label><input className="form-control" value={form.phone} onChange={(e) => setForm(school.id, "phone", e.target.value)} /></div>
+                            <div className="form-group"><label className="form-label">Password</label><input className="form-control" type="password" value={form.password} onChange={(e) => setForm(school.id, "password", e.target.value)} /></div>
+                          </div>
+                          <div className="school-reg-actions-row">
+                            <button className="btn btn-blue" onClick={() => createAdmin(school)} disabled={savingSchoolId === school.id}>{savingSchoolId === school.id ? "Creating..." : "Create Admin"}</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button className="btn btn-outline" onClick={() => setExpandedSchoolId(school.id)}>Create School Admin</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SchoolRegistrationPage({ onBack, onRegisterSchool, setupError = "" }) {
+  const [form, setForm] = useState({
+    name: "",
+    location: "",
+    region: "Ashanti",
+    category: "",
+    type: "",
+    active: true,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [savedSchool, setSavedSchool] = useState(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  const openReviewModal = () => {
+    if (setupError) {
+      setError(setupError);
+      return;
+    }
+    if (!form.name.trim()) {
+      setError("School name is required.");
+      return;
+    }
+    if (!form.location.trim()) {
+      setError("Location is required.");
+      return;
+    }
+
+    setError("");
+    setShowReviewModal(true);
+  };
+
+  const registerSchool = async () => {
+    setSaving(true);
+    setError("");
+
+    try {
+      const school = await onRegisterSchool({
+        name: form.name.trim(),
+        location: form.location.trim(),
+        region: form.region,
+        category: form.category,
+        type: form.type,
+        active: form.active,
+      });
+      setShowReviewModal(false);
+      setSavedSchool(school);
+    } catch (err) {
+      setError(String(err?.message || "Unable to register the school right now."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (savedSchool) {
+    return (
+      <div className="fade-in">
+        <div className="school-reg-success">
+          <div className="alert alert-success" style={{marginBottom:0}}>School registered successfully!</div>
+          <div className="enroll-success-title">{savedSchool.name} has been added</div>
+          <div className="enroll-success-sub">The school has been added to the platform registry and is ready for admin setup and school management workflows.</div>
+          <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+            <button className="btn btn-outline" onClick={onBack}>Back To Schools</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="school-reg-shell">
+        <div className="school-reg-hero">
+          <div className="school-reg-hero-copy">
+            <div className="school-reg-kicker">School Directory</div>
+            <div className="school-reg-title">Register a new school</div>
+            <div className="school-reg-sub">Register a school on the platform so its admins can be created and the school can manage its operations in its own workspace.</div>
+          </div>
+          <div className="school-reg-chip"><Ico name="schools" size={14} color="#99f6e4"/> Platform onboarding</div>
+        </div>
+
+        <div className="school-reg-summary-grid">
+          <div className="school-reg-summary-card">
+            <div className="school-reg-summary-label">Onboarding Goal</div>
+            <div className="school-reg-summary-value">Profile</div>
+            <div className="school-reg-summary-sub">Capture the school identity and its operating region clearly before access is provisioned.</div>
+          </div>
+          <div className="school-reg-summary-card">
+            <div className="school-reg-summary-label">Access Setup</div>
+            <div className="school-reg-summary-value">Admin Ready</div>
+            <div className="school-reg-summary-sub">The registered school can immediately receive school-admin accounts after registration.</div>
+          </div>
+          <div className="school-reg-summary-card">
+            <div className="school-reg-summary-label">Visibility</div>
+            <div className="school-reg-summary-value">Controlled</div>
+            <div className="school-reg-summary-sub">Use the active toggle to decide whether the school is currently allowed into live platform operations.</div>
+          </div>
+        </div>
+
+        <div className="school-reg-grid">
+          <aside className="school-reg-side">
+            <div className="school-reg-stat">
+              <div className="school-reg-stat-label">Grade</div>
+              <div className="school-reg-stat-value">{form.category || "-"}</div>
+            </div>
+            <div className="school-reg-stat">
+              <div className="school-reg-stat-label">School Type</div>
+              <div className="school-reg-stat-value">{form.type || "-"}</div>
+            </div>
+            <div className="school-reg-note">
+              Add the official school name, location, grade, and school type carefully. These details feed directly into the registered-school directory and admin setup flow.
+            </div>
+          </aside>
+
+          <div className="card school-reg-form-card">
+            <div className="school-reg-head">
+              <div>
+                <div className="school-reg-head-title">School registration form</div>
+                <div className="school-reg-head-sub">Capture the core school details needed to onboard the school and assign platform access.</div>
+              </div>
+              <div className="enroll-form-status">Draft</div>
+            </div>
+
+            <div className="school-reg-section">
+              <div className="school-reg-section-title">Identity</div>
+              <div className="school-reg-section-sub">The core public-facing information for the school profile.</div>
+              <div className="form-grid">
+                <div className="form-group"><label className="form-label">School Name</label><input className="form-control" placeholder="Campus Ghana" value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Location</label><input className="form-control" placeholder="Obuasi" value={form.location} onChange={(e) => set("location", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Region</label><select className="form-control" value={form.region} onChange={(e) => set("region", e.target.value)}>{GHANA_REGIONS.map((region) => <option key={region}>{region}</option>)}</select></div>
+                <div className="form-group"><label className="form-label">School Type</label><select className="form-control" value={form.type} onChange={(e) => set("type", e.target.value)}><option value="">Select school type</option><option>Mixed</option><option>Boys</option><option>Girls</option></select></div>
+              </div>
+            </div>
+
+            <div className="school-reg-section">
+              <div className="school-reg-section-title">School classification</div>
+              <div className="school-reg-section-sub">These values define how the school is labeled and organized inside the registered-school directory.</div>
+              <div className="form-grid">
+                <div className="form-group"><label className="form-label">Grade</label><select className="form-control" value={form.category} onChange={(e) => set("category", e.target.value)}><option value="">Select grade</option><option>A</option><option>B</option><option>C</option></select></div>
+              </div>
+              <div className="school-reg-switch" style={{marginTop:14}}>
+                <div className="school-reg-switch-copy">
+                  <div className="school-reg-switch-title">Accept admissions</div>
+                  <div className="school-reg-switch-sub">Inactive schools remain in the registry but can be held back from active platform use.</div>
+                </div>
+                <input type="checkbox" checked={form.active} onChange={(e) => set("active", e.target.checked)} />
+              </div>
+            </div>
+
+            {(setupError || error) && <div className="alert alert-warning" style={{margin:"0 22px"}}>{setupError || error}</div>}
+
+            <div className="school-reg-actions">
+              <div className="school-reg-actions-note">Required fields are validated before save. Registered schools are kept in their own registry for super-admin management.</div>
+              <div className="school-reg-actions-row">
+                <button className="btn btn-outline" onClick={onBack}>Cancel</button>
+                <button className="btn btn-blue" onClick={openReviewModal} disabled={saving || !!setupError}>{saving ? "Saving..." : "Review Summary"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {showReviewModal && (
+          <div className="modal-backdrop" onClick={() => !saving && setShowReviewModal(false)}>
+            <div className="modal-card" style={{maxWidth:560}} onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div>
+                  <div className="modal-title">Review school registration</div>
+                  <div className="modal-sub">Confirm the school details before creating the platform registration.</div>
+                </div>
+                <button className="modal-close" onClick={() => !saving && setShowReviewModal(false)}>
+                  <Ico name="close" size={18} color="#1e3a8a" />
+                </button>
+              </div>
+
+              <div className="metric-list">
+                <div className="metric-row"><span>School Name</span><strong>{form.name || "-"}</strong></div>
+                <div className="metric-row"><span>Location</span><strong>{form.location || "-"}</strong></div>
+                <div className="metric-row"><span>Region</span><strong>{form.region || "-"}</strong></div>
+                <div className="metric-row"><span>School Type</span><strong>{form.type || "Not selected"}</strong></div>
+                <div className="metric-row"><span>Grade</span><strong>{form.category || "Not selected"}</strong></div>
+                <div className="metric-row"><span>Status</span><strong>{form.active ? "Active" : "Inactive"}</strong></div>
+              </div>
+
+              <div className="modal-actions">
+                <button className="btn btn-outline" onClick={() => setShowReviewModal(false)} disabled={saving}>Edit</button>
+                <button className="btn btn-blue" onClick={registerSchool} disabled={saving}>{saving ? "Saving..." : "Save School Registration"}</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SchoolAdminDashboardPage({ user, school, admins, pendingRows, confirmedRows, studentsData, teachersData, feesData, loading }) {
+  const totalCollected = (feesData || []).reduce((sum, fee) => sum + Number(fee.paid || 0), 0);
+  const totalOutstanding = (feesData || []).reduce((sum, fee) => sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0), 0);
+  const latestRows = [...confirmedRows, ...pendingRows]
+    .sort((left, right) => new Date(right.reviewedAt || 0).getTime() - new Date(left.reviewedAt || 0).getTime())
+    .slice(0, 6);
+
+  return (
+    <div className="fade-in">
+      <div className="school-workspace-shell">
+        <div className="school-workspace-hero">
+          <div className="school-workspace-copy">
+            <div className="school-workspace-kicker">School Workspace</div>
+            <div className="school-workspace-title">{school?.name || user?.managed_school_name || "School Workspace"}</div>
+            <div className="school-workspace-sub">A refined operations view for the school account, covering student records, finance activity, admin access, and recent school-facing candidate activity.</div>
+          </div>
+          <div className="school-workspace-meta">
+            <div className="school-workspace-chip"><Ico name="schools" size={14} color="#99f6e4"/> {school?.region || "Region pending"}</div>
+            <div className="school-workspace-note">Use this workspace to monitor school operations, confirm admin assignments, and keep the school profile accurate.</div>
+          </div>
+        </div>
+
+        {loading && <div className="alert alert-info">Loading school workspace...</div>}
+        {!school && !loading && <div className="alert alert-warning">This admin account is not yet linked to a registered school record.</div>}
+
+        <div className="school-workspace-summary">
+          <div className="school-workspace-summary-card">
+            <div className="school-workspace-summary-label">Managed School</div>
+            <div className="school-workspace-summary-value">{school?.name || user?.managed_school_name || "Not linked"}</div>
+            <div className="school-workspace-summary-sub">Primary school record attached to this admin account.</div>
+          </div>
+          <div className="school-workspace-summary-card">
+            <div className="school-workspace-summary-label">Students</div>
+            <div className="school-workspace-summary-value">{studentsData.length}</div>
+            <div className="school-workspace-summary-sub">Student records currently linked to this school.</div>
+          </div>
+          <div className="school-workspace-summary-card">
+            <div className="school-workspace-summary-label">Teachers</div>
+            <div className="school-workspace-summary-value">{teachersData.length}</div>
+            <div className="school-workspace-summary-sub">School staff records available inside this workspace.</div>
+          </div>
+          <div className="school-workspace-summary-card">
+            <div className="school-workspace-summary-label">Fees Collected</div>
+            <div className="school-workspace-summary-value">GHS {totalCollected.toLocaleString()}</div>
+            <div className="school-workspace-summary-sub">Outstanding: GHS {totalOutstanding.toLocaleString()}</div>
+          </div>
+          <div className="school-workspace-summary-card">
+            <div className="school-workspace-summary-label">School Admins</div>
+            <div className="school-workspace-summary-value">{admins.length}</div>
+            <div className="school-workspace-summary-sub">Admin accounts assigned to this school.</div>
+          </div>
+        </div>
+
+        <div className="school-workspace-grid">
+          <div className="school-workspace-panel">
+            <div className="school-workspace-panel-head">
+              <div>
+                <div className="school-workspace-panel-title">School profile</div>
+                <div className="school-workspace-panel-sub">High-level identity details used across the school-admin workspace.</div>
+              </div>
+            </div>
+            <div className="school-profile-list">
+              <div className="school-profile-row"><span>Name</span><strong>{school?.name || user?.managed_school_name || "-"}</strong></div>
+              <div className="school-profile-row"><span>Region</span><strong>{school?.region || "-"}</strong></div>
+              <div className="school-profile-row"><span>Location</span><strong>{school?.location || "-"}</strong></div>
+              <div className="school-profile-row"><span>Grade</span><strong>{school?.category || "-"}</strong></div>
+              <div className="school-profile-row"><span>Type</span><strong>{school?.type || "-"}</strong></div>
+              <div className="school-profile-row"><span>Status</span><strong>{school?.active ? "Active" : "Inactive"}</strong></div>
+            </div>
+          </div>
+
+          <div className="school-insight-stack">
+            <div className="school-workspace-panel">
+              <div className="school-workspace-panel-head">
+                <div>
+                  <div className="school-workspace-panel-title">Assigned admins</div>
+                  <div className="school-workspace-panel-sub">People who currently manage the school through the platform.</div>
+                </div>
+              </div>
+              <div className="school-admin-mini-list">
+                {admins.map((admin) => (
+                  <div key={admin.id} className="school-admin-mini-row">
+                    <div className="school-admin-mini-copy">
+                      <strong>{admin.full_name}</strong>
+                      <span>{admin.email}</span>
+                    </div>
+                    <span className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}>{admin.status || "active"}</span>
+                  </div>
+                ))}
+                {!admins.length && <div className="school-activity-empty">No additional school admins have been assigned yet.</div>}
+              </div>
+            </div>
+
+            <div className="school-workspace-panel">
+              <div className="school-workspace-panel-head">
+                <div>
+                  <div className="school-workspace-panel-title">Recent candidate activity</div>
+                  <div className="school-workspace-panel-sub">Selections and placement activity where this school appears in scope.</div>
+                </div>
+              </div>
+              {latestRows.length ? (
+                <div className="table-wrap">
+                  <table>
+                    <thead><tr><th>Student</th><th>1st Choice</th><th>2nd Choice</th><th>Status</th><th>Date</th></tr></thead>
+                    <tbody>
+                      {latestRows.map((row) => (
+                        <tr key={row.id}>
+                          <td><strong>{row.studentName}</strong></td>
+                          <td>{row.first}</td>
+                          <td>{row.second}</td>
+                          <td><span className={`badge ${row.status === "confirmed" ? "badge-success" : "badge-blue"}`}>{row.status}</span></td>
+                          <td>{row.reviewedAt ? new Date(row.reviewedAt).toLocaleDateString() : "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="school-activity-empty">No selection activity mentioning this school yet.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ManagedSchoolPage({ school, admins, user, onSaveProfile }) {
+  const [form, setForm] = useState({ name: "", location: "", region: "", type: "", category: "" });
+  const [saving, setSaving] = useState(false);
+  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+
+  useEffect(() => {
+    setForm({
+      name: school?.name || user?.managed_school_name || "",
+      location: school?.location || "",
+      region: school?.region || "Ashanti",
+      type: school?.type || "",
+      category: school?.category || "",
+    });
+  }, [school, user]);
+
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  const saveProfile = async () => {
+    if (!form.name.trim()) {
+      setStatusModal({ open: true, type: "failure", title: "Save Failed", message: "School name is required." });
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSaveProfile?.({
+        name: form.name.trim(),
+        location: form.location.trim(),
+        region: form.region,
+        type: form.type,
+        category: form.category,
+      });
+      setStatusModal({ open: true, type: "success", title: "School Updated", message: "School profile settings were saved." });
+    } catch (error) {
+      setStatusModal({ open: true, type: "failure", title: "Save Failed", message: error?.message || "Could not save school profile settings." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fade-in">
+      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((current) => ({ ...current, open: false }))} />
+      <div className="school-settings-shell">
+        <div className="school-workspace-hero">
+          <div className="school-workspace-copy">
+            <div className="school-workspace-kicker">Managed School</div>
+            <div className="school-workspace-title">School profile and access</div>
+            <div className="school-workspace-sub">Review the official school record, update profile details, and confirm which administrators currently manage the school.</div>
+          </div>
+          <div className="school-workspace-meta">
+            <div className="school-workspace-chip"><Ico name="profile" size={14} color="#99f6e4"/> Admin settings</div>
+            <div className="school-workspace-note">Changes made here affect how the school appears across its workspace and onboarding registry.</div>
+          </div>
+        </div>
+
+        <div className="school-settings-grid">
+          <div className="school-settings-card">
+            <div className="school-settings-head">
+              <div>
+                <div className="school-settings-title">Registry details</div>
+                <div className="school-settings-sub">The current school identity record as stored in the platform registry.</div>
+              </div>
+            </div>
+            <div className="school-profile-list">
+              <div className="school-profile-row"><span>School Name</span><strong>{school?.name || user?.managed_school_name || "-"}</strong></div>
+              <div className="school-profile-row"><span>Region</span><strong>{school?.region || "-"}</strong></div>
+              <div className="school-profile-row"><span>Location</span><strong>{school?.location || "-"}</strong></div>
+              <div className="school-profile-row"><span>Grade</span><strong>{school?.category || "-"}</strong></div>
+              <div className="school-profile-row"><span>Type</span><strong>{school?.type || "-"}</strong></div>
+              <div className="school-profile-row"><span>Status</span><strong>{school?.active ? "Active" : "Inactive"}</strong></div>
+            </div>
+          </div>
+
+          <div className="school-settings-card">
+            <div className="school-settings-head">
+              <div>
+                <div className="school-settings-title">Edit profile</div>
+                <div className="school-settings-sub">Update the school profile details used throughout the school-admin portal.</div>
+              </div>
+            </div>
+            <div className="school-settings-form-grid">
+              <div className="form-grid">
+            <div className="form-group"><label className="form-label">School Name</label><input className="form-control" value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Location</label><input className="form-control" value={form.location} onChange={(e) => set("location", e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Region</label><select className="form-control" value={form.region} onChange={(e) => set("region", e.target.value)}>{GHANA_REGIONS.map((region) => <option key={region}>{region}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">School Type</label><select className="form-control" value={form.type} onChange={(e) => set("type", e.target.value)}><option value="">Select school type</option><option>Mixed</option><option>Boys</option><option>Girls</option></select></div>
+            <div className="form-group"><label className="form-label">Grade</label><select className="form-control" value={form.category} onChange={(e) => set("category", e.target.value)}><option value="">Select grade</option><option>A</option><option>B</option><option>C</option></select></div>
+              </div>
+            </div>
+            <div className="modal-actions" style={{justifyContent:"flex-start"}}>
+              <button className="btn btn-blue" onClick={saveProfile} disabled={saving}>{saving ? "Saving..." : "Save Profile"}</button>
+            </div>
+          </div>
+
+          <div className="school-settings-card">
+            <div className="school-settings-head">
+              <div>
+                <div className="school-settings-title">Admin accounts</div>
+                <div className="school-settings-sub">People currently responsible for managing this school on the platform.</div>
+              </div>
+            </div>
+            <div className="school-admin-mini-list">
+            {admins.map((admin) => (
+              <div key={admin.id} className="school-admin-mini-row">
+                <div className="school-admin-mini-copy">
+                  <strong>{admin.full_name}</strong>
+                  <span>{admin.email}</span>
+                  <span>{admin.phone || "No phone added"}</span>
+                </div>
+                <span className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}>{admin.status || "active"}</span>
+              </div>
+            ))}
+            {!admins.length && <div className="school-activity-empty">No school-admin records found for this school yet.</div>}
+          </div>
+        </div>
+      </div>
+      </div>
+    </div>
+  );
+}
+
 // â”€â”€â”€ PENDING SELECTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function PendingSelections({ rows, loading, onApprove }) {
+function PendingSelections({ rows, loading, onApprove, readOnly = false, pageTitle = "Pending Selections", pageSub = "Review and approve student school selections", emptyMessage = "There are currently no pending selections requiring review." }) {
   const isMobile = useIsMobileLayout();
   const displayRows = sortRecordsByStudentIndex(rows || []);
 
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Pending Selections</div><div className="page-sub">Review and approve student school selections</div></div>
+      <div className="page-header"><div className="page-title">{pageTitle}</div><div className="page-sub">{pageSub}</div></div>
       {loading && <div className="alert alert-info">Loading pending selections...</div>}
       {isMobile ? (
         <div className="mobile-record-list">
@@ -1569,11 +3551,11 @@ function PendingSelections({ rows, loading, onApprove }) {
                 <div className="mobile-record-item"><label>2nd Choice</label><span>{s.second}</span></div>
               </div>
               <div className="mobile-record-actions">
-                {s.approved ? <span className="badge badge-success">Approved</span> : <button className="btn btn-sm btn-green" onClick={()=>onApprove?.(s.id)}>Approve</button>}
+                {s.approved ? <span className="badge badge-success">Approved</span> : readOnly ? <span className="badge badge-blue">Review only</span> : <button className="btn btn-sm btn-green" onClick={()=>onApprove?.(s.id)}>Approve</button>}
               </div>
             </div>
           ))}
-          {!displayRows.length && !loading && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>There are currently no pending selections requiring review.</div>}
+          {!displayRows.length && !loading && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>{emptyMessage}</div>}
         </div>
       ) : (
       <div className="card table-wrap">
@@ -1587,12 +3569,12 @@ function PendingSelections({ rows, loading, onApprove }) {
                 <td>{s.second}</td>
                 <td style={{fontWeight:700}}>{s.aggregate}</td>
                 <td>
-                  {s.approved ? <span className="badge badge-success">Approved</span> :
+                  {s.approved ? <span className="badge badge-success">Approved</span> : readOnly ? <span className="badge badge-blue">Review only</span> :
                     <button className="btn btn-sm btn-green" onClick={()=>onApprove?.(s.id)}>Approve</button>}
                 </td>
               </tr>
             ))}
-            {!displayRows.length && !loading && <tr><td colSpan="5" style={{textAlign:"center",padding:24,color:"#64748b"}}>There are currently no pending selections requiring review.</td></tr>}
+            {!displayRows.length && !loading && <tr><td colSpan="5" style={{textAlign:"center",padding:24,color:"#64748b"}}>{emptyMessage}</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1855,11 +3837,11 @@ function FinancePage({ financeSummary, tableInfo }) {
       </div>
       <div className="card card-padded">
         <h3 style={{fontWeight:700,marginBottom:16}}>Expense Breakdown</h3>
-        {[["Staff Salaries","62,000","#1e40af"],["Utilities","12,000","#d97706"],["Maintenance","8,000","#7c3aed"],["Supplies","7,000","#16a34a"]].map(([cat,amt,c])=>(
-          <div key={cat} style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-            <span style={{minWidth:140,fontWeight:600,fontSize:".875rem"}}>{cat}</span>
-            <div className="progress" style={{flex:1}}><div className="progress-bar" style={{width:`${parseInt(amt.replace(",",""))/890}%`,background:c}}/></div>
-            <span style={{fontWeight:700,color:c,minWidth:72,textAlign:"right"}}>GHS {amt}</span>
+        {[ ["Staff Salaries","62,000","#1e40af"], ["Utilities","12,000","#d97706"], ["Maintenance","8,000","#7c3aed"], ["Supplies","7,000","#16a34a"] ].map(([cat,amt,c])=>(
+          <div key={cat} style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+            <span style={{fontWeight:600,fontSize:".875rem",flex:"1 1 140px"}}>{cat}</span>
+            <div className="progress" style={{flex:"999 1 160px"}}><div className="progress-bar" style={{width:`${parseInt(amt.replace(",",""))/890}%`,background:c}}/></div>
+            <span style={{fontWeight:700,color:c,marginLeft:"auto"}}>GHS {amt}</span>
           </div>
         ))}
       </div>
@@ -1868,35 +3850,123 @@ function FinancePage({ financeSummary, tableInfo }) {
 }
 
 // â”€â”€â”€ TEACHERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function TeachersPage({ teachersData, tableInfo }) {
+function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdateTeacher = null, currentUser = null }) {
+  const { cfg: globalCfg } = useContext(SettingsContext);
   const hasTeachersError = hasRealTableError(tableInfo);
+  const isMobile = useIsMobileLayout();
   const rows = teachersData?.length ? teachersData : [];
+  const [editingTeacher, setEditingTeacher] = useState(undefined);
+  const [teacherDraft, setTeacherDraft] = useState(() => buildTeacherDraft());
+  const [savingTeacher, setSavingTeacher] = useState(false);
+  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const canCreateTeacher = typeof onCreateTeacher === "function";
+  const canEditTeacher = typeof onUpdateTeacher === "function";
+  const actorRole = currentUser?.role || "admin";
+  const availableRoleCatalog = buildRoleCatalog(globalCfg);
+  const assignableRolesBase = getAssignableRoles(globalCfg, actorRole, "teacher");
+  const roleOptions = assignableRolesBase.some((role) => role.key === teacherDraft.role)
+    ? assignableRolesBase
+    : [...assignableRolesBase, getRoleMeta(globalCfg, teacherDraft.role || "teacher")].filter((role, index, list) => list.findIndex((entry) => entry.key === role.key) === index);
+
+  const openCreateTeacher = () => {
+    setEditingTeacher(null);
+    setTeacherDraft(buildTeacherDraft());
+  };
+
+  const openEditTeacher = (teacher) => {
+    setEditingTeacher(teacher);
+    setTeacherDraft(buildTeacherDraft(teacher));
+  };
+
+  const closeTeacherEditor = () => {
+    if (savingTeacher) return;
+    setEditingTeacher(undefined);
+    setTeacherDraft(buildTeacherDraft());
+  };
+
+  const saveTeacher = async () => {
+    if (!teacherDraft.name.trim() || !teacherDraft.subject.trim()) {
+      setStatusModal({ open: true, type: "failure", title: "Teacher Save Failed", message: "Teacher name and subject are required." });
+      return;
+    }
+    setSavingTeacher(true);
+    try {
+      if (editingTeacher) {
+        await onUpdateTeacher?.(editingTeacher, teacherDraft);
+      } else {
+        await onCreateTeacher?.(teacherDraft);
+      }
+      closeTeacherEditor();
+      setStatusModal({ open: true, type: "success", title: "Teacher Saved", message: "Teacher record saved successfully." });
+    } catch (error) {
+      setStatusModal({ open: true, type: "failure", title: "Teacher Save Failed", message: error?.message || "Could not save the teacher record." });
+    } finally {
+      setSavingTeacher(false);
+    }
+  };
   return (
     <div className="fade-in">
+      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((current) => ({ ...current, open: false }))} />
       <div className="page-header"><div className="page-title">Teachers</div></div>
       {hasTeachersError && <div className="alert alert-warning">Teachers table is not accessible in Supabase yet.</div>}
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Name</th><th>Subject</th><th>Classes</th><th>Phone</th></tr></thead>
-          <tbody>
-            {rows.map(t=>(
-              <tr key={t.id}>
-                <td><strong>{t.name}</strong></td>
-                <td>{t.subject}</td>
-                <td>{t.class}</td>
-                <td style={{fontFamily:"monospace"}}>{t.phone}</td>
-              </tr>
-            ))}
-            {!rows.length && <tr><td colSpan="4" style={{textAlign:"center",padding:24,color:"#64748b"}}>No teacher rows available from Supabase.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      {(canCreateTeacher || canEditTeacher) && <div className="page-actions-row"><button className="btn btn-blue" onClick={openCreateTeacher}><Ico name="teachers" size={16} color="#fff"/> Add Teacher</button></div>}
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {rows.map((teacher) => (
+            <div key={teacher.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{teacher.name}</div>
+                  <div className="mobile-record-sub">{teacher.subject} • {getRoleMeta(globalCfg, teacher.role || "teacher").label}</div>
+                </div>
+                <span className="badge badge-blue">{teacher.class || "Unassigned"}</span>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item"><label>Role</label><span>{getRoleMeta(globalCfg, teacher.role || "teacher").label}</span></div>
+                <div className="mobile-record-item"><label>Class</label><span>{teacher.class || "-"}</span></div>
+                <div className="mobile-record-item"><label>Phone</label><span>{teacher.phone || "-"}</span></div>
+              </div>
+              {canEditTeacher && <div className="mobile-record-actions"><button className="btn btn-outline" onClick={() => openEditTeacher(teacher)}>Edit</button></div>}
+            </div>
+          ))}
+          {!rows.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No teacher rows available from Supabase.</div>}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Role</th><th>Subject</th><th>Classes</th><th>Phone</th>{canEditTeacher && <th>Actions</th>}</tr></thead>
+            <tbody>
+              {rows.map(t=>(
+                <tr key={t.id}>
+                  <td><strong>{t.name}</strong></td>
+                  <td>{getRoleMeta(globalCfg, t.role || "teacher").label}</td>
+                  <td>{t.subject}</td>
+                  <td>{t.class}</td>
+                  <td style={{fontFamily:"monospace"}}>{t.phone}</td>
+                  {canEditTeacher && <td><button className="btn btn-outline btn-sm" onClick={() => openEditTeacher(t)}>Edit</button></td>}
+                </tr>
+              ))}
+              {!rows.length && <tr><td colSpan={canEditTeacher ? "6" : "5"} style={{textAlign:"center",padding:24,color:"#64748b"}}>No teacher rows available from Supabase.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <TeacherEditorModal
+        open={editingTeacher !== undefined}
+        title={editingTeacher ? "Edit Teacher" : "Add Teacher"}
+        draft={teacherDraft}
+        roleOptions={roleOptions}
+        saving={savingTeacher}
+        onChange={(key, value) => setTeacherDraft((current) => ({ ...current, [key]: value }))}
+        onClose={closeTeacherEditor}
+        onSave={saveTeacher}
+      />
     </div>
   );
 }
 
 // â”€â”€â”€ EVENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function EventsPage({ eventsData, tableInfo }) {
+function EventsPage({ eventsData, tableInfo, registeredSchoolId = null }) {
   const hasEventsError = hasRealTableError(tableInfo);
   const [form, setForm] = useState({title:"",date:"",type:"event",desc:""});
   const [events, setEvents] = useState(eventsData?.length ? eventsData.map(normalizeEventRow) : []);
@@ -1916,10 +3986,21 @@ function EventsPage({ eventsData, tableInfo }) {
           title: form.title,
           event_date: form.date || null,
           type: form.type,
+          ...(registeredSchoolId != null ? { registered_school_id: registeredSchoolId } : {}),
           description: form.desc || null,
         })
         .select("id, title, event_date, type, description")
         .single();
+
+      if (error && isMissingColumnError(error) && registeredSchoolId != null) {
+        setStatusModal({
+          open: true,
+          type: "failure",
+          title: "Event Save Failed",
+          message: "School-scoped events require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.",
+        });
+        return;
+      }
 
       if (!error && data) {
         setEvents((e) => [
@@ -2260,38 +4341,765 @@ function SettingsPage() {
   );
 }
 
-function PermissionsMatrixPage() {
-  const [matrix, setMatrix] = useState({
-    admissions: { admin: true, staff: true, student: false },
-    results: { admin: true, staff: true, student: true },
-    finance: { admin: true, staff: false, student: false },
-    settings: { admin: true, staff: false, student: false },
-  });
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+function PermissionsMatrixPage({ currentUser }) {
+  const { cfg: globalCfg, updateCfg } = useContext(SettingsContext);
+  const defaultBaseRoles = [
+    { key: "super_admin", label: "Super Admin", color: "#1d4ed8", note: "Full platform control" },
+    { key: "admin", label: "Admin", color: "#0f766e", note: "School and operations management" },
+    { key: "school_admin", label: "School Admin", color: "#7c3aed", note: "School-scoped operations" },
+    { key: "teacher", label: "Teacher", color: "#d97706", note: "Academic records and attendance" },
+    { key: "staff", label: "Staff", color: "#475569", note: "Support and office workflows" },
+    { key: "student", label: "Student", color: "#dc2626", note: "Self-service access only" },
+  ];
+  const permissionGroups = [
+    {
+      title: "Admissions",
+      sub: "Student onboarding, placements, and school registry actions.",
+      permissions: [
+        { key: "students.view", label: "View Students" },
+        { key: "students.edit", label: "Create and Edit Students" },
+        { key: "schools.view", label: "View Schools" },
+        { key: "placements.review", label: "Approve Placements" },
+      ],
+    },
+    {
+      title: "Academics",
+      sub: "Score entry, results, grading, and teacher records.",
+      permissions: [
+        { key: "teachers.manage", label: "Manage Teachers" },
+        { key: "scores.manage", label: "Manage Scores" },
+        { key: "results.publish", label: "Publish Results" },
+        { key: "attendance.manage", label: "Manage Attendance" },
+      ],
+    },
+    {
+      title: "Finance",
+      sub: "Fees, payments, and finance reporting.",
+      permissions: [
+        { key: "fees.manage", label: "Manage Fees" },
+        { key: "payments.manage", label: "Manage Payments" },
+        { key: "finance.view", label: "View Finance Reports" },
+      ],
+    },
+    {
+      title: "Platform Control",
+      sub: "Platform governance, roles, and system configuration.",
+      permissions: [
+        { key: "roles.manage", label: "Assign Role Privileges" },
+        { key: "settings.manage", label: "Manage Settings" },
+        { key: "audit.view", label: "View Audit Trail" },
+        { key: "registered_schools.manage", label: "Manage Registered Schools" },
+      ],
+    },
+  ];
+  const defaultPrivileges = {
+    super_admin: {
+      "students.view": true,
+      "students.edit": true,
+      "schools.view": true,
+      "placements.review": true,
+      "teachers.manage": true,
+      "scores.manage": true,
+      "results.publish": true,
+      "attendance.manage": true,
+      "fees.manage": true,
+      "payments.manage": true,
+      "finance.view": true,
+      "roles.manage": true,
+      "settings.manage": true,
+      "audit.view": true,
+      "registered_schools.manage": true,
+    },
+    admin: {
+      "students.view": true,
+      "students.edit": true,
+      "schools.view": true,
+      "placements.review": true,
+      "teachers.manage": true,
+      "scores.manage": true,
+      "results.publish": true,
+      "attendance.manage": true,
+      "fees.manage": true,
+      "payments.manage": true,
+      "finance.view": true,
+      "roles.manage": false,
+      "settings.manage": false,
+      "audit.view": false,
+      "registered_schools.manage": false,
+    },
+    school_admin: {
+      "students.view": true,
+      "students.edit": true,
+      "schools.view": true,
+      "placements.review": true,
+      "teachers.manage": true,
+      "scores.manage": true,
+      "results.publish": true,
+      "attendance.manage": true,
+      "fees.manage": true,
+      "payments.manage": false,
+      "finance.view": true,
+      "roles.manage": false,
+      "settings.manage": false,
+      "audit.view": false,
+      "registered_schools.manage": false,
+    },
+    teacher: {
+      "students.view": true,
+      "students.edit": false,
+      "schools.view": false,
+      "placements.review": false,
+      "teachers.manage": false,
+      "scores.manage": true,
+      "results.publish": false,
+      "attendance.manage": true,
+      "fees.manage": false,
+      "payments.manage": false,
+      "finance.view": false,
+      "roles.manage": false,
+      "settings.manage": false,
+      "audit.view": false,
+      "registered_schools.manage": false,
+    },
+    staff: {
+      "students.view": true,
+      "students.edit": false,
+      "schools.view": true,
+      "placements.review": false,
+      "teachers.manage": false,
+      "scores.manage": false,
+      "results.publish": false,
+      "attendance.manage": false,
+      "fees.manage": true,
+      "payments.manage": true,
+      "finance.view": true,
+      "roles.manage": false,
+      "settings.manage": false,
+      "audit.view": false,
+      "registered_schools.manage": false,
+    },
+    student: {
+      "students.view": false,
+      "students.edit": false,
+      "schools.view": true,
+      "placements.review": false,
+      "teachers.manage": false,
+      "scores.manage": false,
+      "results.publish": false,
+      "attendance.manage": false,
+      "fees.manage": false,
+      "payments.manage": false,
+      "finance.view": false,
+      "roles.manage": false,
+      "settings.manage": false,
+      "audit.view": false,
+      "registered_schools.manage": false,
+    },
+  };
 
-  const toggle = (moduleKey, role) => setMatrix((m) => ({ ...m, [moduleKey]: { ...m[moduleKey], [role]: !m[moduleKey][role] } }));
-  const save = () => setStatusModal({ open: true, type: "success", title: "Permissions Updated", message: "Role-based permission matrix saved." });
+  const baseRoleKeys = defaultBaseRoles.map((role) => role.key);
+  const [roleMetaOverrides, setRoleMetaOverrides] = useState(() => globalCfg?.roleMetaOverrides || {});
+  const [customRoles, setCustomRoles] = useState(() => Array.isArray(globalCfg?.roleDefinitions) ? globalCfg.roleDefinitions : []);
+  const [roleFormMode, setRoleFormMode] = useState("create");
+  const [roleForm, setRoleForm] = useState({ key: "", label: "", note: "", color: "#2563eb" });
+
+  const baseRoles = defaultBaseRoles.map((role) => ({
+    ...role,
+    ...(roleMetaOverrides?.[role.key] || {}),
+  }));
+
+  const mergeRolePrivileges = (incoming = {}) => {
+    const merged = {};
+    [...baseRoles, ...customRoles].forEach((role) => {
+      const roleKey = role.key;
+      merged[roleKey] = { ...defaultPrivileges[roleKey], ...(incoming?.[roleKey] || {}) };
+    });
+    return merged;
+  };
+
+  const roles = [...baseRoles, ...customRoles];
+
+  const [selectedRole, setSelectedRole] = useState("admin");
+  const [matrix, setMatrix] = useState(() => mergeRolePrivileges(globalCfg?.rolePrivileges));
+  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const [saving, setSaving] = useState(false);
+  const [promotionAccounts, setPromotionAccounts] = useState([]);
+  const [promotionSearch, setPromotionSearch] = useState("");
+  const [selectedPromotionAccountKey, setSelectedPromotionAccountKey] = useState("");
+  const [promotionRole, setPromotionRole] = useState("admin");
+  const [loadingPromotionAccounts, setLoadingPromotionAccounts] = useState(false);
+  const [promotingAccount, setPromotingAccount] = useState(false);
+
+  useEffect(() => {
+    setRoleMetaOverrides(globalCfg?.roleMetaOverrides || {});
+    setCustomRoles(Array.isArray(globalCfg?.roleDefinitions) ? globalCfg.roleDefinitions : []);
+    setMatrix(mergeRolePrivileges(globalCfg?.rolePrivileges));
+  }, [globalCfg?.roleDefinitions, globalCfg?.roleMetaOverrides, globalCfg?.rolePrivileges]);
+
+  const selectedRoleMeta = roles.find((role) => role.key === selectedRole) || roles[1];
+  const enabledCount = Object.values(matrix[selectedRole] || {}).filter(Boolean).length;
+  const totalPrivilegeCount = permissionGroups.reduce((sum, group) => sum + group.permissions.length, 0);
+  const coverage = totalPrivilegeCount ? Math.round((enabledCount / totalPrivilegeCount) * 100) : 0;
+  const actorRoleKey = normalizeRoleKey(currentUser?.role);
+  const canAssignSuperAdmin = actorRoleKey === "super_admin";
+  const canPromoteAdmins = actorRoleKey === "super_admin" || actorRoleKey === "admin";
+  const adminPromotionRoles = roles.filter((role) => {
+    if (role.key === "super_admin") return canAssignSuperAdmin;
+    if (role.key === "admin") return true;
+    if (["school_admin", "teacher", "staff", "student"].includes(role.key)) return false;
+    return ["roles.manage", "settings.manage", "registered_schools.manage", "audit.view"].some((permissionKey) => !!matrix[role.key]?.[permissionKey]);
+  });
+  const selectedPrivilegeLabels = permissionGroups.flatMap((group) =>
+    group.permissions
+      .filter((permission) => !!matrix[selectedRole]?.[permission.key])
+      .map((permission) => ({ ...permission, group: group.title }))
+  );
+  const filteredPromotionAccounts = useMemo(() => {
+    const query = String(promotionSearch || "").trim().toLowerCase();
+    const sorted = [...promotionAccounts].sort((left, right) => {
+      const leftName = String(left.full_name || left.email || "").toLowerCase();
+      const rightName = String(right.full_name || right.email || "").toLowerCase();
+      return leftName.localeCompare(rightName);
+    });
+    if (!query) return sorted;
+    return sorted.filter((account) => [account.full_name, account.email, account.role].join(" ").toLowerCase().includes(query));
+  }, [promotionAccounts, promotionSearch]);
+  const selectedPromotionAccount = promotionAccounts.find((account) => account.accountKey === selectedPromotionAccountKey) || null;
+
+  useEffect(() => {
+    if (!adminPromotionRoles.some((role) => role.key === promotionRole)) {
+      setPromotionRole(adminPromotionRoles[0]?.key || "");
+    }
+  }, [adminPromotionRoles, promotionRole]);
+
+  const loadPromotionAccounts = useCallback(async () => {
+    if (!supabase) {
+      setPromotionAccounts([]);
+      return;
+    }
+
+    setLoadingPromotionAccounts(true);
+    try {
+      const profileRequest = profilesTableAvailable
+        ? supabase.from("profiles").select("id, email, full_name, role, registered_school_id, managed_school_name").order("full_name", { ascending: true })
+        : Promise.resolve({ data: [], error: null });
+      const [{ data: tableUsers, error: usersError }, { data: profileRows, error: profilesError }] = await Promise.all([
+        supabase.from("users").select("id, email, full_name, role, registered_school_id, managed_school_name").order("full_name", { ascending: true }),
+        profileRequest,
+      ]);
+
+      if (usersError && !isMissingTableError(usersError)) throw usersError;
+      if (profilesError) {
+        if (isProfilesTableMissingError(profilesError) || isMissingTableError(profilesError)) {
+          profilesTableAvailable = false;
+        } else {
+          throw profilesError;
+        }
+      }
+
+      const mergedAccounts = new Map();
+      const upsertPromotionAccount = (row, source) => {
+        if (!row) return;
+        const email = String(row.email || "").trim().toLowerCase();
+        const fallbackId = row.id != null ? String(row.id) : "";
+        const accountKey = email || `${source}:${fallbackId}`;
+        if (!accountKey) return;
+
+        const current = mergedAccounts.get(accountKey) || {
+          accountKey,
+          email,
+          full_name: "",
+          role: "student",
+          registered_school_id: null,
+          managed_school_name: "",
+          profileId: null,
+          tableUserId: null,
+          hasProfile: false,
+          hasTableUser: false,
+        };
+
+        mergedAccounts.set(accountKey, {
+          ...current,
+          email: email || current.email,
+          full_name: String(row.full_name || current.full_name || row.email || "User").trim(),
+          role: normalizeRoleKey(row.role || current.role || "student") || "student",
+          registered_school_id: row.registered_school_id ?? current.registered_school_id ?? null,
+          managed_school_name: row.managed_school_name || current.managed_school_name || "",
+          profileId: source === "profile" ? (row.id ?? current.profileId) : current.profileId,
+          tableUserId: source === "user" ? (row.id ?? current.tableUserId) : current.tableUserId,
+          hasProfile: current.hasProfile || source === "profile",
+          hasTableUser: current.hasTableUser || source === "user",
+        });
+      };
+
+      (Array.isArray(tableUsers) ? tableUsers : []).forEach((row) => upsertPromotionAccount(row, "user"));
+      (Array.isArray(profileRows) ? profileRows : []).forEach((row) => upsertPromotionAccount(row, "profile"));
+
+      const nextAccounts = Array.from(mergedAccounts.values());
+      setPromotionAccounts(nextAccounts);
+      setSelectedPromotionAccountKey((current) => current && nextAccounts.some((account) => account.accountKey === current)
+        ? current
+        : (nextAccounts[0]?.accountKey || ""));
+    } catch (error) {
+      setStatusModal({ open: true, type: "failure", title: "Accounts Not Loaded", message: error?.message || "Could not load promotable accounts." });
+    } finally {
+      setLoadingPromotionAccounts(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPromotionAccounts();
+  }, [loadPromotionAccounts]);
+
+  const toggle = (roleKey, permissionKey) => {
+    setMatrix((current) => ({
+      ...current,
+      [roleKey]: {
+        ...(current[roleKey] || {}),
+        [permissionKey]: !(current[roleKey] || {})[permissionKey],
+      },
+    }));
+  };
+
+  const applyPreset = (roleKey, preset) => {
+    const next = {};
+    permissionGroups.forEach((group) => {
+      group.permissions.forEach((permission) => {
+        next[permission.key] = preset === "full" ? true : preset === "none" ? false : ["students.view", "schools.view", "finance.view"].includes(permission.key);
+      });
+    });
+    setMatrix((current) => ({ ...current, [roleKey]: next }));
+  };
+
+  const setGroupPrivileges = (roleKey, permissionKeys, enabled) => {
+    setMatrix((current) => ({
+      ...current,
+      [roleKey]: {
+        ...(current[roleKey] || {}),
+        ...Object.fromEntries(permissionKeys.map((key) => [key, enabled])),
+      },
+    }));
+  };
+
+  const resetRoleForm = () => {
+    setRoleFormMode("create");
+    setRoleForm({ key: "", label: "", note: "", color: "#2563eb" });
+  };
+
+  const startEditingRole = (role) => {
+    if (!role) return;
+    setRoleFormMode("edit");
+    setRoleForm({
+      key: role.key,
+      label: role.label || "",
+      note: role.note || "",
+      color: role.color || "#2563eb",
+    });
+  };
+
+  const createRole = () => {
+    const label = String(roleForm.label || "").trim();
+    if (!label) {
+      setStatusModal({ open: true, type: "failure", title: "Role Not Created", message: "Role name is required." });
+      return;
+    }
+
+    const key = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    if (!key) {
+      setStatusModal({ open: true, type: "failure", title: "Role Not Created", message: "Use a role name with letters or numbers." });
+      return;
+    }
+    if (roles.some((role) => role.key === key)) {
+      setStatusModal({ open: true, type: "failure", title: "Role Not Created", message: "A role with that name already exists." });
+      return;
+    }
+
+    const newRole = {
+      key,
+      label,
+      note: String(roleForm.note || "").trim() || "Custom role",
+      color: roleForm.color || "#2563eb",
+    };
+
+    setCustomRoles((current) => [...current, newRole]);
+    setMatrix((current) => ({
+      ...current,
+      [key]: Object.fromEntries(
+        permissionGroups.flatMap((group) => group.permissions.map((permission) => [permission.key, false]))
+      ),
+    }));
+    setSelectedRole(key);
+    resetRoleForm();
+    setStatusModal({ open: true, type: "success", title: "Role Created", message: `${label} is ready for privilege assignment.` });
+  };
+
+  const updateRole = () => {
+    const key = String(roleForm.key || "").trim();
+    const label = String(roleForm.label || "").trim();
+    if (!key) {
+      setStatusModal({ open: true, type: "failure", title: "Role Not Updated", message: "Select a role to edit first." });
+      return;
+    }
+    if (!label) {
+      setStatusModal({ open: true, type: "failure", title: "Role Not Updated", message: "Role name is required." });
+      return;
+    }
+
+    const nextMeta = {
+      label,
+      note: String(roleForm.note || "").trim() || (baseRoleKeys.includes(key) ? "System role" : "Custom role"),
+      color: roleForm.color || "#2563eb",
+    };
+
+    if (baseRoleKeys.includes(key)) {
+      setRoleMetaOverrides((current) => ({ ...current, [key]: nextMeta }));
+    } else {
+      setCustomRoles((current) => current.map((role) => (
+        role.key === key ? { ...role, ...nextMeta } : role
+      )));
+    }
+
+    setStatusModal({ open: true, type: "success", title: "Role Updated", message: `${label} role details were updated.` });
+    resetRoleForm();
+  };
+
+  const save = async () => {
+    const mergedConfig = { ...globalCfg, roleDefinitions: customRoles, roleMetaOverrides, rolePrivileges: matrix };
+    setSaving(true);
+    try {
+      if (supabase) {
+        const { error } = await supabase.from("app_settings").upsert({ id: 1, config: mergedConfig });
+        if (error) throw error;
+      }
+      updateCfg((current) => ({ ...current, roleDefinitions: customRoles, roleMetaOverrides, rolePrivileges: matrix }));
+      setStatusModal({ open: true, type: "success", title: "Privileges Updated", message: `${selectedRoleMeta.label} privileges were saved to Supabase.` });
+    } catch (error) {
+      setStatusModal({ open: true, type: "failure", title: "Save Failed", message: error?.message || "Could not save role privileges to Supabase." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const promoteSelectedAccount = async () => {
+    if (!canPromoteAdmins) {
+      setStatusModal({ open: true, type: "failure", title: "Promotion Locked", message: "Only super admins can promote global admin accounts." });
+      return;
+    }
+    if (!supabase) {
+      setStatusModal({ open: true, type: "failure", title: "Promotion Unavailable", message: "Supabase is required to promote accounts." });
+      return;
+    }
+    if (!selectedPromotionAccount) {
+      setStatusModal({ open: true, type: "failure", title: "No Account Selected", message: "Choose an account to promote first." });
+      return;
+    }
+
+    const normalizedPromotionRole = normalizeRoleKey(promotionRole);
+    if (!normalizedPromotionRole) {
+      setStatusModal({ open: true, type: "failure", title: "No Role Selected", message: "Select an admin role before continuing." });
+      return;
+    }
+
+    const targetRoleMeta = getRoleMeta({ roleDefinitions: customRoles, roleMetaOverrides, rolePrivileges: matrix }, normalizedPromotionRole);
+    const payloads = [
+      { role: normalizedPromotionRole, registered_school_id: null, managed_school_name: "" },
+      { role: normalizedPromotionRole },
+    ];
+    const updateRoleInTable = async (tableName, matchColumn, matchValue) => {
+      if (!matchValue) return false;
+      for (const payload of payloads) {
+        const response = await supabase.from(tableName).update(payload).eq(matchColumn, matchValue).select(matchColumn);
+        if (!response.error) return Array.isArray(response.data) && response.data.length > 0;
+        if (!isMissingColumnError(response.error)) throw response.error;
+      }
+      return false;
+    };
+
+    setPromotingAccount(true);
+    try {
+      const updatedUsers = selectedPromotionAccount.hasTableUser
+        ? await updateRoleInTable("users", selectedPromotionAccount.email ? "email" : "id", selectedPromotionAccount.email || selectedPromotionAccount.tableUserId)
+        : false;
+
+      let updatedProfiles = false;
+      if (selectedPromotionAccount.hasProfile && profilesTableAvailable) {
+        try {
+          updatedProfiles = await updateRoleInTable("profiles", selectedPromotionAccount.profileId ? "id" : "email", selectedPromotionAccount.profileId || selectedPromotionAccount.email);
+        } catch (error) {
+          if (isProfilesTableMissingError(error) || isMissingTableError(error)) {
+            profilesTableAvailable = false;
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (!updatedUsers && !updatedProfiles) {
+        throw new Error("No matching account record was updated. Confirm the user exists in the users or profiles table.");
+      }
+
+      setPromotionAccounts((current) => current.map((account) => (
+        account.accountKey === selectedPromotionAccount.accountKey
+          ? { ...account, role: normalizedPromotionRole, registered_school_id: null, managed_school_name: "" }
+          : account
+      )));
+
+      const storedSession = readAppSession();
+      const sameStoredUser = storedSession && (
+        (selectedPromotionAccount.email && String(storedSession.user?.email || "").trim().toLowerCase() === selectedPromotionAccount.email)
+        || (selectedPromotionAccount.profileId && String(storedSession.user?.id || "") === String(selectedPromotionAccount.profileId))
+      );
+      if (sameStoredUser) {
+        const nextUser = {
+          ...storedSession.user,
+          role: normalizedPromotionRole,
+          registered_school_id: null,
+          managed_school_name: "",
+        };
+        writeAppSession({
+          ...storedSession,
+          portal: resolvePortalFromAccount(nextUser, normalizedPromotionRole),
+          user: nextUser,
+        });
+      }
+
+      await loadPromotionAccounts();
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "Admin Promotion Applied",
+        message: `${selectedPromotionAccount.full_name || selectedPromotionAccount.email || "Account"} is now assigned to ${targetRoleMeta.label}.`,
+      });
+    } catch (error) {
+      setStatusModal({ open: true, type: "failure", title: "Promotion Failed", message: error?.message || "Could not update the selected account role." });
+    } finally {
+      setPromotingAccount(false);
+    }
+  };
 
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Permissions Matrix</div><div className="page-sub">Feature 1: Role-based permissions by module and role.</div></div>
+      <div className="page-header"><div className="page-title">Role Privileges</div><div className="page-sub">Assign what each role can view, manage, approve, or control across the platform.</div></div>
       <ActionStatusModal state={statusModal} onClose={() => setStatusModal((s) => ({ ...s, open: false }))} />
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Module</th><th>Admin</th><th>Staff</th><th>Student</th></tr></thead>
-          <tbody>
-            {Object.entries(matrix).map(([moduleKey, roles]) => (
-              <tr key={moduleKey}>
-                <td style={{textTransform:"capitalize",fontWeight:700}}>{moduleKey}</td>
-                {["admin", "staff", "student"].map((role) => (
-                  <td key={role}><input type="checkbox" checked={!!roles[role]} onChange={() => toggle(moduleKey, role)} /></td>
+      <div className="role-priv-shell">
+        <div className="role-priv-overview">
+          <div className="role-priv-stat">
+            <div className="role-priv-stat-label">Roles</div>
+            <div className="role-priv-stat-value">{roles.length}</div>
+            <div className="role-priv-stat-sub">System roles available for assignment across the platform.</div>
+          </div>
+          <div className="role-priv-stat">
+            <div className="role-priv-stat-label">Selected Role</div>
+            <div className="role-priv-stat-value" style={{ color: selectedRoleMeta.color }}>{selectedRoleMeta.label}</div>
+            <div className="role-priv-stat-sub">{selectedRoleMeta.note}</div>
+          </div>
+          <div className="role-priv-stat">
+            <div className="role-priv-stat-label">Coverage</div>
+            <div className="role-priv-stat-value">{coverage}%</div>
+            <div className="role-priv-stat-sub">{enabledCount} of {totalPrivilegeCount} privileges enabled for this role.</div>
+          </div>
+        </div>
+
+        <div className="role-priv-layout">
+          <aside className="role-priv-sidebar">
+            <div className="role-priv-sidebar-head">
+              <div className="role-priv-sidebar-title">Roles</div>
+              <div className="role-priv-sidebar-sub">Select a role, review its access level, then assign the exact privileges it should carry.</div>
+            </div>
+            <div className="role-priv-create-card">
+              <div className="role-priv-create-head">
+                <div>
+                  <div className="role-priv-create-title">{roleFormMode === "edit" ? "Edit Role" : "Create New Role"}</div>
+                  <div className="role-priv-create-sub">{roleFormMode === "edit" ? "Update the selected role name, note, or accent color. Role keys stay fixed for reliable access mapping." : "Add a custom role, then assign its privileges from this same page."}</div>
+                </div>
+                <div className="role-priv-create-actions">
+                  <button className="btn btn-outline btn-sm" onClick={() => startEditingRole(selectedRoleMeta)}>Edit Selected</button>
+                  {roleFormMode === "edit" && <button className="btn btn-outline btn-sm" onClick={resetRoleForm}>New Role</button>}
+                </div>
+              </div>
+              {roleFormMode === "edit" && <div className="role-priv-create-key">Role Key: {roleForm.key}</div>}
+              <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Role Name</label><input className="form-control" value={roleForm.label} onChange={(e) => setRoleForm((current) => ({ ...current, label: e.target.value }))} placeholder="e.g. Registrar" /></div>
+              <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Role Note</label><input className="form-control" value={roleForm.note} onChange={(e) => setRoleForm((current) => ({ ...current, note: e.target.value }))} placeholder="What this role is for" /></div>
+              <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Accent Color</label><input type="color" className="form-control" value={roleForm.color} onChange={(e) => setRoleForm((current) => ({ ...current, color: e.target.value }))} /></div>
+              {roleFormMode === "edit"
+                ? <>
+                    <div className="role-priv-create-help">Changes to built-in roles update their display details only. Their internal keys remain unchanged so privilege and portal routing stays stable.</div>
+                    <button className="btn btn-blue" onClick={updateRole}>Update Role</button>
+                  </>
+                : <button className="btn btn-blue" onClick={createRole}>Create Role</button>}
+            </div>
+            <div className="role-priv-role-list">
+              {roles.map((role) => {
+                const count = Object.values(matrix[role.key] || {}).filter(Boolean).length;
+                const active = selectedRole === role.key;
+                const isCustomRole = !baseRoleKeys.includes(role.key);
+                return (
+                  <button
+                    key={role.key}
+                    className={`role-priv-role-card ${active ? "active" : ""}`}
+                    onClick={() => setSelectedRole(role.key)}
+                    style={{ borderColor: active ? role.color : "#e2e8f0", background: active ? `${role.color}12` : "#fff" }}
+                  >
+                    <div className="role-priv-role-head">
+                      <div>
+                        <div className="role-priv-role-name" style={{ color: role.color }}>{role.label}</div>
+                        <div className="role-priv-role-note">{role.note}</div>
+                      </div>
+                      {active && <span className="badge badge-blue">Active</span>}
+                    </div>
+                    <div className="role-priv-role-count">{count} enabled privileges</div>
+                    <div className="role-priv-role-footer">
+                      <span className={`role-priv-role-meta ${isCustomRole ? "custom" : "system"}`}>{isCustomRole ? "Custom role" : "System role"}</span>
+                      <button className="btn btn-outline btn-sm" onClick={(event) => { event.stopPropagation(); startEditingRole(role); }}>Edit</button>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          <div className="role-priv-main">
+            <div className="role-priv-toolbar">
+              <div className="role-priv-toolbar-copy">
+                <div className="role-priv-toolbar-kicker">Privileges Workspace</div>
+                <div className="role-priv-toolbar-title" style={{ color: selectedRoleMeta.color }}>{selectedRoleMeta.label} privileges</div>
+                <div className="role-priv-toolbar-sub">{selectedRoleMeta.note}. Use presets for a fast baseline, then fine-tune access by privilege group.</div>
+              </div>
+              <div className="role-priv-toolbar-actions">
+                <button className="btn btn-outline btn-sm" onClick={() => applyPreset(selectedRole, "minimum")}>Minimum Access</button>
+                <button className="btn btn-outline btn-sm" onClick={() => applyPreset(selectedRole, "full")}>Full Access</button>
+                <button className="btn btn-outline btn-sm" onClick={() => applyPreset(selectedRole, "none")}>Clear All</button>
+              </div>
+            </div>
+
+            <div className="role-priv-content">
+              <div className="role-priv-groups">
+                {permissionGroups.map((group) => (
+                  <div key={group.title} className="role-priv-group-card">
+                    <div className="role-priv-group-head">
+                      <div>
+                        <div className="role-priv-group-title">{group.title}</div>
+                        <div className="role-priv-group-sub">{group.sub}</div>
+                      </div>
+                      <div className="role-priv-group-actions">
+                        <button className="btn btn-outline btn-sm" onClick={() => setGroupPrivileges(selectedRole, group.permissions.map((permission) => permission.key), true)}>Select Group</button>
+                        <button className="btn btn-outline btn-sm" onClick={() => setGroupPrivileges(selectedRole, group.permissions.map((permission) => permission.key), false)}>Clear Group</button>
+                      </div>
+                    </div>
+                    <div className="role-priv-items">
+                      {group.permissions.map((permission) => (
+                        <div
+                          key={permission.key}
+                          className={`role-priv-item ${matrix[selectedRole]?.[permission.key] ? "active" : ""}`}
+                          onClick={() => toggle(selectedRole, permission.key)}
+                          style={{ "--role-accent": selectedRoleMeta.color, "--role-soft": `${selectedRoleMeta.color}10` }}
+                        >
+                          <div className="role-priv-item-copy">
+                            <div className="role-priv-item-title">{permission.label}</div>
+                            <div className="role-priv-item-meta">{group.title}</div>
+                          </div>
+                          <input className="role-priv-item-toggle" type="checkbox" checked={!!matrix[selectedRole]?.[permission.key]} onChange={() => toggle(selectedRole, permission.key)} onClick={(event) => event.stopPropagation()} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </div>
+
+              <div className="role-priv-summary-column">
+                <div className="role-priv-summary-card">
+                  <div className="role-priv-summary-title">Selected Privileges</div>
+                  <div className="role-priv-summary-sub">Enabled access currently assigned to {selectedRoleMeta.label}.</div>
+                  <div className="role-priv-chip-list">
+                    {selectedPrivilegeLabels.length ? selectedPrivilegeLabels.map((permission) => (
+                      <span key={permission.key} className="role-priv-chip">
+                        {permission.label}
+                        <span className="role-priv-chip-group">{permission.group}</span>
+                      </span>
+                    )) : <div className="role-priv-empty">No privileges selected for this role yet.</div>}
+                  </div>
+                </div>
+
+                <div className="role-priv-summary-card">
+                  <div className="role-priv-summary-title">Privilege Summary</div>
+                  <div className="role-priv-summary-sub">Quick overview of how much access each role currently has.</div>
+                  <div className="role-priv-summary-list">
+                    {roles.map((role) => (
+                      <div key={role.key} className="role-priv-summary-row">
+                        <span className="role-priv-summary-name" style={{ color: role.color }}>{role.label}</span>
+                        <span className="role-priv-summary-count">{Object.values(matrix[role.key] || {}).filter(Boolean).length} enabled</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="role-priv-save-card">
+                  <div className="role-priv-save-title">Save Changes</div>
+                  <div className="role-priv-save-sub">Commit the current privilege selections so this role keeps the updated access pattern across the platform.</div>
+                  <button className="btn btn-blue" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Role Privileges"}</button>
+                </div>
+
+                <div className="role-priv-promo-card">
+                  <div className="role-priv-promo-head">
+                    <div>
+                      <div className="role-priv-promo-title">Admin Promotion</div>
+                      <div className="role-priv-promo-sub">Promote an existing account into a global admin role from this page. Promotion clears any school scope so the account lands in the main admin portal on its next session refresh.</div>
+                    </div>
+                    <button className="btn btn-outline btn-sm" onClick={loadPromotionAccounts} disabled={loadingPromotionAccounts}>{loadingPromotionAccounts ? "Refreshing..." : "Refresh Accounts"}</button>
+                  </div>
+                  {!canPromoteAdmins && <div className="role-priv-promo-note">Only admin-level accounts can apply global admin promotions.</div>}
+                  {!supabase && <div className="role-priv-promo-note">Supabase must be connected before account promotion can be used.</div>}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Find Account</label>
+                    <input className="form-control" value={promotionSearch} onChange={(event) => setPromotionSearch(event.target.value)} placeholder="Search by name, email, or current role" disabled={!canPromoteAdmins || !supabase} />
+                  </div>
+                  <div className="role-priv-promo-list">
+                    {filteredPromotionAccounts.length ? filteredPromotionAccounts.slice(0, 8).map((account) => {
+                      const accountRoleMeta = getRoleMeta({ roleDefinitions: customRoles, roleMetaOverrides, rolePrivileges: matrix }, account.role);
+                      const active = selectedPromotionAccountKey === account.accountKey;
+                      return (
+                        <button key={account.accountKey} className={`role-priv-promo-item ${active ? "active" : ""}`} onClick={() => setSelectedPromotionAccountKey(account.accountKey)} disabled={!canPromoteAdmins || !supabase}>
+                          <div className="role-priv-promo-item-head">
+                            <div>
+                              <div className="role-priv-promo-item-name">{account.full_name || "Unnamed User"}</div>
+                              <div className="role-priv-promo-item-email">{account.email || "No email recorded"}</div>
+                            </div>
+                            <span className="role-priv-promo-badge" style={{ color: accountRoleMeta.color, borderColor: `${accountRoleMeta.color}55` }}>{accountRoleMeta.label}</span>
+                          </div>
+                          <div className="role-priv-promo-item-meta">
+                            {account.hasProfile && <span className="role-priv-promo-badge">Profiles</span>}
+                            {account.hasTableUser && <span className="role-priv-promo-badge">Users</span>}
+                            {(account.registered_school_id != null || account.managed_school_name) && <span className="role-priv-promo-badge">School scoped</span>}
+                          </div>
+                        </button>
+                      );
+                    }) : <div className="role-priv-empty">{loadingPromotionAccounts ? "Loading accounts..." : "No matching accounts found."}</div>}
+                  </div>
+                  {selectedPromotionAccount && <div className="role-priv-promo-selected">
+                    <div className="role-priv-promo-selected-head">
+                      <div>
+                        <div className="role-priv-promo-selected-name">{selectedPromotionAccount.full_name || "Unnamed User"}</div>
+                        <div className="role-priv-promo-selected-meta">{selectedPromotionAccount.email || "No email recorded"}</div>
+                      </div>
+                      <div className="role-priv-promo-badges">
+                        <span className="role-priv-promo-badge">Current role: {getRoleMeta({ roleDefinitions: customRoles, roleMetaOverrides, rolePrivileges: matrix }, selectedPromotionAccount.role).label}</span>
+                      </div>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Promote To</label>
+                      <select className="form-control" value={promotionRole} onChange={(event) => setPromotionRole(event.target.value)} disabled={!canPromoteAdmins || !supabase || !adminPromotionRoles.length}>
+                        {adminPromotionRoles.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="role-priv-promo-note">Admins can assign admin-capable roles here. Only super admins can assign the Super Admin role.</div>
+                    <button className="btn btn-blue" onClick={promoteSelectedAccount} disabled={!canPromoteAdmins || !supabase || !selectedPromotionAccount || !promotionRole || promotingAccount}>{promotingAccount ? "Applying Promotion..." : "Apply Promotion"}</button>
+                  </div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <button className="btn btn-blue" style={{marginTop:12}} onClick={save}>Save Matrix</button>
     </div>
   );
 }
@@ -2306,7 +5114,7 @@ function AuditTrailPage() {
   return (
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Audit Trail</div><div className="page-sub">Feature 2: Immutable log of critical actions.</div></div>
-      <input className="form-control" style={{maxWidth:340,marginBottom:12}} placeholder="Filter logs..." value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <input className="form-control search-input-compact" placeholder="Filter logs..." value={filter} onChange={(e) => setFilter(e.target.value)} />
       <div className="card table-wrap">
         <table>
           <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
@@ -3732,6 +6540,7 @@ const ADMIN_NAV = [
   {section:"Student Services"},{key:"attendance",icon:"attendance",label:"Attendance",color:"#14b8a6"},{key:"fees",icon:"fees",label:"Fees",color:"#22c55e"},{key:"teachers",icon:"teachers",label:"Teachers",color:"#8b5cf6"},
   {section:"Communication"},{key:"chat",icon:"chat",label:"Chat",color:"#10b981"},{key:"events",icon:"events",label:"Events",color:"#f59e0b"},
   {section:"Administration"},{key:"finance",icon:"finance",label:"Finance",color:"#d97706"},{key:"settings",icon:"settings",label:"Settings",color:"#64748b"},
+  {key:"registered-schools",icon:"schools",label:"Registered Schools",color:"#0f766e"},
   {section:"Platform Suite"},
   {key:"permissions",icon:"lock",label:"Permissions",color:"#1d4ed8"},
   {key:"audit",icon:"docs",label:"Audit Trail",color:"#0f766e"},
@@ -3766,6 +6575,7 @@ const ADMIN_NAV = [
 ];
 
 const ADMIN_SUBPAGE_MAP = {
+  "registered-schools": ["school-register"],
   settings: ["auto-rules", "integrations", "flags"],
   analytics: ["insights", "risk-score", "recommend", "quality"],
   events: ["calendar", "timetable", "exam-builder", "public-status"],
@@ -3774,6 +6584,53 @@ const ADMIN_SUBPAGE_MAP = {
   permissions: ["audit", "privacy", "sla"],
   students: ["digital-id", "tenants", "bulk", "offline", "documents"],
 };
+
+const dedupeNavEntries = (items) => {
+  const seen = new Set();
+  return items.filter((entry) => {
+    if (entry.section) return true;
+    if (!entry.key || seen.has(entry.key)) return false;
+    seen.add(entry.key);
+    return true;
+  });
+};
+
+const dedupeSubpageKeys = (keys) => {
+  const seen = new Set();
+  return keys.filter((key) => {
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const SCHOOL_ADMIN_EXCLUDED_KEYS = new Set(["settings", "registered-schools", "school-register", "permissions", "audit", "privacy", "recovery", "mobile", "integrations", "tenants", "flags", "auto-rules"]);
+const SCHOOL_ADMIN_SUBPAGE_MAP = Object.fromEntries(
+  Object.entries(ADMIN_SUBPAGE_MAP)
+    .filter(([parent]) => !SCHOOL_ADMIN_EXCLUDED_KEYS.has(parent))
+    .map(([parent, children]) => [parent, dedupeSubpageKeys(children.filter((child) => !SCHOOL_ADMIN_EXCLUDED_KEYS.has(child)))])
+    .filter(([, children]) => children.length > 0)
+);
+const SCHOOL_ADMIN_NAV = (() => {
+  const items = [];
+  let pendingSection = null;
+  ADMIN_NAV.forEach((entry) => {
+    if (entry.section) {
+      pendingSection = entry.section;
+      return;
+    }
+    if (SCHOOL_ADMIN_EXCLUDED_KEYS.has(entry.key)) return;
+    if (pendingSection) {
+      items.push({ section: pendingSection });
+      pendingSection = null;
+    }
+    items.push(entry);
+    if (entry.key === "finance") {
+      items.push({ key: "school-profile", icon: "schools", label: "Managed School", color: "#0f766e" });
+    }
+  });
+  return dedupeNavEntries(items);
+})();
 
 const STUDENT_NAV = [
   {section:"Overview"},
@@ -3837,6 +6694,9 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const [notificationCount, setNotificationCount] = useState(0);
   const [adminStudents, setAdminStudents] = useState(() => (supabase ? [] : sortStudentsByIndex(STUDENTS_DATA)));
   const [adminSchools, setAdminSchools] = useState(() => (supabase ? [] : SCHOOLS_DATA));
+  const [registeredSchools, setRegisteredSchools] = useState([]);
+  const [schoolAdmins, setSchoolAdmins] = useState([]);
+  const [registrySetupError, setRegistrySetupError] = useState("");
   const [pendingSelections, setPendingSelections] = useState([]);
   const [confirmedSelections, setConfirmedSelections] = useState([]);
   const [feesData, setFeesData] = useState(FEES_DATA);
@@ -3885,6 +6745,152 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     outstanding: feesData.reduce((sum, fee) => sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0), 0),
   };
 
+  const registerSchool = async (schoolForm) => {
+    const payload = {
+      name: schoolForm.name,
+      location: schoolForm.location,
+      region: schoolForm.region,
+      category: schoolForm.category,
+      type: schoolForm.type,
+      active: !!schoolForm.active,
+      tenant_key: `${String(schoolForm.name || "school").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "school"}-${Date.now().toString().slice(-5)}`,
+    };
+
+    let insertedRow = { id: Date.now(), ...payload };
+
+    if (supabase) {
+      const { data, error } = await supabase.from("registered_schools").insert(payload).select("*").single();
+      if (error) {
+        if (isMissingTableError(error, "registered_schools")) {
+          throw new Error("Registered school setup is not available yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql in Supabase, then refresh.");
+        }
+        throw error;
+      }
+      insertedRow = data || insertedRow;
+    }
+
+    const normalized = normalizeSchoolRow(insertedRow);
+    setRegisteredSchools((current) => sortSchoolsByCategory([...(current || []), normalized]));
+    return normalized;
+  };
+
+  const createSchoolAdmin = async (school, adminForm) => {
+    const assignedRole = normalizeRoleKey(adminForm.role || "school_admin") || "school_admin";
+    const payload = {
+      registered_school_id: school.id,
+      full_name: adminForm.full_name.trim(),
+      email: adminForm.email.trim(),
+      phone: adminForm.phone.trim(),
+      password: adminForm.password,
+      role: assignedRole,
+      status: "active",
+    };
+
+    let insertedAdmin = { id: `local-${Date.now()}`, ...payload };
+
+    if (supabase) {
+      let adminResponse = await supabase.from("school_admins").insert(payload).select("*").single();
+      if (adminResponse.error && isMissingColumnError(adminResponse.error) && Object.prototype.hasOwnProperty.call(payload, "role")) {
+        const { role, ...fallbackPayload } = payload;
+        adminResponse = await supabase.from("school_admins").insert(fallbackPayload).select("*").single();
+      }
+      if (adminResponse.error) {
+        if (isMissingTableError(adminResponse.error, "school_admins")) {
+          throw new Error("School admin setup is not available yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql in Supabase, then refresh.");
+        }
+        throw adminResponse.error;
+      }
+      insertedAdmin = { ...(adminResponse.data || insertedAdmin), role: (adminResponse.data?.role || assignedRole) };
+
+      const { error: userError } = await supabase.from("users").insert({
+        email: payload.email,
+        password: payload.password,
+        role: assignedRole,
+        full_name: payload.full_name,
+        registered_school_id: school.id,
+        managed_school_name: school.name,
+      });
+      if (userError) throw userError;
+    }
+
+    setSchoolAdmins((current) => [insertedAdmin, ...current]);
+    return insertedAdmin;
+  };
+
+  const saveAdminStudent = async (existingStudent, draft) => {
+    const payload = {
+      full_name: draft.full_name.trim(),
+      index: draft.index.trim(),
+      class: draft.class,
+      region: draft.region,
+      aggregate: Number(draft.aggregate || 0),
+      status: draft.status || "pending",
+      photo_url: draft.photo_url?.trim() || null,
+    };
+
+    let savedRow = normalizeStudentRecord({ id: existingStudent?.id || Date.now(), ...payload });
+
+    if (supabase) {
+      let response = existingStudent?.id
+        ? await supabase.from("students").update(payload).eq("id", existingStudent.id).select("*").single()
+        : await supabase.from("students").insert(payload).select("*").single();
+
+      if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "photo_url")) {
+        const { photo_url, ...fallbackPayload } = payload;
+        response = existingStudent?.id
+          ? await supabase.from("students").update(fallbackPayload).eq("id", existingStudent.id).select("*").single()
+          : await supabase.from("students").insert(fallbackPayload).select("*").single();
+      }
+
+      if (response.error) throw response.error;
+      savedRow = normalizeStudentRecord(response.data || { id: existingStudent?.id || Date.now(), ...payload });
+    }
+
+    setAdminStudents((current) => sortStudentsByIndex(
+      existingStudent
+        ? current.map((student) => String(student.id) === String(existingStudent.id) ? { ...student, ...savedRow } : student)
+        : [...current, savedRow]
+    ));
+
+    return savedRow;
+  };
+
+  const saveAdminTeacher = async (existingTeacher, draft) => {
+    const payload = {
+      name: draft.name.trim(),
+      role: normalizeRoleKey(draft.role || "teacher") || "teacher",
+      subject: draft.subject.trim(),
+      class: draft.class.trim(),
+      phone: draft.phone.trim(),
+    };
+
+    let savedRow = normalizeTeacherRow({ id: existingTeacher?.id || Date.now(), ...payload });
+
+    if (supabase) {
+      let response = existingTeacher?.id
+        ? await supabase.from("teachers").update(payload).eq("id", existingTeacher.id).select("*").single()
+        : await supabase.from("teachers").insert(payload).select("*").single();
+
+      if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "role")) {
+        const { role, ...fallbackPayload } = payload;
+        response = existingTeacher?.id
+          ? await supabase.from("teachers").update(fallbackPayload).eq("id", existingTeacher.id).select("*").single()
+          : await supabase.from("teachers").insert(fallbackPayload).select("*").single();
+      }
+
+      if (response.error) throw response.error;
+      savedRow = normalizeTeacherRow(response.data || { id: existingTeacher?.id || Date.now(), ...payload });
+    }
+
+    setTeachersData((current) => {
+      const nextRows = existingTeacher
+        ? current.map((teacher) => String(teacher.id) === String(existingTeacher.id) ? { ...teacher, ...savedRow } : teacher)
+        : [savedRow, ...current];
+      return nextRows.slice().sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    });
+
+    return savedRow;
+  };
   useEffect(() => {
     const parent = childToParent[tab];
     if (parent) {
@@ -3922,6 +6928,22 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
         ? sortSchoolsByCategory(schools.map(normalizeSchoolRow))
         : SCHOOLS_DATA;
       setAdminSchools(normalizedSchools);
+
+      const { data: regSchools, error: regSchoolsError } = await supabase.from("registered_schools").select("*").order("name", { ascending: true });
+      if (isMissingTableError(regSchoolsError, "registered_schools")) {
+        setRegistrySetupError("Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
+        setRegisteredSchools([]);
+      } else if (!regSchoolsError && Array.isArray(regSchools)) {
+        setRegisteredSchools(sortSchoolsByCategory(regSchools.map(normalizeSchoolRow)));
+      }
+
+      const { data: regAdmins, error: regAdminsError } = await supabase.from("school_admins").select("*").order("created_at", { ascending: false });
+      if (isMissingTableError(regAdminsError, "school_admins")) {
+        setRegistrySetupError("Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
+        setSchoolAdmins([]);
+      } else if (!regAdminsError && Array.isArray(regAdmins)) {
+        setSchoolAdmins(regAdmins);
+      }
 
       const tableEntries = await Promise.all([
         "users",
@@ -4041,12 +7063,12 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const renderPage = () => {
     if (tab==="enroll") return <EnrollPage onBack={()=>goTab("students")}/>;
     const pages = {
-      dashboard:<AdminDashboard studentsData={adminStudents} schoolsData={adminSchools} pendingRows={pendingSelections} confirmedRows={confirmedSelections} financeSummary={financeSummary} recentActivity={recentActivity} isLoading={loadingAdminData}/>, students:<StudentsPage onEnroll={()=>goTab("enroll")} studentsData={adminStudents}/>,
+      dashboard:<AdminDashboard studentsData={adminStudents} schoolsData={adminSchools} pendingRows={pendingSelections} confirmedRows={confirmedSelections} financeSummary={financeSummary} recentActivity={recentActivity} isLoading={loadingAdminData}/>, students:<StudentsPage onEnroll={()=>goTab("enroll")} onEditStudent={saveAdminStudent} studentsData={adminStudents}/> ,
       scores:<ScoresPage studentsData={adminStudents} tableInfo={databaseTables.scores}/>, analytics:<AnalyticsPage studentsData={adminStudents} schoolsData={adminSchools} selectionsData={[...pendingSelections, ...confirmedSelections]} scoreTableInfo={databaseTables.scores}/>, results:<ResultsPage studentsData={adminStudents} tableInfo={databaseTables.results}/>, grading:<GradingPage/>,
-      attendance:<AttendancePage studentsData={adminStudents} tableInfo={databaseTables.attendance}/>, fees:<FeesAdmin studentsData={adminStudents} feesData={feesData} tableInfo={databaseTables.fees}/>, teachers:<TeachersPage teachersData={teachersData} tableInfo={databaseTables.teachers}/>, events:<EventsPage eventsData={databaseTables.events?.rows} tableInfo={databaseTables.events}/>,
-      schools:<SchoolsPage schoolsData={adminSchools}/>, pending:<PendingSelections rows={pendingSelections} loading={loadingPlacements} onApprove={approveSelection}/>, confirmed:<ConfirmedPlacements rows={confirmedSelections} loading={loadingPlacements}/>,
+      attendance:<AttendancePage studentsData={adminStudents} tableInfo={databaseTables.attendance}/>, fees:<FeesAdmin studentsData={adminStudents} feesData={feesData} tableInfo={databaseTables.fees}/>, teachers:<TeachersPage teachersData={teachersData} tableInfo={databaseTables.teachers} onCreateTeacher={(draft) => saveAdminTeacher(null, draft)} onUpdateTeacher={saveAdminTeacher} currentUser={user}/>, events:<EventsPage eventsData={databaseTables.events?.rows} tableInfo={databaseTables.events}/> ,
+      schools:<SchoolsPage schoolsData={adminSchools}/>, "registered-schools":<RegisteredSchoolsPage schools={registeredSchools} admins={schoolAdmins} onRegisterNew={()=>goTab("school-register")} onCreateSchoolAdmin={createSchoolAdmin} setupError={registrySetupError} currentUser={user}/>, "school-register":<SchoolRegistrationPage onBack={()=>goTab("registered-schools")} onRegisterSchool={registerSchool} setupError={registrySetupError}/>, pending:<PendingSelections rows={pendingSelections} loading={loadingPlacements} onApprove={approveSelection}/>, confirmed:<ConfirmedPlacements rows={confirmedSelections} loading={loadingPlacements}/>,
       finance:<FinancePage financeSummary={financeSummary} tableInfo={databaseTables.fees}/>, chat:<ChatPage chatUsers={chatUsers} onChatUsersChange={setChatUsers}/>, settings:<SettingsPage/>,
-      permissions:<PermissionsMatrixPage/>, audit:<AuditTrailPage/>, notify:<NotificationCenterPage/>, payments:<PaymentsReceiptsPage/>,
+      permissions:<PermissionsMatrixPage currentUser={user}/>, audit:<AuditTrailPage/>, notify:<NotificationCenterPage/>, payments:<PaymentsReceiptsPage/>,
       documents:<DocumentWorkflowPage/>, reports:<ReportsExportsPage/>, insights:<AdvancedAnalyticsPage/>, bulk:<BulkOperationsPage/>,
       offline:<OfflineSyncPage/>, calendar:<AcademicCalendarPage/>, helpdesk:<HelpdeskPage/>, privacy:<PrivacyCompliancePage/>,
       recovery:<DisasterRecoveryPage/>, mobile:<MobilePwaPage/>,
@@ -4119,7 +7141,431 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
             {BOTTOM.map(k=>{
               const item = ADMIN_NAV.find(n=>n.key===k);
               return <button key={k} className={`bottom-nav-item ${tab===k?"active":""}`} onClick={()=>goTab(k)}>
-                <Ico name={item.icon} size={20} color={item.color}/><span>{item.label}</span>
+                <Ico name={item.icon} size={17} color={item.color}/><span>{item.label}</span>
+              </button>;
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
+  const { cfg: appCfg } = useContext(SettingsContext);
+  const childToParent = useMemo(() => {
+    const map = {};
+    Object.entries(SCHOOL_ADMIN_SUBPAGE_MAP).forEach(([parent, children]) => {
+      children.forEach((key) => { map[key] = parent; });
+    });
+    return map;
+  }, []);
+  const [expandedGroups, setExpandedGroups] = useState(() =>
+    Object.fromEntries(Object.keys(SCHOOL_ADMIN_SUBPAGE_MAP).map((key) => [key, false]))
+  );
+  const [tab, setTab] = useState(() => readStoredTab(SCHOOL_ADMIN_TAB_KEY, "dashboard"));
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [school, setSchool] = useState(null);
+  const [schoolAdmins, setSchoolAdmins] = useState([]);
+  const [schoolStudents, setSchoolStudents] = useState([]);
+  const [schoolTeachers, setSchoolTeachers] = useState([]);
+  const [schoolFeesData, setSchoolFeesData] = useState([]);
+  const [schoolChoiceSchools, setSchoolChoiceSchools] = useState(SCHOOLS_DATA);
+  const [schoolScoresInfo, setSchoolScoresInfo] = useState({ rows: [], error: "" });
+  const [schoolEventsInfo, setSchoolEventsInfo] = useState({ rows: [], error: "" });
+  const [schoolResultsInfo, setSchoolResultsInfo] = useState({ rows: [], error: "" });
+  const [schoolTableInfo, setSchoolTableInfo] = useState({
+    attendance: { rows: [], error: "" },
+    fees: { rows: [], error: "" },
+    teachers: { rows: [], error: "" },
+    events: { rows: [], error: "" },
+    results: { rows: [], error: "" },
+  });
+  const [pendingSelections, setPendingSelections] = useState([]);
+  const [confirmedSelections, setConfirmedSelections] = useState([]);
+  const [loadingSchoolData, setLoadingSchoolData] = useState(!!supabase);
+  const [schoolRegistryError, setSchoolRegistryError] = useState("");
+  const [schoolScopeError, setSchoolScopeError] = useState("");
+  const [chatUsers, setChatUsers] = useState([
+    {id:1, name:"Admissions Desk", avatar:"A", unread:0, status:"active"},
+    {id:2, name:"Registrar", avatar:"R", unread:0, status:"online"},
+    {id:3, name:"Support Team", avatar:"S", unread:0, status:"away"},
+  ]);
+  const totalChatUnread = chatUsers.reduce((sum, item) => sum + item.unread, 0);
+  const BOTTOM = ["dashboard", "students", "analytics", "pending", "school-profile"];
+
+  const goTab = (key, closeSidebar = true) => {
+    setTab(key);
+    writeStoredTab(SCHOOL_ADMIN_TAB_KEY, key);
+    if (closeSidebar) setSidebarOpen(false);
+  };
+
+  const reloadApp = () => window.location.reload();
+  const schoolFinanceSummary = {
+    income: schoolFeesData.reduce((sum, fee) => sum + Number(fee.paid || 0), 0),
+    expenses: Math.round(schoolFeesData.reduce((sum, fee) => sum + Number(fee.paid || 0), 0) * 0.42),
+    fees_collected: schoolFeesData.reduce((sum, fee) => sum + Number(fee.paid || 0), 0),
+    outstanding: schoolFeesData.reduce((sum, fee) => sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0), 0),
+  };
+
+  useEffect(() => {
+    const parent = childToParent[tab];
+    if (parent) {
+      setExpandedGroups((prev) => ({ ...prev, [parent]: true }));
+    }
+  }, [tab, childToParent]);
+
+  const saveManagedSchoolProfile = async (updates) => {
+    if (!school?.id) {
+      throw new Error("This school record is not fully linked yet, so profile changes cannot be saved.");
+    }
+    if (!supabase) {
+      setSchool((current) => ({ ...current, ...updates }));
+      return;
+    }
+    const { data, error } = await supabase.from("registered_schools").update(updates).eq("id", school.id).select("*").single();
+    if (error) {
+      if (isMissingTableError(error, "registered_schools")) {
+        throw new Error("Registered school setup is not available yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
+      }
+      throw error;
+    }
+    setSchool({ ...normalizeSchoolRow(data), tenant_key: data?.tenant_key || school?.tenant_key || "" });
+  };
+
+  const saveSchoolStudent = async (existingStudent, draft) => {
+    const scopedSchoolId = school?.id || user?.registered_school_id || null;
+    const payload = {
+      full_name: draft.full_name.trim(),
+      index: draft.index.trim(),
+      class: draft.class,
+      region: draft.region,
+      aggregate: Number(draft.aggregate || 0),
+      status: draft.status || "pending",
+      photo_url: draft.photo_url?.trim() || null,
+      ...(scopedSchoolId != null ? { registered_school_id: scopedSchoolId } : {}),
+    };
+
+    if (supabase && !existingStudent?.id && scopedSchoolId == null) {
+      throw new Error("This admin account is not linked to a registered school yet, so new students cannot be created.");
+    }
+
+    let savedRow = normalizeStudentRecord({ id: existingStudent?.id || Date.now(), ...payload });
+
+    if (supabase) {
+      let response = existingStudent?.id
+        ? await supabase.from("students").update(payload).eq("id", existingStudent.id).select("*").single()
+        : await supabase.from("students").insert(payload).select("*").single();
+
+      if (response.error && isMissingColumnError(response.error) && scopedSchoolId != null) {
+        throw new Error("School-scoped student updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.");
+      }
+
+      if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "photo_url")) {
+        const { photo_url, ...fallbackPayload } = payload;
+        response = existingStudent?.id
+          ? await supabase.from("students").update(fallbackPayload).eq("id", existingStudent.id).select("*").single()
+          : await supabase.from("students").insert(fallbackPayload).select("*").single();
+      }
+
+      if (response.error) throw response.error;
+      savedRow = normalizeStudentRecord(response.data || { id: existingStudent?.id || Date.now(), ...payload });
+    }
+
+    setSchoolStudents((current) => sortStudentsByIndex(
+      existingStudent
+        ? current.map((student) => String(student.id) === String(existingStudent.id) ? { ...student, ...savedRow } : student)
+        : [...current, savedRow]
+    ));
+
+    return savedRow;
+  };
+
+  const saveSchoolTeacher = async (existingTeacher, draft) => {
+    const scopedSchoolId = school?.id || user?.registered_school_id || null;
+    const payload = {
+      name: draft.name.trim(),
+      role: normalizeRoleKey(draft.role || "teacher") || "teacher",
+      subject: draft.subject.trim(),
+      class: draft.class.trim(),
+      phone: draft.phone.trim(),
+      ...(scopedSchoolId != null ? { registered_school_id: scopedSchoolId } : {}),
+    };
+
+    if (supabase && !existingTeacher?.id && scopedSchoolId == null) {
+      throw new Error("This admin account is not linked to a registered school yet, so new teachers cannot be created.");
+    }
+
+    let savedRow = normalizeTeacherRow({ id: existingTeacher?.id || Date.now(), ...payload });
+
+    if (supabase) {
+      let response = existingTeacher?.id
+        ? await supabase.from("teachers").update(payload).eq("id", existingTeacher.id).select("*").single()
+        : await supabase.from("teachers").insert(payload).select("*").single();
+
+      if (response.error && isMissingColumnError(response.error) && scopedSchoolId != null) {
+        throw new Error("School-scoped teacher updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.");
+      }
+
+      if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "role")) {
+        const { role, ...fallbackPayload } = payload;
+        response = existingTeacher?.id
+          ? await supabase.from("teachers").update(fallbackPayload).eq("id", existingTeacher.id).select("*").single()
+          : await supabase.from("teachers").insert(fallbackPayload).select("*").single();
+      }
+
+      if (response.error) throw response.error;
+      savedRow = normalizeTeacherRow(response.data || { id: existingTeacher?.id || Date.now(), ...payload });
+    }
+
+    setSchoolTeachers((current) => {
+      const nextRows = existingTeacher
+        ? current.map((teacher) => String(teacher.id) === String(existingTeacher.id) ? { ...teacher, ...savedRow } : teacher)
+        : [savedRow, ...current];
+      return nextRows.slice().sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    });
+
+    return savedRow;
+  };
+
+  useEffect(() => {
+    const loadSchoolAdminData = async () => {
+      const scopedSchoolName = user?.managed_school_name || "";
+      const scopedSchoolId = user?.registered_school_id;
+      const scopeColumnMessage = "School-scoped data columns are not installed in Supabase yet. Run backend/supabase/migrations/004_add_registered_school_scope.sql, then refresh.";
+
+      if (!supabase) {
+        setSchool(scopedSchoolName ? normalizeSchoolRow({ name: scopedSchoolName, region: "Unknown", category: "C" }) : null);
+        setLoadingSchoolData(false);
+        return;
+      }
+
+      let schoolRow = null;
+      if (scopedSchoolId != null) {
+        const { data, error } = await supabase.from("registered_schools").select("*").eq("id", scopedSchoolId).maybeSingle();
+        if (isMissingTableError(error, "registered_schools")) {
+          setSchoolRegistryError("Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
+        }
+        schoolRow = data || null;
+      }
+
+      if (!schoolRow && scopedSchoolName) {
+        const { data, error } = await supabase.from("registered_schools").select("*").eq("name", scopedSchoolName).maybeSingle();
+        if (isMissingTableError(error, "registered_schools")) {
+          setSchoolRegistryError("Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
+        }
+        schoolRow = data || null;
+      }
+
+      const normalizedSchool = schoolRow
+        ? { ...normalizeSchoolRow(schoolRow), tenant_key: schoolRow.tenant_key || "" }
+        : (scopedSchoolName ? normalizeSchoolRow({ name: scopedSchoolName, region: "Unknown", category: "C" }) : null);
+      setSchool(normalizedSchool);
+
+      if (schoolRow?.id != null) {
+        const { data: admins, error: adminsError } = await supabase.from("school_admins").select("*").eq("registered_school_id", schoolRow.id).order("created_at", { ascending: false });
+        if (isMissingTableError(adminsError, "school_admins")) {
+          setSchoolRegistryError("Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
+        }
+        if (Array.isArray(admins)) setSchoolAdmins(admins);
+      } else {
+        setSchoolAdmins([{ id: user?.id || "self", full_name: user?.name || "School Admin", email: user?.email || "", phone: "", status: "active" }]);
+      }
+
+      let normalizedScopedStudents = [];
+      if (schoolRow?.id != null) {
+        const { data: scopedStudentsData, error: studentsError } = await supabase.from("students").select("*").eq("registered_school_id", schoolRow.id).order("id", { ascending: true });
+        if (isMissingColumnError(studentsError)) {
+          setSchoolScopeError(scopeColumnMessage);
+          setSchoolTableInfo((current) => ({
+            ...current,
+            attendance: { ...current.attendance, error: scopeColumnMessage },
+            fees: { ...current.fees, error: scopeColumnMessage },
+            teachers: { ...current.teachers, error: scopeColumnMessage },
+            results: { ...current.results, error: scopeColumnMessage },
+          }));
+        } else if (Array.isArray(scopedStudentsData)) {
+          normalizedScopedStudents = scopedStudentsData.map((s, i) => ({
+            id: s.id ?? i + 1,
+            full_name: s.full_name || s.name || "Unnamed Student",
+            index: s.index || s.index_number || s.index_no || `AUTO${i + 1}`,
+            class: s.class || s.class_name || "JHS 3A",
+            region: s.region || "Unknown",
+            aggregate: Number(s.aggregate ?? 0),
+            status: s.status || "pending",
+            email: s.email || null,
+            photo_url: resolveStudentPhotoUrl(s),
+          }));
+        }
+      }
+      setSchoolStudents(sortStudentsByIndex(normalizedScopedStudents));
+
+      if (schoolRow?.id != null) {
+        const [teachersResponse, feesResponse, resultsResponse, scoresResponse, eventsResponse, schoolsResponse] = await Promise.all([
+          supabase.from("teachers").select("*").eq("registered_school_id", schoolRow.id).order("name", { ascending: true }),
+          supabase.from("fees").select("*").eq("registered_school_id", schoolRow.id).order("id", { ascending: false }),
+          supabase.from("results").select("*").eq("registered_school_id", schoolRow.id).order("created_at", { ascending: false }),
+          supabase.from("scores").select("*").eq("registered_school_id", schoolRow.id).order("created_at", { ascending: false }),
+          supabase.from("events").select("*").eq("registered_school_id", schoolRow.id).order("event_date", { ascending: true }),
+          supabase.from("schools").select("*").order("name", { ascending: true }),
+        ]);
+
+        if (isMissingColumnError(teachersResponse.error) || isMissingColumnError(feesResponse.error) || isMissingColumnError(resultsResponse.error) || isMissingColumnError(scoresResponse.error) || isMissingColumnError(eventsResponse.error)) {
+          setSchoolScopeError(scopeColumnMessage);
+        }
+
+        setSchoolTeachers(Array.isArray(teachersResponse.data) ? teachersResponse.data.map(normalizeTeacherRow) : []);
+        setSchoolFeesData(Array.isArray(feesResponse.data) ? feesResponse.data.map(normalizeFeeRow) : []);
+        setSchoolScoresInfo({ rows: Array.isArray(scoresResponse.data) ? scoresResponse.data : [], error: scoresResponse.error?.message || "" });
+        setSchoolEventsInfo({ rows: Array.isArray(eventsResponse.data) ? eventsResponse.data : [], error: eventsResponse.error?.message || "" });
+        setSchoolResultsInfo({ rows: Array.isArray(resultsResponse.data) ? resultsResponse.data : [], error: resultsResponse.error?.message || "" });
+        setSchoolChoiceSchools(Array.isArray(schoolsResponse.data) && schoolsResponse.data.length ? sortSchoolsByCategory(schoolsResponse.data.map(normalizeSchoolRow)) : SCHOOLS_DATA);
+        setSchoolTableInfo({
+          attendance: { rows: [], error: isMissingColumnError(teachersResponse.error) || isMissingColumnError(feesResponse.error) || isMissingColumnError(resultsResponse.error) || isMissingColumnError(scoresResponse.error) || isMissingColumnError(eventsResponse.error) ? scopeColumnMessage : "" },
+          fees: { rows: Array.isArray(feesResponse.data) ? feesResponse.data : [], error: feesResponse.error?.message || "" },
+          teachers: { rows: Array.isArray(teachersResponse.data) ? teachersResponse.data : [], error: teachersResponse.error?.message || "" },
+          events: { rows: Array.isArray(eventsResponse.data) ? eventsResponse.data : [], error: eventsResponse.error?.message || "" },
+          results: { rows: Array.isArray(resultsResponse.data) ? resultsResponse.data : [], error: resultsResponse.error?.message || "" },
+        });
+      }
+
+      const { data: students } = await supabase.from("students").select("*").order("id", { ascending: true });
+      const normalizedStudents = Array.isArray(students) && students.length
+        ? students.map((s, i) => ({
+            id: s.id ?? i + 1,
+            full_name: s.full_name || s.name || "Unnamed Student",
+            index: s.index || s.index_number || s.index_no || `AUTO${i + 1}`,
+            class: s.class || s.class_name || "JHS 3A",
+            region: s.region || "Unknown",
+            aggregate: Number(s.aggregate ?? 0),
+            status: s.status || "pending",
+            email: s.email || null,
+            photo_url: resolveStudentPhotoUrl(s),
+          }))
+        : [];
+      const studentsMap = new Map();
+      normalizedStudents.forEach((student) => {
+        studentsMap.set(String(student.id), student);
+        studentsMap.set(String(student.index), student);
+      });
+
+      const { data: selectionRows } = await supabase.from("school_selections").select("*").order("created_at", { ascending: false });
+      const matchingRows = (selectionRows || []).filter((row) => normalizeSelectionList(row).some((pick) => normalizeSchoolIdentity(pick.name) === normalizeSchoolIdentity(normalizedSchool?.name || scopedSchoolName)));
+      const summarized = matchingRows.map((row) => summarizeSelectionRecord(row, studentsMap));
+      setPendingSelections(sortRecordsByStudentIndex(summarized.filter((row) => !row.approved && row.status !== "confirmed")));
+      setConfirmedSelections(sortRecordsByStudentIndex(summarized.filter((row) => row.approved || row.status === "confirmed")));
+      setLoadingSchoolData(false);
+    };
+
+    loadSchoolAdminData();
+  }, [user]);
+
+  const handleMainBlankClick = (event) => {
+    if (!sidebarOpen) return;
+    if (event.target === event.currentTarget) setSidebarOpen(false);
+  };
+
+  const renderPage = () => {
+    const pages = {
+      dashboard: <SchoolAdminDashboardPage user={user} school={school} admins={schoolAdmins} pendingRows={pendingSelections} confirmedRows={confirmedSelections} studentsData={schoolStudents} teachersData={schoolTeachers} feesData={schoolFeesData} loading={loadingSchoolData} />,
+      students: <StudentsPage onEnroll={()=>goTab("enroll")} onEditStudent={saveSchoolStudent} studentsData={schoolStudents} showEnrollAction={true} heroKicker="School Registry" heroTitle="Students linked to this school" heroSub="Review only the student records currently assigned to this school workspace." heroNote="Search, review, and manage the student list that belongs to this school." directoryTitle="School student registry" directorySub="Search by student name or ID within this school only." emptyRemoteMessage="No students are currently linked to this school." />,
+      enroll: <EnrollPage onBack={()=>goTab("students")} registeredSchoolId={school?.id || user?.registered_school_id || null} />,
+      scores: <ScoresPage studentsData={schoolStudents} tableInfo={schoolScoresInfo} />,
+      analytics: <AnalyticsPage studentsData={schoolStudents} schoolsData={schoolChoiceSchools} selectionsData={[...pendingSelections, ...confirmedSelections]} scoreTableInfo={schoolScoresInfo} />,
+      attendance: <AttendancePage studentsData={schoolStudents} tableInfo={schoolTableInfo.attendance} registeredSchoolId={school?.id || null} />,
+      fees: <FeesAdmin studentsData={schoolStudents} feesData={schoolFeesData} tableInfo={schoolTableInfo.fees} />,
+      teachers: <TeachersPage teachersData={schoolTeachers} tableInfo={schoolTableInfo.teachers} onCreateTeacher={(draft) => saveSchoolTeacher(null, draft)} onUpdateTeacher={saveSchoolTeacher} currentUser={user} />,
+      schools: <SchoolsPage schoolsData={schoolChoiceSchools} />,
+      results: <ResultsPage studentsData={schoolStudents} tableInfo={schoolResultsInfo} />,
+      grading: <GradingPage />,
+      events: <EventsPage eventsData={schoolEventsInfo.rows} tableInfo={schoolTableInfo.events} registeredSchoolId={school?.id || null} />,
+      finance: <FinancePage financeSummary={schoolFinanceSummary} tableInfo={schoolTableInfo.fees} />,
+      "school-profile": <ManagedSchoolPage school={school} admins={schoolAdmins} user={user} onSaveProfile={saveManagedSchoolProfile} />,
+      pending: <PendingSelections rows={pendingSelections} loading={loadingSchoolData} readOnly pageTitle="Candidate Reviews" pageSub="Selections that currently mention this school." emptyMessage="No candidate reviews are currently in scope for this school." />,
+      confirmed: <ConfirmedPlacements rows={confirmedSelections} loading={loadingSchoolData} />,
+      chat: <ChatPage chatUsers={chatUsers} onChatUsersChange={setChatUsers} />,
+      notify: <NotificationCenterPage />,
+      payments: <PaymentsReceiptsPage />,
+      documents: <DocumentWorkflowPage />,
+      reports: <ReportsExportsPage />,
+      insights: <AdvancedAnalyticsPage />,
+      bulk: <BulkOperationsPage />,
+      offline: <OfflineSyncPage />,
+      calendar: <AcademicCalendarPage />,
+      helpdesk: <HelpdeskPage />,
+      "ai-assist": <AiAssistantPage />,
+      "risk-score": <StudentRiskPage />,
+      timetable: <TimetablePage />,
+      "exam-builder": <ExamBuilderPage />,
+      installments: <InstallmentPlansPage />,
+      campaigns: <MessagingCampaignsPage />,
+      recommend: <RecommendationEnginePage />,
+      "digital-id": <DigitalIdPage />,
+      "public-status": <PublicStatusPage />,
+      quality: <DataQualityPage />,
+    };
+    return pages[tab] || pages.dashboard;
+  };
+
+  return (
+    <div className="app">
+      <Topbar user={user} onLogout={onLogout} onMenuClick={()=>setSidebarOpen(o=>!o)} darkMode={darkMode} onToggleDark={onToggleDark} onOpenNotifications={() => setNotificationCount(0)} onOpenProfile={() => goTab("school-profile")} onReloadApp={reloadApp} notificationCount={notificationCount} chatUnread={totalChatUnread} onOpenChat={() => goTab("chat")} systemName={school?.name || appCfg.systemName}/>
+      <div className="shell">
+        {sidebarOpen && <div className="sidebar-overlay" onClick={()=>setSidebarOpen(false)}/>}
+        <nav className={`sidebar ${sidebarOpen?"":"closed"}`}>
+          <button className="sidebar-brand brand-btn" onClick={reloadApp} title="Reload app"><img src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png" alt="Campus Ghana"/></button>
+          {SCHOOL_ADMIN_NAV.map((item, i) => {
+            if (item.section) return <div key={i} className="sidebar-section" style={item.section === "Admissions & Mock Placement" ? { textAlign: "center" } : undefined}>{item.section}</div>;
+            if (childToParent[item.key]) return null;
+
+            const childrenKeys = SCHOOL_ADMIN_SUBPAGE_MAP[item.key] || [];
+            const hasChildren = childrenKeys.length > 0;
+            const activeParent = tab === item.key || childrenKeys.includes(tab);
+
+            return (
+              <div key={item.key}>
+                <button
+                  className={`nav-item ${activeParent?"active":""}`}
+                  onClick={() => {
+                    goTab(item.key, !hasChildren);
+                    if (hasChildren) {
+                      setExpandedGroups((prev) => ({ ...prev, [item.key]: !prev[item.key] }));
+                    }
+                  }}
+                >
+                  <Ico name={item.icon} size={26} color={item.color} className="nav-item-icon" style={{strokeWidth:2.6,filter:"saturate(1.08) contrast(1.05)"}}/>
+                  <span className="nav-item-label" style={{color:item.color,fontWeight:700}}>{item.label}</span>
+                  {item.key === "pending" && pendingSelections.length > 0 && <span className="nav-item-badge">{pendingSelections.length}</span>}
+                  {hasChildren && <span style={{marginLeft:"auto",fontWeight:700,color:"#64748b"}}>{expandedGroups[item.key] ? "▾" : "▸"}</span>}
+                </button>
+
+                {hasChildren && expandedGroups[item.key] && childrenKeys.map((childKey) => {
+                  const child = SCHOOL_ADMIN_NAV.find((entry) => entry.key === childKey);
+                  if (!child) return null;
+                  return (
+                    <button key={child.key} className={`nav-item ${tab===child.key?"active":""}`} onClick={() => goTab(child.key)} style={{paddingLeft:36, marginTop:2, marginBottom:2}}>
+                      <Ico name={child.icon} size={20} color={child.color} className="nav-item-icon" />
+                      <span className="nav-item-label" style={{color:child.color,fontWeight:600,fontSize:".84rem"}}>{child.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </nav>
+        <main className={`main ${sidebarOpen?"":"full"}`} onClick={handleMainBlankClick}>
+          {appCfg.maintenanceMode && <div className="alert alert-warning" style={{margin:"16px 16px 0",fontWeight:700,borderRadius:8}}>⚠️ Maintenance Mode is ON — some workflows may be unavailable.</div>}
+          {schoolRegistryError && <div className="alert alert-warning" style={{margin:"16px 16px 0",borderRadius:8}}>{schoolRegistryError}</div>}
+          {schoolScopeError && <div className="alert alert-warning" style={{margin:"16px 16px 0",borderRadius:8}}>{schoolScopeError}</div>}
+          {renderPage()}
+        </main>
+        <div className="bottom-nav">
+          <div className="bottom-nav-grid" style={{gridTemplateColumns:`repeat(${BOTTOM.length},1fr)`}}>
+            {BOTTOM.map((key) => {
+              const item = SCHOOL_ADMIN_NAV.find((entry) => entry.key === key);
+              return <button key={key} className={`bottom-nav-item ${tab===key?"active":""}`} onClick={() => goTab(key)}>
+                <Ico name={item.icon} size={17} color={item.color}/><span>{item.label}</span>
               </button>;
             })}
           </div>
@@ -4462,7 +7908,7 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
             {BOTTOM.map(k=>{
               const item = STUDENT_NAV.find(n=>n.key===k);
               return <button key={k} className={`bottom-nav-item ${tab===k?"active":""}`} onClick={()=>goTab(k)}>
-                <Ico name={item.icon} size={20} color={item.color}/><span style={{fontSize:".6rem"}}>{item.label}</span>
+                <Ico name={item.icon} size={17} color={item.color}/><span style={{fontSize:".6rem"}}>{item.label}</span>
               </button>;
             })}
           </div>
@@ -4473,7 +7919,7 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
 }
 
 // ROOT
-export default function GhanaCampus() {
+function GhanaCampus() {
   const [session, setSession] = useState(() => readAppSession());
   const [darkMode, setDarkMode] = useState(false);
   const [appSettings, setAppSettings] = useState(DEFAULT_SETTINGS);
@@ -4493,13 +7939,13 @@ export default function GhanaCampus() {
     }
 
     let displayName = authUser.user_metadata?.full_name || authUser.email || "User";
-    let role = authUser.user_metadata?.role || "student";
+    let role = normalizeRoleKey(authUser.user_metadata?.role || "student");
 
     let profile = null;
     if (profilesTableAvailable) {
       const { data: profileData, error } = await supabase
         .from("profiles")
-        .select("full_name, role")
+        .select("*")
         .eq("id", authUser.id)
         .maybeSingle();
       if (error && isProfilesTableMissingError(error)) {
@@ -4510,16 +7956,19 @@ export default function GhanaCampus() {
     }
 
     if (profile?.full_name) displayName = profile.full_name;
-    if (profile?.role === "admin" || profile?.role === "student") role = profile.role;
+    if (profile?.role) role = normalizeRoleKey(profile.role);
+    const restoredPortal = resolvePortalFromAccount(profile || { role, registered_school_id: authUser.user_metadata?.registered_school_id, managed_school_name: authUser.user_metadata?.managed_school_name }, role);
 
     const restoredSession = {
       authSource: "supabase",
-      portal: role,
+      portal: restoredPortal,
       user: {
         id: authUser.id,
         email: authUser.email,
         role,
         name: displayName,
+        registered_school_id: profile?.registered_school_id ?? authUser.user_metadata?.registered_school_id ?? null,
+        managed_school_name: profile?.managed_school_name || authUser.user_metadata?.managed_school_name || "",
       },
     };
     setSession(restoredSession);
@@ -4587,7 +8036,7 @@ export default function GhanaCampus() {
 
       const { data: tableUsers, error: tableUsersError } = await supabase
         .from("users")
-        .select("id, email, password, role, full_name")
+        .select("*")
         .eq("email", identifier)
         .limit(1);
 
@@ -4597,15 +8046,19 @@ export default function GhanaCampus() {
           return { ok: false, error: "Invalid email or password." };
         }
 
+        const resolvedRole = normalizeRoleKey(matchedUser.role || portal);
+        const resolvedPortal = resolvePortalFromAccount({ ...matchedUser, role: resolvedRole }, portal);
         await supabase.auth.signOut();
         const tableSession = {
           authSource: "custom",
-          portal: matchedUser.role === "admin" || matchedUser.role === "student" ? matchedUser.role : portal,
+          portal: resolvedPortal,
           user: {
             id: matchedUser.id || user.id,
             email: matchedUser.email || user.email,
-            role: matchedUser.role || portal,
+            role: resolvedRole,
             name: matchedUser.full_name || user.name,
+            registered_school_id: matchedUser.registered_school_id ?? null,
+            managed_school_name: matchedUser.managed_school_name || "",
           },
         };
         setSession(tableSession);
@@ -4618,26 +8071,37 @@ export default function GhanaCampus() {
 
       const authUser = data?.user;
       let displayName = user.name;
-      let roleFromProfile = portal;
+      let roleFromProfile = normalizeRoleKey(portal);
+      let profile = null;
 
       if (authUser?.id && profilesTableAvailable) {
-        const { data: profile, error: profileError } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from("profiles")
-          .select("full_name, role")
+          .select("*")
           .eq("id", authUser.id)
           .maybeSingle();
         if (profileError && isProfilesTableMissingError(profileError)) {
           profilesTableAvailable = false;
         } else {
+          profile = profileData;
           if (profile?.full_name) displayName = profile.full_name;
-          if (profile?.role === "admin" || profile?.role === "student") roleFromProfile = profile.role;
+          if (profile?.role) roleFromProfile = normalizeRoleKey(profile.role);
         }
       }
 
+      const resolvedPortal = resolvePortalFromAccount(profile || { role: roleFromProfile }, roleFromProfile);
       const s = {
         authSource: "supabase",
-        portal: roleFromProfile,
-        user: { ...user, name: displayName, id: authUser?.id || user.id, email: authUser?.email || user.email }
+        portal: resolvedPortal,
+        user: {
+          ...user,
+          name: displayName,
+          id: authUser?.id || user.id,
+          email: authUser?.email || user.email,
+          role: roleFromProfile,
+          registered_school_id: profile?.registered_school_id ?? null,
+          managed_school_name: profile?.managed_school_name || "",
+        }
       };
       setSession(s);
       writeAppSession(s);
@@ -4742,10 +8206,15 @@ export default function GhanaCampus() {
         ? <Landing onSelect={(portal, user, password) => login(portal, user, password)} hasSupabase={!!supabase}/>
         : session.portal === "admin"
           ? <AdminPortal user={session.user} onLogout={logout} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}/>
+          : session.portal === "school-admin"
+            ? <SchoolAdminPortal user={session.user} onLogout={logout} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}/>
           : <StudentPortal user={session.user} onLogout={logout} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}/>
       }
     </SettingsContext.Provider>
   );
 }
+
+export { GhanaCampus };
+export default GhanaCampus;
 
 
