@@ -1,453 +1,55 @@
-﻿import { useState, useEffect, useCallback, createContext, useContext, useMemo } from "react";
-import {
-  IoGridOutline, IoPeopleOutline, IoClipboardOutline, IoBarChartOutline,
-  IoDocumentTextOutline, IoSchoolOutline, IoTimeOutline, IoCheckmarkCircleOutline,
-  IoWalletOutline, IoChatbubbleEllipsesOutline, IoSettingsOutline, IoCalendarOutline,
-  IoCardOutline, IoFolderOutline, IoNotificationsOutline, IoSearchOutline,
-  IoLogOutOutline, IoMenuOutline, IoPersonCircleOutline, IoSunnyOutline,
-  IoMoonOutline, IoRibbonOutline, IoCreateOutline, IoCalendarClearOutline,
-  IoPersonAddOutline, IoHelpBuoyOutline, IoListCircleOutline,
-  IoMailOutline, IoLockClosedOutline, IoChevronBackOutline, IoLogInOutline,
-  IoEyeOutline, IoEyeOffOutline
-} from "react-icons/io5";
+﻿﻿import { useState, useEffect, useCallback, useContext, useMemo } from "react";
 import { supabase } from "./src/lib/supabaseClient.js";
-
-// SETTINGS CONTEXT
-const DEFAULT_SETTINGS = {
-  systemName: "Campus Ghana", academicYear: "2023/2024", currentTerm: "Second Term",
-  selectionDeadline: "2024-05-15", maxChoices: 7, schoolRegion: "All Regions",
-  allowChanges: true, studentPortalOpen: true, emailNotifs: true, smsNotifs: false,
-  maintenanceMode: false, showResultsToStudents: true, autoApproveSelections: false,
-  locale: "en-GH", timezone: "Africa/Accra", currency: "GHS",
-  supportEmail: "support@campusghana.edu.gh", supportPhone: "0240000000",
-  sessionTimeoutMins: 30, passwordMinLength: 8, lockoutAttempts: 5,
-  twoFactorAdmins: false, enforcePasswordRotation: false,
-  backupFrequency: "daily", backupTime: "02:00", auditLogsEnabled: true,
-  auditRetentionDays: 180, apiRateLimitPerMin: 120,
-};
-const SettingsContext = createContext({ cfg: DEFAULT_SETTINGS, updateCfg: () => {} });
-
-// GHANA GRADES
-const getGrade = (score) => {
-  if (score == null) return { grade: "-", color: "#94a3b8", bg: "#f1f5f9" };
-  if (score >= 80) return { grade: "A1", color: "#14532d", bg: "#dcfce7" };
-  if (score >= 70) return { grade: "B2", color: "#1e3a8a", bg: "#dbeafe" };
-  if (score >= 60) return { grade: "B3", color: "#0c4a6e", bg: "#e0f2fe" };
-  if (score >= 55) return { grade: "C4", color: "#78350f", bg: "#fef3c7" };
-  if (score >= 50) return { grade: "C5", color: "#7c2d12", bg: "#ffedd5" };
-  if (score >= 45) return { grade: "C6", color: "#7f1d1d", bg: "#fee2e2" };
-  if (score >= 40) return { grade: "D7", color: "#4a044e", bg: "#fdf4ff" };
-  if (score >= 30) return { grade: "E8", color: "#1e1b4b", bg: "#eef2ff" };
-  return { grade: "F9", color: "#374151", bg: "#f3f4f6" };
-};
-
-// SAMPLE DATA
-const SUBJECTS = ["English Language","Mathematics","Integrated Science","Social Studies","Religious & Moral Ed","Home Language","French","Creative Arts","Career Technology","Computing"];
-const GHANA_REGIONS = ["Greater Accra","Ashanti","Western","Central","Eastern","Volta","Northern","Upper East","Upper West","Bono","Oti","Ahafo","Bono East","North East","Savannah","Western North"];
-const SCHOOLS_DATA = [
-  { id:1, name:"Achimota School", region:"Greater Accra", category:"A", cutoff:8, slots:300 },
-  { id:2, name:"Wesley Girls' High School", region:"Central", category:"A", cutoff:6, slots:250 },
-  { id:3, name:"Prempeh College", region:"Ashanti", category:"A", cutoff:7, slots:280 },
-  { id:4, name:"St. Augustine's College", region:"Central", category:"B", cutoff:9, slots:200 },
-  { id:5, name:"Holy Child School", region:"Central", category:"B", cutoff:10, slots:180 },
-  { id:6, name:"Kumasi Academy", region:"Ashanti", category:"B", cutoff:12, slots:220 },
-  { id:7, name:"GSTS Takoradi", region:"Western", category:"C", cutoff:14, slots:350 },
-  { id:8, name:"Tamale SHS", region:"Northern", category:"C", cutoff:15, slots:400 },
-];
-const STUDENTS_DATA = [
-  { id:1, full_name:"Kwame Asante", index:"2024001", class:"JHS 3A", region:"Ashanti", aggregate:8, status:"confirmed" },
-  { id:2, full_name:"Abena Mensah", index:"2024002", class:"JHS 3A", region:"Greater Accra", aggregate:12, status:"pending" },
-  { id:3, full_name:"Kofi Boateng", index:"2024003", class:"JHS 3B", region:"Central", aggregate:6, status:"confirmed" },
-  { id:4, full_name:"Akosua Frimpong", index:"2024004", class:"JHS 3B", region:"Western", aggregate:15, status:"pending" },
-  { id:5, full_name:"Yaw Darko", index:"2024005", class:"JHS 3C", region:"Volta", aggregate:10, status:"confirmed" },
-];
-const SCORES_DATA = STUDENTS_DATA.map(s => ({
-  student_id: s.id, name: s.full_name,
-  scores: Object.fromEntries(SUBJECTS.map(sub => [sub, Math.floor(Math.random()*50)+40]))
-}));
-const ATTENDANCE_DATA = Array.from({length:20}, (_,i) => ({
-  id:i+1, date: new Date(Date.now() - i*86400000*1.5).toISOString().split("T")[0],
-  status: Math.random() > 0.15 ? "Present" : "Absent"
-}));
-const ANNOUNCEMENTS = [
-  { id:1, title:"BECE Registration Open", body:"All JHS 3 students should complete BECE registration by April 30, 2024.", date:"2024-04-10", type:"urgent" },
-  { id:2, title:"School Selection Window", body:"Students can now select up to 6 secondary schools. Deadline: May 15, 2024.", date:"2024-04-08", type:"info" },
-  { id:3, title:"Mid-term Break", body:"School resumes on Monday, April 22, 2024. Enjoy your break!", date:"2024-04-05", type:"notice" },
-];
-const FEES_DATA = [
-  { id:1, term:"First Term 2024", amount:350, paid:350, date:"2024-01-15", status:"paid" },
-  { id:2, term:"Second Term 2024", amount:350, paid:200, date:"2024-04-02", status:"partial" },
-  { id:3, term:"Third Term 2024", amount:350, paid:0, date:null, status:"unpaid" },
-];
-const FINANCE_DATA = { income: 125000, expenses: 89000, fees_collected: 98000, outstanding: 27000 };
-const TEACHERS_DATA = [
-  { id:1, name:"Mr. Kwesi Adjei", subject:"Mathematics", class:"JHS 3A,3B", phone:"0244123456" },
-  { id:2, name:"Mrs. Ama Owusu", subject:"English Language", class:"JHS 3A,3C", phone:"0244234567" },
-  { id:3, name:"Mr. Baffour Dankwah", subject:"Science", class:"JHS 3B,3C", phone:"0244345678" },
-];
-const EVENTS_DATA = [
-  { id:1, title:"BECE Mock Exams", date:"2024-04-22", type:"exam", desc:"Three-day mock examination for JHS 3" },
-  { id:2, title:"PTA Meeting", date:"2024-04-28", type:"meeting", desc:"Parents & teachers Q1 review" },
-  { id:3, title:"Sports Day", date:"2024-05-10", type:"event", desc:"Annual inter-house sports competition" },
-];
-
-const getSessionUserEmail = () => {
-  return globalThis.__campus_user_email || "demo@campus.local";
-};
-
-const APP_SESSION_KEY = "campus_portal_session";
-let appSessionMemory = null;
-const readAppSession = () => {
-  if (appSessionMemory) return appSessionMemory;
-  try {
-    const raw = sessionStorage.getItem(APP_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.authSource === "custom" ? parsed : null;
-  } catch {
-    return null;
-  }
-};
-const writeAppSession = (session) => {
-  appSessionMemory = session || null;
-  try {
-    if (session?.authSource === "custom") {
-      sessionStorage.setItem(APP_SESSION_KEY, JSON.stringify(session));
-    } else {
-      sessionStorage.removeItem(APP_SESSION_KEY);
-    }
-  } catch {}
-};
-
-const ADMIN_TAB_KEY = "admin_active_tab";
-const STUDENT_TAB_KEY = "student_active_tab";
-const tabMemory = {
-  [ADMIN_TAB_KEY]: "dashboard",
-  [STUDENT_TAB_KEY]: "dashboard",
-};
-const readStoredTab = (key, fallback) => {
-  try {
-    return sessionStorage.getItem(key) || tabMemory[key] || fallback;
-  } catch {
-    return tabMemory[key] || fallback;
-  }
-};
-const writeStoredTab = (key, value) => {
-  tabMemory[key] = value;
-  try {
-    sessionStorage.setItem(key, value);
-  } catch {}
-};
+import { Ico } from "./src/components/Ico.jsx";
+import { Landing } from "./src/components/Landing.jsx";
+import { Topbar } from "./src/components/Topbar.jsx";
+import { SettingsContext } from "./src/context/SettingsContext.js";
+import { useIsMobileLayout } from "./src/hooks/useIsMobileLayout.js";
+import { DEFAULT_SETTINGS, getGrade } from "./src/config/campusConfig.js";
+import {
+  ANNOUNCEMENTS,
+  ATTENDANCE_DATA,
+  EVENTS_DATA,
+  FEES_DATA,
+  FINANCE_DATA,
+  GHANA_REGIONS,
+  SCHOOLS_DATA,
+  SCORES_DATA,
+  STUDENTS_DATA,
+  SUBJECTS,
+  TEACHERS_DATA,
+} from "./src/data/demoData.js";
+import {
+  buildRecentActivity,
+  fetchStudentSelection,
+  hasRealTableError,
+  isMissingColumnError,
+  isProfilesTableMissingError,
+  normalizeEventRow,
+  normalizeFeeRow,
+  normalizeResultRow,
+  normalizeSchoolRow,
+  normalizeScoreRow,
+  normalizeSelectionList,
+  normalizeTeacherRow,
+  resolveStudentPhotoUrl,
+  sortRecordsByStudentIndex,
+  sortSchoolsByCategory,
+  sortStudentsByIndex,
+  sortTableRowsForDisplay,
+  summarizeSelectionRecord,
+} from "./src/utils/campusData.js";
+import {
+  ADMIN_TAB_KEY,
+  STUDENT_TAB_KEY,
+  getSessionUserEmail,
+  readAppSession,
+  readStoredTab,
+  writeAppSession,
+  writeStoredTab,
+} from "./src/utils/sessionState.js";
 
 let profilesTableAvailable = true;
-const isProfilesTableMissingError = (error) => {
-  if (!error) return false;
-  const msg = String(error.message || "").toLowerCase();
-  return error.status === 404 || error.code === "PGRST205" || error.code === "42P01" || msg.includes("profiles");
-};
-const isMissingColumnError = (error) => {
-  if (!error) return false;
-  const msg = String(error.message || "").toLowerCase();
-  return error.code === "PGRST204" || error.code === "42703" || msg.includes("column");
-};
-const normalizeSchoolRow = (s, i = 0) => ({
-  id: s?.id ?? i + 1,
-  name: s?.name || s?.school_name || "Unnamed School",
-  region: s?.region || "Unknown",
-  category: String(s?.category || "C"),
-  cutoff: Number(s?.cutoff ?? s?.cut_off ?? 0),
-  slots: Number(s?.slots ?? s?.capacity ?? 0),
-});
-const resolveStudentPhotoUrl = (student) => {
-  if (!student || typeof student !== "object") return "";
-  const candidates = [
-    student.photo_url,
-    student.profile_photo_url,
-    student.avatar_url,
-    student.image_url,
-    student.profile_image,
-    student.profile_picture,
-    student.picture_url,
-    student.photo,
-    student.avatar,
-  ];
-  const selected = candidates.find((value) => typeof value === "string" && value.trim());
-  return selected ? selected.trim() : "";
-};
-const sortSchoolsByCategory = (schools) => {
-  const order = { A: 0, B: 1, C: 2 };
-  return [...schools].sort((left, right) => {
-    const categoryDiff = (order[left?.category] ?? 99) - (order[right?.category] ?? 99);
-    if (categoryDiff !== 0) return categoryDiff;
-    return String(left?.name || "").localeCompare(String(right?.name || ""));
-  });
-};
-const sortStudentsByIndex = (students) => {
-  return [...(students || [])].sort((left, right) => {
-    const leftIndex = String(left?.index || left?.index_number || "").trim();
-    const rightIndex = String(right?.index || right?.index_number || "").trim();
-    const leftNumber = Number(leftIndex);
-    const rightNumber = Number(rightIndex);
-    const leftIsNumeric = Number.isFinite(leftNumber) && leftIndex !== "";
-    const rightIsNumeric = Number.isFinite(rightNumber) && rightIndex !== "";
-
-    if (leftIsNumeric && rightIsNumeric && leftNumber !== rightNumber) {
-      return leftNumber - rightNumber;
-    }
-
-    return leftIndex.localeCompare(rightIndex, undefined, { numeric: true, sensitivity: "base" });
-  });
-};
-const sortRecordsByStudentIndex = (rows) => {
-  return [...(rows || [])].sort((left, right) => {
-    const leftIndex = String(left?.index || left?.index_number || "").trim();
-    const rightIndex = String(right?.index || right?.index_number || "").trim();
-    const leftNumber = Number(leftIndex);
-    const rightNumber = Number(rightIndex);
-    const leftIsNumeric = Number.isFinite(leftNumber) && leftIndex !== "";
-    const rightIsNumeric = Number.isFinite(rightNumber) && rightIndex !== "";
-
-    if (leftIsNumeric && rightIsNumeric && leftNumber !== rightNumber) {
-      return leftNumber - rightNumber;
-    }
-
-    const byIndex = leftIndex.localeCompare(rightIndex, undefined, { numeric: true, sensitivity: "base" });
-    if (byIndex !== 0) return byIndex;
-
-    return String(left?.studentName || left?.full_name || left?.user_email || "").localeCompare(
-      String(right?.studentName || right?.full_name || right?.user_email || ""),
-    );
-  });
-};
-const sortTableRowsForDisplay = (tableName, rows) => {
-  if (!Array.isArray(rows) || !rows.length) return [];
-  if (tableName === "students") return sortStudentsByIndex(rows);
-
-  const hasStudentIndex = rows.some((row) => row && (row.index_number != null || row.index != null));
-  if (hasStudentIndex) return sortRecordsByStudentIndex(rows);
-
-  return rows;
-};
-const hasRealTableError = (tableInfo) => !!(tableInfo?.error && tableInfo.error !== "Not loaded yet");
-const normalizeSelectionList = (row) => {
-  if (!row) return [];
-  const raw = row.selections || row.selected_schools || [];
-  if (!Array.isArray(raw)) return [];
-  return raw.map((x, i) => ({
-    id: x.school_id || x.id || `${i + 1}`,
-    name: x.school_name || x.name || "Unknown School",
-    region: x.region || "Unknown",
-    category: x.category || "C",
-    cutoff: Number(x.cutoff ?? x.cut_off ?? 0),
-    rank: Number(x.rank ?? i + 1),
-  }));
-};
-const normalizeTeacherRow = (teacher, i = 0) => ({
-  id: teacher?.id ?? i + 1,
-  name: teacher?.name || teacher?.full_name || "Unknown Teacher",
-  subject: teacher?.subject || teacher?.department || "General",
-  class: teacher?.class || teacher?.classes || teacher?.assigned_class || "-",
-  phone: teacher?.phone || teacher?.contact || "-",
-});
-const normalizeFeeRow = (fee, i = 0) => ({
-  id: fee?.id ?? i + 1,
-  student_id: fee?.student_id || fee?.studentId || null,
-  index_number: fee?.index_number || fee?.index || null,
-  term: fee?.term || fee?.semester || `Term ${i + 1}`,
-  amount: Number(fee?.amount ?? fee?.total ?? 0),
-  paid: Number(fee?.paid ?? fee?.amount_paid ?? 0),
-  status: fee?.status || (Number(fee?.paid ?? 0) >= Number(fee?.amount ?? 0) ? "paid" : Number(fee?.paid ?? 0) > 0 ? "partial" : "unpaid"),
-  date: fee?.date || fee?.payment_date || fee?.updated_at || fee?.created_at || null,
-  created_at: fee?.created_at || null,
-  updated_at: fee?.updated_at || null,
-});
-const normalizeEventRow = (event, i = 0) => ({
-  id: event?.id ?? i + 1,
-  title: event?.title || event?.name || "Untitled",
-  date: event?.event_date || event?.date || event?.created_at || "",
-  type: event?.type || "event",
-  desc: event?.description || event?.desc || "",
-});
-const normalizeScoreRow = (row, studentsMap, i = 0) => {
-  const student = studentsMap.get(String(row?.student_id || "")) || studentsMap.get(String(row?.index_number || "")) || null;
-  return {
-    id: row?.id ?? i + 1,
-    studentName: student?.full_name || row?.student_name || "Student",
-    index: row?.index_number || student?.index || student?.index_number || "-",
-    className: student?.class || student?.class_name || "-",
-    subject: row?.subject || "General",
-    score: Number(row?.score ?? 0),
-    examType: row?.exam_type || "test",
-    term: row?.term || "-",
-  };
-};
-const normalizeResultRow = (row, studentsMap, i = 0) => {
-  const student = studentsMap.get(String(row?.student_id || "")) || studentsMap.get(String(row?.index_number || "")) || null;
-  return {
-    id: row?.id ?? i + 1,
-    studentName: student?.full_name || row?.student_name || "Student",
-    index: row?.index_number || student?.index || student?.index_number || "-",
-    averageScore: Number(row?.average_score ?? 0),
-    aggregate: Number(row?.aggregate ?? student?.aggregate ?? 0),
-    grade: row?.grade || getGrade(Number(row?.average_score ?? 0)).grade,
-    rank: Number(row?.rank ?? i + 1),
-    term: row?.term || "-",
-    remarks: row?.remarks || "",
-  };
-};
-const summarizeSelectionRecord = (row, studentsMap) => {
-  const picks = normalizeSelectionList(row);
-  const student = studentsMap.get(String(row?.student_id || "")) || studentsMap.get(String(row?.index_number || "")) || null;
-  const first = picks[0] || null;
-  const second = picks[1] || null;
-  const isApproved = !!row?.approved || String(row?.status || "").toLowerCase() === "confirmed";
-  const normalizedStatus = isApproved ? "confirmed" : String(row?.status || "pending").toLowerCase();
-  return {
-    id: row?.id,
-    studentName: student?.full_name || student?.name || row?.student_name || row?.user_email || "Student",
-    user_email: row?.user_email || student?.email || "student@campus.local",
-    index_number: row?.index_number || student?.index || student?.index_number || "-",
-    aggregate: row?.aggregate ?? student?.aggregate ?? "-",
-    first: first?.name || "-",
-    second: second?.name || "-",
-    placedAt: first?.name || "-",
-    category: first?.category || "C",
-    reviewedAt: row?.reviewed_at || row?.updated_at || row?.created_at || null,
-    status: normalizedStatus,
-    approved: isApproved,
-  };
-};
-const resolveActivityTimestamp = (...values) => {
-  for (const value of values) {
-    if (!value) continue;
-    const time = new Date(value).getTime();
-    if (Number.isFinite(time)) return time;
-  }
-  return null;
-};
-const formatActivityTime = (value) => {
-  const time = resolveActivityTimestamp(value);
-  if (time == null) return "";
-
-  const diffMs = Date.now() - time;
-  const absDiffMs = Math.abs(diffMs);
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-
-  if (absDiffMs < hour) {
-    const minutes = Math.max(1, Math.round(absDiffMs / minute));
-    return diffMs >= 0 ? `${minutes}m ago` : `in ${minutes}m`;
-  }
-  if (absDiffMs < day) {
-    const hours = Math.max(1, Math.round(absDiffMs / hour));
-    return diffMs >= 0 ? `${hours}h ago` : `in ${hours}h`;
-  }
-  if (absDiffMs < 7 * day) {
-    const days = Math.max(1, Math.round(absDiffMs / day));
-    return diffMs >= 0 ? `${days}d ago` : `in ${days}d`;
-  }
-  return new Date(time).toLocaleDateString();
-};
-const buildRecentActivity = ({ students, selections, fees, events }) => {
-  const items = [];
-
-  (students || []).forEach((student) => {
-    const timestamp = resolveActivityTimestamp(student?.created_at, student?.updated_at);
-    if (timestamp == null) return;
-    items.push({
-      id: `student-${student?.id || student?.index || Math.random()}`,
-      text: `New student enrolled: ${student?.full_name || student?.name || "Student"}`,
-      time: timestamp,
-      dot: "#1d4ed8",
-    });
-  });
-
-  (selections || []).forEach((selection) => {
-    const timestamp = resolveActivityTimestamp(selection?.reviewedAt, selection?.reviewed_at, selection?.updated_at, selection?.created_at);
-    if (timestamp == null) return;
-    const approved = String(selection?.status || "").toLowerCase() === "confirmed" || !!selection?.approved;
-    items.push({
-      id: `selection-${selection?.id || selection?.index_number || Math.random()}`,
-      text: approved
-        ? `${selection?.studentName || "Student"} placement confirmed`
-        : `${selection?.studentName || "Student"} submitted school selection`,
-      time: timestamp,
-      dot: approved ? "#16a34a" : "#d97706",
-    });
-  });
-
-  (fees || []).forEach((fee) => {
-    const timestamp = resolveActivityTimestamp(fee?.date, fee?.updated_at, fee?.created_at);
-    if (timestamp == null || Number(fee?.paid || 0) <= 0) return;
-    items.push({
-      id: `fee-${fee?.id || fee?.index_number || Math.random()}`,
-      text: `Fee payment recorded for ${fee?.index_number || fee?.term || "student"}`,
-      time: timestamp,
-      dot: "#0f9f6e",
-    });
-  });
-
-  (events || []).forEach((event) => {
-    const timestamp = resolveActivityTimestamp(event?.updated_at, event?.created_at);
-    if (timestamp == null) return;
-    items.push({
-      id: `event-${event?.id || Math.random()}`,
-      text: `Event updated: ${event?.title || event?.name || "Untitled event"}`,
-      time: timestamp,
-      dot: "#7c3aed",
-    });
-  });
-
-  return items
-    .sort((left, right) => right.time - left.time)
-    .slice(0, 4)
-    .map((item) => ({ ...item, timeLabel: formatActivityTime(item.time) }));
-};
-const fetchStudentSelection = async ({ userEmail, studentData }) => {
-  if (!supabase) return null;
-
-  const tries = [];
-  if (studentData?.id) {
-    tries.push(() => supabase.from("school_selections").select("*").eq("student_id", studentData.id).order("created_at", { ascending: false }).limit(1).maybeSingle());
-    tries.push(() => supabase.from("school_selections").select("*").eq("student_id", String(studentData.id)).order("created_at", { ascending: false }).limit(1).maybeSingle());
-  }
-  if (studentData?.index_number || studentData?.index) {
-    const idx = studentData.index_number || studentData.index;
-    tries.push(() => supabase.from("school_selections").select("*").eq("index_number", idx).order("created_at", { ascending: false }).limit(1).maybeSingle());
-  }
-  if (userEmail) {
-    tries.push(() => supabase.from("school_selections").select("*").eq("user_email", userEmail).order("created_at", { ascending: false }).limit(1).maybeSingle());
-  }
-
-  for (const run of tries) {
-    const { data, error } = await run();
-    if (error) {
-      if (isMissingColumnError(error)) continue;
-      continue;
-    }
-    if (data) return data;
-  }
-  return null;
-};
-
-// ICONS
-const ICON_MAP = {
-  dashboard: IoGridOutline, students: IoPeopleOutline, scores: IoClipboardOutline,
-  analytics: IoBarChartOutline, results: IoDocumentTextOutline, schools: IoSchoolOutline,
-  pending: IoTimeOutline, confirmed: IoCheckmarkCircleOutline, finance: IoWalletOutline,
-  chat: IoChatbubbleEllipsesOutline, settings: IoSettingsOutline, attendance: IoCalendarOutline,
-  fees: IoCardOutline, docs: IoFolderOutline, bell: IoNotificationsOutline, search: IoSearchOutline,
-  logout: IoLogOutOutline, menu: IoMenuOutline, profile: IoPersonCircleOutline, sun: IoSunnyOutline, moon: IoMoonOutline,
-  teachers: IoRibbonOutline, grading: IoCreateOutline, events: IoCalendarClearOutline,
-  enroll: IoPersonAddOutline, support: IoHelpBuoyOutline, selection: IoListCircleOutline,
-  email: IoMailOutline, lock: IoLockClosedOutline, back: IoChevronBackOutline, signin: IoLogInOutline,
-  eye: IoEyeOutline, eyeOff: IoEyeOffOutline,
-};
-const Ico = ({ name, size=18, color="currentColor", ...rest }) => {
-  const L = ICON_MAP[name] || IoGridOutline;
-  return <L size={size} color={color} {...rest}/>;
-};
 
 // STYLES
 const css = `
@@ -532,11 +134,11 @@ const css = `
   .topbar-logo img { width:100%; height:100%; object-fit:cover; }
   .topbar-name { color:#fff; font-weight:800; font-size:1rem; }
   .topbar-search { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.15);
-    border:1px solid rgba(255,255,255,.25); border-radius:8px; padding:0 12px; flex:1 1 52vw; max-width:none; min-width:320px; margin-left:4px; }
+    border:1px solid rgba(255,255,255,.25); border-radius:8px; padding:0 12px; flex:1 1 52vw; max-width:none; min-width:0; margin-left:4px; }
   .topbar-search input { background:none; border:none; outline:none; color:#fff; font-family:var(--font);
     font-size:.875rem; width:100%; padding:8px 0; }
   .topbar-search input::placeholder { color:rgba(255,255,255,.6); }
-  .topbar-right { display:flex; align-items:center; gap:8px; }
+  .topbar-right { display:flex; align-items:center; gap:8px; min-width:0; flex-shrink:0; }
   .topbar-actions {
     display:flex;
     align-items:center;
@@ -665,6 +267,50 @@ const css = `
   
   .main { flex:1; margin-left:var(--sidebar-w); padding:24px; min-height:calc(100vh - var(--topbar-h)); overflow-x:hidden; }
   .main.full { margin-left:0; }
+  .page-actions-row { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  .page-actions-row .form-control { flex:1 1 220px; min-width:0; }
+  .page-actions-row .btn { flex-shrink:0; }
+  .stats-grid-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .stats-grid-4-compact { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .results-visual-grid-wide { grid-template-columns:1.2fr 1fr 1fr; }
+  .enroll-layout { display:flex; gap:24px; align-items:flex-start; margin-bottom:16px; }
+  .enroll-photo-col { display:flex; flex-direction:column; align-items:center; gap:8px; width:110px; flex:0 0 110px; }
+  .enroll-photo-frame { width:100px; height:120px; border-radius:10px; border:2px dashed #cbd5e1; overflow:hidden; background:#f8fafc; display:flex; align-items:center; justify-content:center; }
+  .enroll-photo-input { font-size:11px; width:100px; }
+  .messages-page { display:flex; flex-direction:column; height:calc(100vh - 120px); overflow:hidden; }
+  .messages-layout { display:grid; grid-template-columns:minmax(220px,280px) minmax(0,1fr); gap:0; flex:1; overflow:hidden; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .messages-composer { display:flex; gap:8px; flex-shrink:0; }
+  .messages-composer .form-control { min-width:0; }
+  .messages-bubble { max-width:min(60%, 420px); }
+  .toggle-row { display:flex; justify-content:space-between; gap:16px; align-items:center; padding:12px 0; border-bottom:1px solid #f1f5f9; }
+  .toggle-row span { font-weight:600; }
+  .metric-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid #f1f5f9; }
+  .metric-row-badge { padding:4px 12px; border-radius:8px; font-weight:700; font-size:.85rem; min-width:80px; text-align:center; }
+  .metric-row-count { font-weight:700; width:32px; text-align:right; }
+  .subject-progress-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .subject-progress-label { min-width:160px; font-weight:600; font-size:.85rem; }
+  .subject-progress-value { width:42px; text-align:right; font-weight:700; }
+  .progress-scale { display:flex; justify-content:space-between; margin-top:10px; font-size:.75rem; color:#64748b; }
+  .card-grid-auto { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
+  .card-grid-tight { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; }
+  .search-input-compact { max-width:340px; margin-bottom:12px; }
+  .form-group-narrow { max-width:260px; }
+  .form-group-slim { max-width:220px; }
+  .announcement-head { display:flex; justify-content:space-between; gap:10px; }
+  .mobile-record-list { display:grid; gap:12px; }
+  .mobile-record-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:var(--shadow); padding:14px; }
+  .mobile-record-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
+  .mobile-record-identity { display:flex; align-items:center; gap:10px; min-width:0; }
+  .mobile-record-avatar { width:40px; height:40px; border-radius:12px; background:#dbeafe; color:#1e40af; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.76rem; flex-shrink:0; border:1px solid #bfdbfe; overflow:hidden; }
+  .mobile-record-avatar img { width:100%; height:100%; object-fit:cover; }
+  .mobile-record-title { font-weight:800; color:#0f172a; line-height:1.25; }
+  .mobile-record-sub { font-size:.78rem; color:#64748b; margin-top:3px; word-break:break-word; }
+  .mobile-record-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px; }
+  .mobile-record-item label { display:block; font-size:.7rem; text-transform:uppercase; letter-spacing:.5px; color:#94a3b8; font-weight:700; margin-bottom:4px; }
+  .mobile-record-item strong,
+  .mobile-record-item span { display:block; color:#0f172a; font-size:.88rem; }
+  .mobile-record-actions { display:flex; gap:10px; margin-top:12px; }
+  .mobile-record-actions .btn { flex:1; justify-content:center; }
   
   /* CARDS & LAYOUT */
   .card { background:#fff; border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow); }
@@ -1015,9 +661,23 @@ const css = `
     :root { --topbar-h: 58px; }
     .topbar { padding:0 10px; gap:8px; }
     .topbar-left { gap:6px; flex:1; min-width:0; }
-    .topbar-search { display:flex; flex:1 1 52vw; min-width:132px; max-width:none; margin-left:4px; padding:0 10px; }
-    .topbar-search input { font-size:.8rem; padding:7px 0; }
-    .topbar-right { gap:6px; }
+    .topbar-search { display:none; }
+    .topbar-search.topbar-search-mobile {
+      display:flex;
+      position:fixed;
+      left:10px;
+      right:10px;
+      top:calc(var(--topbar-h) + 8px);
+      margin-left:0;
+      min-width:0;
+      padding:0 10px;
+      z-index:130;
+      box-shadow:0 10px 24px rgba(15,23,42,.18);
+      backdrop-filter:blur(10px);
+    }
+    .topbar-search.topbar-search-mobile input { font-size:.8rem; padding:7px 0; }
+    .topbar-right { gap:6px; max-width:52vw; }
+    .topbar-actions { max-width:100%; }
     .desktop-only-action { display:none; }
     .bell-mobile-visible { display:flex; }
     .topbar-logo { width:50px; height:50px; }
@@ -1032,14 +692,18 @@ const css = `
     .page-sub { font-size:.8rem; }
 
     .stats-grid { grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+  .stats-grid-3,
+  .stats-grid-4-compact { grid-template-columns:1fr 1fr; }
     .stat-card { padding:14px; }
     .stat-value { font-size:1.4rem; }
     .stat-icon { width:34px; height:34px; }
 
     .grid2, .grid3, .form-grid { grid-template-columns:1fr; gap:10px; }
-    .results-visual-grid { grid-template-columns:1fr; }
+  .results-visual-grid,
+  .results-visual-grid-wide { grid-template-columns:1fr; }
     .results-donut { width:122px; height:122px; }
     .results-donut::after { width:74px; height:74px; }
+  .results-bar-row { grid-template-columns:minmax(0,84px) 1fr 40px; gap:8px; }
 
     .card-padded { padding:14px; }
 
@@ -1052,8 +716,28 @@ const css = `
 
     .chat-msg { max-width:88%; }
     .chat-layout { flex-direction:column; }
+    .messages-page { height:auto; min-height:calc(100vh - 96px); overflow:visible; }
+    .messages-layout { grid-template-columns:1fr; }
+    .messages-bubble { max-width:88%; }
+    .messages-composer { flex-wrap:wrap; }
+    .messages-composer button,
+    .messages-composer .btn { width:100%; }
+    .toggle-row,
+    .metric-row,
+    .subject-progress-row,
+    .announcement-head { flex-wrap:wrap; align-items:flex-start; }
+    .metric-row-badge,
+    .subject-progress-label,
+    .subject-progress-value { min-width:0; width:auto; }
+    .card-grid-auto,
+    .card-grid-tight { grid-template-columns:1fr; }
+    .search-input-compact,
+    .form-group-narrow,
+    .form-group-slim { max-width:none; width:100%; }
+    .mobile-record-grid { grid-template-columns:1fr; }
+    .mobile-record-actions { flex-direction:column; }
 
-    .table-wrap { font-size:.8rem; }
+    .table-wrap { font-size:.8rem; -webkit-overflow-scrolling:touch; }
     th, td { padding:8px 10px; }
 
     .btn { padding:9px 14px; font-size:.82rem; }
@@ -1064,6 +748,8 @@ const css = `
     .landing-box { padding:22px 18px; border-radius:18px; }
     .landing-title { font-size:1.45rem; }
     .portal-btn { padding:13px 10px; }
+    .enroll-layout { flex-direction:column; gap:16px; }
+    .enroll-photo-col { width:100%; flex-basis:auto; align-items:flex-start; }
 
     .selection-card { padding:11px 12px; }
     .bottom-nav { height:58px; padding:3px 5px; }
@@ -1096,6 +782,8 @@ const css = `
     .portal-grid { grid-template-columns:1fr 1fr; gap:8px; }
     .portal-btn { padding:12px 8px; }
     .portal-btn-label { font-size:.85rem; }
+    .page-actions-row .form-control,
+    .page-actions-row .btn { width:100%; flex-basis:100%; }
 
     .landing-box { padding:18px 14px; }
     .landing-title { font-size:1.25rem; }
@@ -1107,12 +795,18 @@ const css = `
     .modal-card { padding:12px; }
     .modal-title { font-size:1rem; }
 
-    .topbar { padding:0 10px; }
+    .topbar { padding:0 8px; }
     .topbar-left { gap:4px; }
-    .topbar-search { flex:1 1 48vw; min-width:108px; padding:0 8px; }
-    .topbar-search input { font-size:.75rem; }
+    .topbar-search.topbar-search-mobile { left:8px; right:8px; padding:0 8px; }
+    .topbar-search.topbar-search-mobile input { font-size:.75rem; }
     .topbar-right { gap:4px; }
     .topbar-actions { border-radius:10px; }
+    .portal-grid { grid-template-columns:1fr; }
+    .stats-grid-3,
+    .stats-grid-4-compact { grid-template-columns:1fr; }
+    .mobile-record-head { flex-direction:column; }
+    .mobile-record-identity { width:100%; }
+    .metric-row-count { margin-left:auto; }
   }
 
   @media (min-width:1024px) {
@@ -1140,182 +834,11 @@ const css = `
   }
 `;
 
-// TOPBAR
-function Topbar({ user, portal, onLogout, onMenuClick, darkMode, onToggleDark, onOpenNotifications, onOpenProfile, onReloadApp, notificationCount, chatUnread, onOpenChat }) {
-  const [search, setSearch] = useState("");
-  const [showSearch, setShowSearch] = useState(true);
-  const { cfg } = useContext(SettingsContext);
-  const initials = user?.name?.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase() || "?";
-  return (
-    <header className="topbar">
-      <div className="topbar-left">
-        <button className="menu-btn" onClick={onMenuClick}><Ico name="menu" size={22} color="#fff"/></button>
-        <button className="brand-btn" onClick={onReloadApp} title="Reload app">
-          <div className="topbar-logo"><img src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png" alt="Campus Ghana"/></div>
-        </button>
-        <span className="topbar-name" style={{display:"none"}}>{cfg.systemName}</span>
-        {showSearch && <div className="topbar-search" style={{marginLeft:8}}>
-          <Ico name="search" size={15} color="rgba(255,255,255,.7)"/>
-          <input placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)}/>
-        </div>}
-      </div>
-      <div className="topbar-right">
-        <div className="topbar-actions">
-        <button className="topbar-btn desktop-only-action" onClick={onOpenChat} title="Chat">
-          <Ico name="chat" size={17} color="#fff"/>
-          {chatUnread > 0 && <span className="notif-badge">{chatUnread}</span>}
-        </button>
-        <button className="topbar-btn desktop-only-action bell-mobile-visible" onClick={onOpenNotifications} title="Notifications">
-          <Ico name="bell" size={17} color="#fff"/>
-          {notificationCount > 0 && <span className="notif-badge">{notificationCount}</span>}
-        </button>
-        <button className="topbar-btn" onClick={() => setShowSearch((v) => !v)} title={showSearch ? "Hide Search" : "Show Search"}>
-          <Ico name={showSearch ? "eyeOff" : "eye"} size={17} color="#fff"/>
-        </button>
-        <button className="topbar-btn" onClick={onToggleDark} title={darkMode ? "Light Mode" : "Dark Mode"}>
-          <Ico name={darkMode ? "sun" : "moon"} size={17} color="#fff"/>
-        </button>
-        <button className="topbar-btn" onClick={onOpenProfile} title="Profile">
-          <Ico name="profile" size={17} color="#fff"/>
-        </button>
-        <button className="topbar-btn" onClick={onLogout} title="Logout"><Ico name="logout" size={17} color="#fff"/></button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-// LANDING
-function Landing({ onSelect }) {
-  const [mode, setMode] = useState(null); // null | 'admin' | 'student'
-  const [email, setEmail] = useState(""); const [pwd, setPwd] = useState(""); const [err, setErr] = useState("");
-  const [showPwd, setShowPwd] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const handle = async () => {
-    if (!email || !pwd) { setErr("Please fill in both fields."); return; }
-    if (mode === "student") {
-      if (!/^\d{12}$/.test(email)) {
-        setErr("Student ID must be exactly 12 digits.");
-        return;
-      }
-      if (!/^\d{10}$/.test(pwd)) {
-        setErr("Parent contact must be exactly 10 digits.");
-        return;
-      }
-    }
-    setErr("");
-    setLoading(true);
-    try {
-      const payloadUser = { name: mode==="admin"?"Admin User":"Student User", role:mode, email };
-      const result = await onSelect(mode, payloadUser, pwd);
-      if (!result?.ok) {
-        const rawErr = String(result?.error || "");
-        const authErr = rawErr.toLowerCase().includes("invalid login credentials")
-          ? "Invalid email or password. Create an account first if you are new."
-          : (result?.error || "Sign in failed.");
-        setErr(authErr);
-      }
-    } catch (error) {
-      setErr(error instanceof Error ? error.message : "Sign in failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-  if (mode) return (
-    <div className="landing">
-      <div className="landing-box">
-        <button className="brand-btn" onClick={() => window.location.reload()} title="Reload app">
-          <div className="landing-logo"><img src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png" alt="Campus Ghana"/></div>
-        </button>
-        <div className="landing-title">Sign In</div>
-        <div className="landing-sub">{mode==="admin"?"Admin Portal":"Student Portal"}</div>
-        <div className="login-form">
-          <button className="login-back" onClick={()=>{setMode(null);setErr("");}}><Ico name="back" size={16} color="#1a56db"/> Back</button>
-          {err && <div className="alert alert-danger">{err}</div>}
-          <div className="auth-input-wrap">
-            <span className="auth-input-icon"><Ico name="email" size={18} color="#64748b"/></span>
-            <input
-              className="form-input"
-              placeholder={mode==="admin"?"admin@campus.edu":"12-digit student ID"}
-              value={email}
-              onChange={e=>{
-                const v = e.target.value;
-                if (mode === "student") {
-                  setEmail(v.replace(/\D/g, "").slice(0, 12));
-                } else {
-                  setEmail(v);
-                }
-              }}
-              maxLength={mode === "student" ? 12 : 254}
-              inputMode={mode === "student" ? "numeric" : "email"}
-            />
-          </div>
-          <div className="auth-input-wrap">
-            <span className="auth-input-icon"><Ico name="lock" size={18} color="#64748b"/></span>
-            <input
-              className="form-input"
-              type={showPwd ? "text" : "password"}
-              data-has-toggle="true"
-              placeholder={mode==="admin"?"Password":"Parent contact"}
-              value={pwd}
-              onChange={e=>{
-                const v = e.target.value;
-                if (mode === "student") {
-                  setPwd(v.replace(/\D/g, "").slice(0, 10));
-                } else {
-                  setPwd(v);
-                }
-              }}
-              maxLength={mode === "student" ? 10 : 128}
-              inputMode={mode === "student" ? "numeric" : "text"}
-            />
-            <button
-              type="button"
-              className="auth-pwd-toggle"
-              onClick={() => setShowPwd(v => !v)}
-              aria-label={showPwd ? "Hide password" : "Show password"}
-              title={showPwd ? "Hide password" : "Show password"}
-            >
-              <Ico name={showPwd ? "eyeOff" : "eye"} size={18} color="#64748b"/>
-            </button>
-          </div>
-          <button className="btn-primary" onClick={handle} disabled={loading}><Ico name="signin" size={18} color="#fff"/>{loading ? "Signing In..." : "Sign In"}</button>
-          {!supabase && <div className="demo-hint">Demo: use any email + any password</div>}
-        </div>
-      </div>
-    </div>
-  );
-  return (
-    <div className="landing">
-      <div className="landing-box">
-        <button className="brand-btn" onClick={() => window.location.reload()} title="Reload app">
-          <div className="landing-logo"><img src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png" alt="Campus Ghana"/></div>
-        </button>
-        <div className="landing-title">Campus Ghana</div>
-        <div className="landing-sub">School Management & BECE Mock Placement System</div>
-        <div className="portal-grid">
-          <button className="portal-btn" onClick={()=>setMode("admin")}>
-            <div className="portal-btn-icon"><Ico name="schools" size={24} color="#1a56db"/></div>
-            <div className="portal-btn-label">Admin</div>
-            <div className="portal-btn-sub">Staff & management</div>
-          </button>
-          <button className="portal-btn" onClick={()=>setMode("student")}>
-            <div className="portal-btn-icon"><Ico name="profile" size={24} color="#7c3aed"/></div>
-            <div className="portal-btn-label">Student</div>
-            <div className="portal-btn-sub">Students & parents</div>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // DASHBOARD (Admin)
-function AdminDashboard({ studentsData, schoolsData, pendingRows, confirmedRows, financeSummary, recentActivity }) {
+function AdminDashboard({ studentsData, schoolsData, pendingRows, confirmedRows, financeSummary, recentActivity, isLoading }) {
   const { cfg } = useContext(SettingsContext);
-  const schoolCount = schoolsData?.length || SCHOOLS_DATA.length;
-  const totalStudents = studentsData?.length || STUDENTS_DATA.length;
+  const schoolCount = Array.isArray(schoolsData) ? schoolsData.length : 0;
+  const totalStudents = Array.isArray(studentsData) ? studentsData.length : 0;
   const pendingCount = pendingRows?.length || 0;
   const confirmedCount = confirmedRows?.length || 0;
   const placementCounts = (confirmedRows?.length ? confirmedRows : []).reduce((acc, row) => {
@@ -1331,10 +854,10 @@ function AdminDashboard({ studentsData, schoolsData, pendingRows, confirmedRows,
       </div>
       <div className="stats-grid">
         {[
-          {label:"Total Students",value:String(totalStudents),sub:"Live student records",icon:"students",ic:"#0059ff",bgStart:"#eff5ff",bgEnd:"#9cc2ff",text:"#0039a6",border:"rgba(0,89,255,.22)",glow:"rgba(191,219,254,.98)",shadow:"rgba(0,89,255,.28)"},
+          {label:"Total Students",value:String(totalStudents),sub:isLoading ? "Loading live student records..." : "Live student records",icon:"students",ic:"#0059ff",bgStart:"#eff5ff",bgEnd:"#9cc2ff",text:"#0039a6",border:"rgba(0,89,255,.22)",glow:"rgba(191,219,254,.98)",shadow:"rgba(0,89,255,.28)"},
           {label:"Pending Selections",value:String(pendingCount),sub:"Awaiting review",icon:"pending",ic:"#ff7a00",bgStart:"#fff4e8",bgEnd:"#ffc47a",text:"#a54800",border:"rgba(255,122,0,.24)",glow:"rgba(255,221,181,.98)",shadow:"rgba(255,122,0,.26)"},
           {label:"Confirmed Mock Placements",value:String(confirmedCount),sub:"Approved mock placements",icon:"confirmed",ic:"#00b86b",bgStart:"#ecfff5",bgEnd:"#92f0c2",text:"#007a46",border:"rgba(0,184,107,.22)",glow:"rgba(187,247,208,.98)",shadow:"rgba(0,184,107,.24)"},
-          {label:"Schools Available",value:schoolCount,sub:"Across all regions",icon:"schools",ic:"#c026ff",bgStart:"#fdf0ff",bgEnd:"#efadff",text:"#8610b3",border:"rgba(192,38,255,.22)",glow:"rgba(243,205,255,.98)",shadow:"rgba(192,38,255,.24)"},
+          {label:"Schools Available",value:schoolCount,sub:isLoading ? "Loading school records..." : "Across all regions",icon:"schools",ic:"#c026ff",bgStart:"#fdf0ff",bgEnd:"#efadff",text:"#8610b3",border:"rgba(192,38,255,.22)",glow:"rgba(243,205,255,.98)",shadow:"rgba(192,38,255,.24)"},
         ].map(s=>(
           <div key={s.label} className="stat-card dashboard-stat-card" style={{"--dash-bg-start":s.bgStart,"--dash-bg-end":s.bgEnd,"--dash-accent":s.ic,"--dash-text":s.text,"--dash-border":s.border,"--dash-glow":s.glow,"--dash-shadow":s.shadow}}>
             <div className="stat-icon"><Ico name={s.icon} size={20} color={s.ic}/></div>
@@ -1407,6 +930,7 @@ function ActionStatusModal({ state, onClose }) {
 // STUDENTS LIST
 function StudentsPage({ onEnroll, studentsData }) {
   const [search, setSearch] = useState("");
+  const isMobile = useIsMobileLayout();
   const students = studentsData?.length ? sortStudentsByIndex(studentsData) : [];
   const filtered = students.filter(s => s.full_name.toLowerCase().includes(search.toLowerCase()) || String(s.index).includes(search));
   const initialsFor = (name) => String(name || "ST").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -1417,10 +941,34 @@ function StudentsPage({ onEnroll, studentsData }) {
         <div className="page-sub">All enrolled JHS 3 students</div>
       </div>
       {!students.length && <div className="alert alert-warning">No student rows are currently available from Supabase.</div>}
-      <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap"}}>
-        <input className="form-control" style={{flex:1,minWidth:200}} placeholder="Search students..." value={search} onChange={e=>setSearch(e.target.value)}/>
+      <div className="page-actions-row">
+        <input className="form-control" placeholder="Search students..." value={search} onChange={e=>setSearch(e.target.value)}/>
         <button className="btn btn-blue" onClick={onEnroll}><Ico name="enroll" size={16} color="#fff"/> Enroll Student</button>
       </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {filtered.map((s, i) => (
+            <div key={s.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div className="mobile-record-identity">
+                  <div className="mobile-record-avatar">
+                    {s.photo_url ? <img src={s.photo_url} alt={s.full_name}/> : initialsFor(s.full_name)}
+                  </div>
+                  <div>
+                    <div className="mobile-record-title">{i + 1}. {s.full_name}</div>
+                    <div className="mobile-record-sub">Student ID: {s.index}</div>
+                  </div>
+                </div>
+                <span className="grade-chip" style={s.aggregate<=8?{background:"#dcfce7",color:"#16a34a"}:s.aggregate<=12?{background:"#dbeafe",color:"#1e40af"}:{background:"#fef3c7",color:"#d97706"}}>{s.aggregate}</span>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item"><label>Class</label><span>{s.class}</span></div>
+                <div className="mobile-record-item"><label>Region</label><span>{s.region}</span></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="card table-wrap">
         <table className="students-table">
           <thead><tr><th>#</th><th data-col="photo"><span className="students-th-label">Photo</span></th><th data-col="name"><span className="students-th-label">Name</span></th><th data-col="student-id"><span className="students-th-label">Student ID</span></th><th data-col="class"><span className="students-th-label">Class</span></th><th data-col="region"><span className="students-th-label">Region</span></th><th data-col="aggregate"><span className="students-th-label">Aggregate</span></th></tr></thead>
@@ -1451,6 +999,7 @@ function StudentsPage({ onEnroll, studentsData }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
@@ -1528,17 +1077,17 @@ function EnrollPage({ onBack }) {
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Enroll New Student</div></div>
       <div className="card card-padded">
-        <div style={{display:"flex",gap:24,alignItems:"flex-start",marginBottom:16}}>
+        <div className="enroll-layout">
           {/* Photo column */}
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,minWidth:110}}>
-            <div style={{width:100,height:120,borderRadius:10,border:"2px dashed #cbd5e1",overflow:"hidden",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div className="enroll-photo-col">
+            <div className="enroll-photo-frame">
               {photoPreview
                 ? <img src={photoPreview} alt="Preview" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                 : <span style={{fontSize:12,color:"#94a3b8",textAlign:"center",padding:4}}>No photo</span>
               }
             </div>
             <label className="form-label" style={{marginBottom:0}}>Photo</label>
-            <input type="file" accept="image/*" style={{fontSize:11,width:100}} onChange={handlePhotoChange}/>
+            <input type="file" accept="image/*" className="enroll-photo-input" onChange={handlePhotoChange}/>
           </div>
           {/* Fields grid */}
           <div className="form-grid" style={{flex:1}}>
@@ -1571,6 +1120,7 @@ function EnrollPage({ onBack }) {
 // â”€â”€â”€ SCORES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ScoresPage({ studentsData, tableInfo }) {
   const hasScoresError = hasRealTableError(tableInfo);
+  const isMobile = useIsMobileLayout();
   const students = studentsData?.length ? sortStudentsByIndex(studentsData) : [];
   const studentsMap = new Map();
   students.forEach((student) => {
@@ -1582,6 +1132,47 @@ function ScoresPage({ studentsData, tableInfo }) {
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Test Scores</div></div>
       {hasScoresError && <div className="alert alert-warning">Supabase scores table is unavailable. Showing live student aggregates instead.</div>}
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {(scoreRows.length ? scoreRows : students).map((student) => {
+            if (scoreRows.length) {
+              const grade = getGrade(student.score);
+              return (
+                <div key={`score-${student.id}`} className="mobile-record-card">
+                  <div className="mobile-record-head">
+                    <div>
+                      <div className="mobile-record-title">{student.studentName}</div>
+                      <div className="mobile-record-sub">Student ID: {student.index}</div>
+                    </div>
+                    <span className="grade-chip" style={{background:grade.bg,color:grade.color}}>{student.score}</span>
+                  </div>
+                  <div className="mobile-record-grid">
+                    <div className="mobile-record-item"><label>Subject</label><span>{student.subject}</span></div>
+                    <div className="mobile-record-item"><label>Exam</label><span className="badge badge-blue">{student.examType}</span></div>
+                  </div>
+                </div>
+              );
+            }
+            const aggregate = Number(student.aggregate ?? 0);
+            const grade = getGrade(100 - Math.min(aggregate * 5, 95));
+            return (
+              <div key={student.id} className="mobile-record-card">
+                <div className="mobile-record-head">
+                  <div>
+                    <div className="mobile-record-title">{student.full_name}</div>
+                    <div className="mobile-record-sub">Student ID: {student.index}</div>
+                  </div>
+                  <span className={`badge ${student.status === "confirmed" ? "badge-success" : "badge-warning"}`}>{student.status}</span>
+                </div>
+                <div className="mobile-record-grid">
+                  <div className="mobile-record-item"><label>Class</label><span>{student.class}</span></div>
+                  <div className="mobile-record-item"><label>Aggregate</label><span className="grade-chip" style={{background:grade.bg,color:grade.color}}>{aggregate}</span></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
       <div className="card table-wrap">
         <table>
           <thead><tr><th>Student</th><th>Student ID</th><th>{scoreRows.length ? "Subject" : "Class"}</th><th>{scoreRows.length ? "Score" : "Aggregate"}</th><th>{scoreRows.length ? "Exam" : "Status"}</th></tr></thead>
@@ -1614,6 +1205,7 @@ function ScoresPage({ studentsData, tableInfo }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
@@ -1674,10 +1266,10 @@ function AnalyticsPage({ studentsData, schoolsData, selectionsData, scoreTableIn
             ["Category C",categoryCounts.C,"#dcfce7","#16a34a"],
             ["Confirmed",selections.filter((row) => String(row.status || "").toLowerCase() === "confirmed").length,"#fee2e2","#dc2626"],
           ].map(([label,count,bg,color])=>(
-            <div key={label} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
-              <span style={{background:bg,color,padding:"4px 12px",borderRadius:8,fontWeight:700,fontSize:".85rem",minWidth:80,textAlign:"center"}}>{label}</span>
+            <div key={label} className="metric-row">
+              <span className="metric-row-badge" style={{background:bg,color}}>{label}</span>
               <div className="progress" style={{flex:1}}><div className="progress-bar" style={{width:`${(count/Math.max(students.length || schools.length || 1, 1))*100}%`,background:color}}/></div>
-              <span style={{fontWeight:700,width:32,textAlign:"right"}}>{count}</span>
+              <span className="metric-row-count">{count}</span>
             </div>
           ))}
         </div>
@@ -1689,6 +1281,7 @@ function AnalyticsPage({ studentsData, schoolsData, selectionsData, scoreTableIn
 // â”€â”€â”€ ATTENDANCE (Admin) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function AttendancePage({ studentsData, tableInfo }) {
   const hasAttendanceError = hasRealTableError(tableInfo);
+  const isMobile = useIsMobileLayout();
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const rows = studentsData?.length ? studentsData : [];
   const [marks, setMarks] = useState({});
@@ -1766,12 +1359,36 @@ function AttendancePage({ studentsData, tableInfo }) {
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Attendance</div></div>
       {hasAttendanceError && <div className="alert alert-warning">Attendance table is not accessible in Supabase yet. This page can display students, but attendance cannot sync online.</div>}
-      <div style={{display:"flex",gap:12,marginBottom:16,alignItems:"center"}}>
-        <input type="date" className="form-control" style={{width:"auto"}} value={date} onChange={e=>setDate(e.target.value)}/>
+      <div className="page-actions-row" style={{alignItems:"center"}}>
+        <input type="date" className="form-control" value={date} onChange={e=>setDate(e.target.value)}/>
         <button className="btn btn-blue" onClick={saveAttendance} disabled={hasAttendanceError}>Save Attendance</button>
       </div>
       {loadingMarks && <div className="alert alert-info">Loading attendance...</div>}
       <ActionStatusModal state={statusModal} onClose={() => setStatusModal((s) => ({ ...s, open: false }))} />
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {rows.map((s)=>(
+            <div key={s.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{s.full_name}</div>
+                  <div className="mobile-record-sub">{s.class}</div>
+                </div>
+                <span className={`badge ${marks[s.id]==="Present"?"badge-success":marks[s.id]==="Absent"?"badge-danger":"badge-warning"}`}>{marks[s.id] || "Present"}</span>
+              </div>
+              <div className="mobile-record-actions">
+                {["Present","Absent","Late"].map(st=>(
+                  <button key={st} className="btn btn-sm" style={{
+                    background:marks[s.id]===st?(st==="Present"?"#dcfce7":st==="Absent"?"#fee2e2":"#fef9c3"):"#f1f5f9",
+                    color:marks[s.id]===st?(st==="Present"?"#16a34a":st==="Absent"?"#dc2626":"#d97706"):"#64748b",
+                    border:"none",borderRadius:8,cursor:"pointer",fontFamily:"var(--font)",fontWeight:600,fontSize:".75rem",padding:"8px 10px"
+                  }} onClick={()=>setMarks(m=>({...m,[s.id]:st}))}>{st}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="card table-wrap">
         <table>
           <thead><tr><th>Student</th><th>Class</th><th>Status</th></tr></thead>
@@ -1796,6 +1413,7 @@ function AttendancePage({ studentsData, tableInfo }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
@@ -1803,6 +1421,7 @@ function AttendancePage({ studentsData, tableInfo }) {
 // â”€â”€â”€ FEES (Admin) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function FeesAdmin({ studentsData, feesData, tableInfo }) {
   const hasFeesError = hasRealTableError(tableInfo);
+  const isMobile = useIsMobileLayout();
   const students = studentsData?.length ? studentsData : [];
   const fees = feesData?.length ? feesData : [];
   const totalCollected = fees.reduce((sum, fee) => sum + Number(fee.paid || 0), 0);
@@ -1812,7 +1431,7 @@ function FeesAdmin({ studentsData, feesData, tableInfo }) {
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Fees Management</div></div>
       {hasFeesError && <div className="alert alert-warning">Fees table is not accessible in Supabase yet. Totals below reflect only live rows currently available to the frontend.</div>}
-      <div className="stats-grid" style={{gridTemplateColumns:"repeat(3,1fr)",marginBottom:20}}>
+      <div className="stats-grid stats-grid-3" style={{marginBottom:20}}>
         {[{label:"Total Collected",value:`GHS ${totalCollected.toLocaleString()}`,color:"#dcfce7",c:"#16a34a"},{label:"Outstanding",value:`GHS ${totalOutstanding.toLocaleString()}`,color:"#fee2e2",c:"#dc2626"},{label:"Students Paid",value:String(studentsPaid),color:"#dbeafe",c:"#1e40af"}].map(s=>(
           <div key={s.label} className="stat-card" style={{background:s.color}}>
             <div className="stat-label" style={{color:s.c}}>{s.label}</div>
@@ -1820,6 +1439,32 @@ function FeesAdmin({ studentsData, feesData, tableInfo }) {
           </div>
         ))}
       </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {students.map((s,i)=>{
+            const fee = fees.find((item) => String(item.student_id) === String(s.id) || String(item.index_number) === String(s.index)) || normalizeFeeRow({}, i);
+            const bal = fee.amount - fee.paid;
+            return (
+              <div key={s.id} className="mobile-record-card">
+                <div className="mobile-record-head">
+                  <div>
+                    <div className="mobile-record-title">{s.full_name}</div>
+                    <div className="mobile-record-sub">{fee.term}</div>
+                  </div>
+                  <span className={`badge ${fee.status==="paid"?"badge-success":fee.status==="partial"?"badge-warning":"badge-danger"}`}>{fee.status}</span>
+                </div>
+                <div className="mobile-record-grid">
+                  <div className="mobile-record-item"><label>Amount</label><strong>GHS {fee.amount}</strong></div>
+                  <div className="mobile-record-item"><label>Paid</label><strong>GHS {fee.paid}</strong></div>
+                  <div className="mobile-record-item"><label>Balance</label><strong style={{color:bal>0?"#dc2626":"#16a34a"}}>GHS {bal}</strong></div>
+                  <div className="mobile-record-item"><label>Student ID</label><span>{s.index}</span></div>
+                </div>
+              </div>
+            );
+          })}
+          {!students.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No fee-linked student rows available.</div>}
+        </div>
+      ) : (
       <div className="card table-wrap">
         <table>
           <thead><tr><th>Student</th><th>Term</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
@@ -1842,12 +1487,14 @@ function FeesAdmin({ studentsData, feesData, tableInfo }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
 
 // â”€â”€â”€ SCHOOLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function SchoolsPage({ schoolsData }) {
+  const isMobile = useIsMobileLayout();
   const schools = sortSchoolsByCategory(schoolsData?.length ? schoolsData : SCHOOLS_DATA);
   const counts = schools.reduce((acc, school) => {
     const key = String(school.category || "").toUpperCase();
@@ -1857,6 +1504,25 @@ function SchoolsPage({ schoolsData }) {
   return (
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Schools</div><div className="page-sub">{`Secondary school database (${schools.length} schools: A ${counts.A}, B ${counts.B}, C ${counts.C})`}</div></div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {schools.map(s=>(
+            <div key={s.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{s.name}</div>
+                  <div className="mobile-record-sub">{s.region}</div>
+                </div>
+                <span className={`badge ${s.category==="A"?"badge-warning":s.category==="B"?"badge-blue":"badge-success"}`}>Cat {s.category}</span>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item"><label>Cutoff</label><strong>{s.cutoff}</strong></div>
+                <div className="mobile-record-item"><label>Slots</label><strong>{s.slots}</strong></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="card table-wrap">
         <table>
           <thead><tr><th>School</th><th>Region</th><th>Category</th><th>Cutoff</th><th>Slots</th></tr></thead>
@@ -1873,18 +1539,43 @@ function SchoolsPage({ schoolsData }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
 
 // â”€â”€â”€ PENDING SELECTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function PendingSelections({ rows, loading, onApprove }) {
+  const isMobile = useIsMobileLayout();
   const displayRows = sortRecordsByStudentIndex(rows || []);
 
   return (
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Pending Selections</div><div className="page-sub">Review and approve student school selections</div></div>
       {loading && <div className="alert alert-info">Loading pending selections...</div>}
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {displayRows.map(s=>(
+            <div key={s.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{String(s.user_email).split("@")[0].replace(/\./g, " ")}</div>
+                  <div className="mobile-record-sub">{s.user_email}</div>
+                </div>
+                <strong style={{color:"#0f172a"}}>{s.aggregate}</strong>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item"><label>1st Choice</label><span>{s.first}</span></div>
+                <div className="mobile-record-item"><label>2nd Choice</label><span>{s.second}</span></div>
+              </div>
+              <div className="mobile-record-actions">
+                {s.approved ? <span className="badge badge-success">Approved</span> : <button className="btn btn-sm btn-green" onClick={()=>onApprove?.(s.id)}>Approve</button>}
+              </div>
+            </div>
+          ))}
+          {!displayRows.length && !loading && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>There are currently no pending selections requiring review.</div>}
+        </div>
+      ) : (
       <div className="card table-wrap">
         <table>
           <thead><tr><th>Student</th><th>1st Choice</th><th>2nd Choice</th><th>Aggregate</th><th>Action</th></tr></thead>
@@ -1905,18 +1596,40 @@ function PendingSelections({ rows, loading, onApprove }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
 
 // â”€â”€â”€ CONFIRMED PLACEMENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ConfirmedPlacements({ rows, loading }) {
+  const isMobile = useIsMobileLayout();
   const confirmedRows = rows || [];
   const displayRows = sortRecordsByStudentIndex(confirmedRows);
   return (
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Confirmed Mock Placements</div></div>
       {loading && <div className="alert alert-info">Loading confirmed mock placements...</div>}
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {displayRows.map(s=>(
+            <div key={s.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{s.studentName}</div>
+                  <div className="mobile-record-sub">Placed at {s.placedAt}</div>
+                </div>
+                <span className={`badge ${s.category==="A"?"badge-warning":s.category==="B"?"badge-blue":"badge-success"}`}>Cat {s.category}</span>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item"><label>Aggregate</label><strong>{s.aggregate}</strong></div>
+                <div className="mobile-record-item"><label>Date</label><span>{s.reviewedAt ? new Date(s.reviewedAt).toLocaleDateString() : "-"}</span></div>
+              </div>
+            </div>
+          ))}
+          {!displayRows.length && !loading && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No confirmed selections found in Supabase.</div>}
+        </div>
+      ) : (
       <div className="card table-wrap">
         <table>
           <thead><tr><th>Student</th><th>Placed At</th><th>Category</th><th>Aggregate</th><th>Date</th></tr></thead>
@@ -1936,12 +1649,14 @@ function ConfirmedPlacements({ rows, loading }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
 
 // â”€â”€â”€ RESULTS SUMMARY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ResultsPage({ studentsData, tableInfo }) {
+  const isMobile = useIsMobileLayout();
   const rankedStudents = [...(studentsData || [])]
     .filter((student) => student && student.full_name)
     .sort((left, right) => Number(left.aggregate ?? 999) - Number(right.aggregate ?? 999));
@@ -2007,7 +1722,7 @@ function ResultsPage({ studentsData, tableInfo }) {
   return (
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Results Summary</div></div>
-      <div className="stats-grid" style={{gridTemplateColumns:"repeat(4,minmax(0,1fr))"}}>
+      <div className="stats-grid stats-grid-4-compact">
         <div className="stat-card" style={{background:"#eef2ff"}}><div className="stat-label" style={{color:"#1e3a8a"}}>Total Students</div><div className="stat-value" style={{color:"#1e3a8a"}}>{displayRows.length}</div><div className="stat-sub" style={{color:"#1e3a8a"}}>Result rows in current view</div></div>
         <div className="stat-card" style={{background:"#dcfce7"}}><div className="stat-label" style={{color:"#166534"}}>Average Score</div><div className="stat-value" style={{color:"#166534"}}>{displayRows.length ? `${avgScore}%` : "N/A"}</div><div className="stat-sub" style={{color:"#166534"}}>Across ranked students</div></div>
         <div className="stat-card" style={{background:"#fef3c7"}}><div className="stat-label" style={{color:"#92400e"}}>Pass Rate</div><div className="stat-value" style={{color:"#92400e"}}>{displayRows.length ? `${passRate}%` : "N/A"}</div><div className="stat-sub" style={{color:"#92400e"}}>{passCount}/{displayRows.length} at 50% and above</div></div>
@@ -2072,6 +1787,25 @@ function ResultsPage({ studentsData, tableInfo }) {
           ) : <div style={{color:"#64748b",fontSize:".82rem"}}>No trend data available.</div>}
         </div>
       </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {displayRows.map((row) => (
+            <div key={row.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">#{row.rank} {row.studentName}</div>
+                  <div className="mobile-record-sub">Average score {row.averageScore}%</div>
+                </div>
+                <span className="grade-chip" style={{background:row.gradeBg,color:row.gradeColor}}>{row.grade}</span>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item"><label>Aggregate</label><strong>{row.aggregate}</strong></div>
+                <div className="mobile-record-item"><label>Score</label><strong>{row.averageScore}%</strong></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="card table-wrap">
         <table>
           <thead><tr><th>Rank</th><th>Student</th><th>Avg Score</th><th>Aggregate</th><th>Grade</th></tr></thead>
@@ -2092,6 +1826,7 @@ function ResultsPage({ studentsData, tableInfo }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
@@ -2692,6 +2427,7 @@ function BulkOperationsPage() {
 function OfflineSyncPage() {
   const [online, setOnline] = useState(globalThis.navigator?.onLine ?? true);
   const [queue, setQueue] = useState([{ id: 1, item: "Attendance sync", status: "queued" }]);
+  const isMobile = useIsMobileLayout();
   useEffect(() => {
     const on = () => setOnline(true);
     const off = () => setOnline(false);
@@ -2700,38 +2436,41 @@ function OfflineSyncPage() {
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
   const retry = () => setQueue((q) => q.map((x) => ({ ...x, status: online ? "synced" : "queued" })));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Offline Sync</div><div className="page-sub">Feature 10: Offline queue and sync recovery.</div></div><div className="alert alert-info">Network: <strong>{online ? "Online" : "Offline"}</strong></div><div className="card table-wrap"><table><thead><tr><th>Queue Item</th><th>Status</th></tr></thead><tbody>{queue.map((q) => <tr key={q.id}><td>{q.item}</td><td>{q.status}</td></tr>)}</tbody></table></div><button className="btn btn-blue" style={{marginTop:10}} onClick={retry}>Retry Sync</button></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Offline Sync</div><div className="page-sub">Feature 10: Offline queue and sync recovery.</div></div><div className="alert alert-info">Network: <strong>{online ? "Online" : "Offline"}</strong></div>{isMobile ? <div className="mobile-record-list">{queue.map((q) => <div key={q.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{q.item}</div></div><span className={`badge ${q.status === "synced" ? "badge-success" : "badge-warning"}`}>{q.status}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Queue Item</th><th>Status</th></tr></thead><tbody>{queue.map((q) => <tr key={q.id}><td>{q.item}</td><td>{q.status}</td></tr>)}</tbody></table></div>}<button className="btn btn-blue" style={{marginTop:10}} onClick={retry}>Retry Sync</button></div>;
 }
 
 function AcademicCalendarPage() {
   const [items, setItems] = useState([{ id: 1, title: "Midterm Exams", date: "2026-05-10", type: "exam" }]);
   const [form, setForm] = useState({ title: "", date: "", type: "event" });
+  const isMobile = useIsMobileLayout();
   const add = () => { if (!form.title || !form.date) return; setItems((i) => [{ id: Date.now(), ...form }, ...i]); setForm({ title: "", date: "", type: "event" }); };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Academic Calendar</div><div className="page-sub">Feature 11: Term calendar and key academic milestones.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Title</label><input className="form-control" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-control" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} /></div><div className="form-group"><label className="form-label">Type</label><select className="form-control" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}><option value="event">Event</option><option value="exam">Exam</option><option value="deadline">Deadline</option></select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Add Calendar Item</button></div><div className="card table-wrap"><table><thead><tr><th>Date</th><th>Title</th><th>Type</th></tr></thead><tbody>{items.map((i) => <tr key={i.id}><td>{i.date}</td><td>{i.title}</td><td>{i.type}</td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Academic Calendar</div><div className="page-sub">Feature 11: Term calendar and key academic milestones.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Title</label><input className="form-control" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-control" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} /></div><div className="form-group"><label className="form-label">Type</label><select className="form-control" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}><option value="event">Event</option><option value="exam">Exam</option><option value="deadline">Deadline</option></select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Add Calendar Item</button></div>{isMobile ? <div className="mobile-record-list">{items.map((i) => <div key={i.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{i.title}</div><div className="mobile-record-sub">{i.date}</div></div><span className="badge badge-blue">{i.type}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Date</th><th>Title</th><th>Type</th></tr></thead><tbody>{items.map((i) => <tr key={i.id}><td>{i.date}</td><td>{i.title}</td><td>{i.type}</td></tr>)}</tbody></table></div>}</div>;
 }
 
 function HelpdeskPage() {
   const [tickets, setTickets] = useState([{ id: 1, subject: "Unable to update profile", status: "open", priority: "high" }]);
   const [form, setForm] = useState({ subject: "", priority: "medium" });
+  const isMobile = useIsMobileLayout();
   const add = () => { if (!form.subject) return; setTickets((t) => [{ id: Date.now(), subject: form.subject, priority: form.priority, status: "open" }, ...t]); setForm({ subject: "", priority: "medium" }); };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Helpdesk</div><div className="page-sub">Feature 12: Internal ticketing and support workflow.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Issue Subject</label><input className="form-control" value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} /></div><div className="form-group"><label className="form-label">Priority</label><select className="form-control" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}><option>low</option><option>medium</option><option>high</option></select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Create Ticket</button></div><div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Priority</th><th>Status</th></tr></thead><tbody>{tickets.map((t) => <tr key={t.id}><td>{t.subject}</td><td>{t.priority}</td><td>{t.status}</td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Helpdesk</div><div className="page-sub">Feature 12: Internal ticketing and support workflow.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Issue Subject</label><input className="form-control" value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} /></div><div className="form-group"><label className="form-label">Priority</label><select className="form-control" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}><option>low</option><option>medium</option><option>high</option></select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Create Ticket</button></div>{isMobile ? <div className="mobile-record-list">{tickets.map((t) => <div key={t.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{t.subject}</div><div className="mobile-record-sub">Priority: {t.priority}</div></div><span className="badge badge-warning">{t.status}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Priority</th><th>Status</th></tr></thead><tbody>{tickets.map((t) => <tr key={t.id}><td>{t.subject}</td><td>{t.priority}</td><td>{t.status}</td></tr>)}</tbody></table></div>}</div>;
 }
 
 function PrivacyCompliancePage() {
   const [cfg, setCfg] = useState({ consentRequired: true, dataExportEnabled: true, rightToDeleteEnabled: true });
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Privacy & Compliance</div><div className="page-sub">Feature 13: Consent, retention and data rights controls.</div></div><div className="card card-padded">{[["consentRequired","Require consent capture"],["dataExportEnabled","Allow data export requests"],["rightToDeleteEnabled","Allow right-to-delete requests"]].map(([k,l]) => <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid #f1f5f9"}}><span style={{fontWeight:600}}>{l}</span><input type="checkbox" checked={!!cfg[k]} onChange={() => setCfg((c) => ({ ...c, [k]: !c[k] }))} /></div>)}</div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Privacy & Compliance</div><div className="page-sub">Feature 13: Consent, retention and data rights controls.</div></div><div className="card card-padded">{[["consentRequired","Require consent capture"],["dataExportEnabled","Allow data export requests"],["rightToDeleteEnabled","Allow right-to-delete requests"]].map(([k,l]) => <div key={k} className="toggle-row"><span>{l}</span><input type="checkbox" checked={!!cfg[k]} onChange={() => setCfg((c) => ({ ...c, [k]: !c[k] }))} /></div>)}</div></div>;
 }
 
 function DisasterRecoveryPage() {
   const [points, setPoints] = useState([{ id: 1, name: "Nightly Backup", at: new Date().toISOString(), status: "verified" }]);
+  const isMobile = useIsMobileLayout();
   const createPoint = () => setPoints((p) => [{ id: Date.now(), name: "Manual Restore Point", at: new Date().toISOString(), status: "pending" }, ...p]);
   const verify = (id) => setPoints((p) => p.map((x) => x.id === id ? { ...x, status: "verified" } : x));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Disaster Recovery</div><div className="page-sub">Feature 14: Restore points and recovery validation.</div></div><button className="btn btn-blue" style={{marginBottom:10}} onClick={createPoint}>Create Restore Point</button><div className="card table-wrap"><table><thead><tr><th>Name</th><th>Created</th><th>Status</th><th>Action</th></tr></thead><tbody>{points.map((p) => <tr key={p.id}><td>{p.name}</td><td>{new Date(p.at).toLocaleString()}</td><td>{p.status}</td><td><button className="btn btn-sm btn-outline" onClick={() => verify(p.id)}>Test Restore</button></td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Disaster Recovery</div><div className="page-sub">Feature 14: Restore points and recovery validation.</div></div><button className="btn btn-blue" style={{marginBottom:10}} onClick={createPoint}>Create Restore Point</button>{isMobile ? <div className="mobile-record-list">{points.map((p) => <div key={p.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{p.name}</div><div className="mobile-record-sub">{new Date(p.at).toLocaleString()}</div></div><span className={`badge ${p.status === "verified" ? "badge-success" : "badge-warning"}`}>{p.status}</span></div><div className="mobile-record-actions"><button className="btn btn-sm btn-outline" onClick={() => verify(p.id)}>Test Restore</button></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Name</th><th>Created</th><th>Status</th><th>Action</th></tr></thead><tbody>{points.map((p) => <tr key={p.id}><td>{p.name}</td><td>{new Date(p.at).toLocaleString()}</td><td>{p.status}</td><td><button className="btn btn-sm btn-outline" onClick={() => verify(p.id)}>Test Restore</button></td></tr>)}</tbody></table></div>}</div>;
 }
 
 function MobilePwaPage() {
   const [cfg, setCfg] = useState({ pushEnabled: true, biometricPreferred: false, compactMode: true });
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Mobile & PWA</div><div className="page-sub">Feature 15: Mobile optimization and installable app controls.</div></div><div className="card card-padded"><div style={{marginBottom:10,color:"#475569"}}>Install status: {window.matchMedia && window.matchMedia("(display-mode: standalone)").matches ? "Installed" : "Browser mode"}</div>{[["pushEnabled","Enable push notifications"],["biometricPreferred","Prefer biometric unlock"],["compactMode","Compact mobile layout"]].map(([k,l]) => <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid #f1f5f9"}}><span style={{fontWeight:600}}>{l}</span><input type="checkbox" checked={!!cfg[k]} onChange={() => setCfg((c) => ({ ...c, [k]: !c[k] }))} /></div>)}</div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Mobile & PWA</div><div className="page-sub">Feature 15: Mobile optimization and installable app controls.</div></div><div className="card card-padded"><div style={{marginBottom:10,color:"#475569"}}>Install status: {window.matchMedia && window.matchMedia("(display-mode: standalone)").matches ? "Installed" : "Browser mode"}</div>{[["pushEnabled","Enable push notifications"],["biometricPreferred","Prefer biometric unlock"],["compactMode","Compact mobile layout"]].map(([k,l]) => <div key={k} className="toggle-row"><span>{l}</span><input type="checkbox" checked={!!cfg[k]} onChange={() => setCfg((c) => ({ ...c, [k]: !c[k] }))} /></div>)}</div></div>;
 }
 
 // â”€â”€â”€ CHAT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2888,9 +2627,9 @@ function ChatPage({ chatUsers, onChatUsersChange }) {
   };
   
   return (
-    <div className="fade-in" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 120px)",overflow:"hidden"}}>
+    <div className="fade-in messages-page">
       <div className="page-header" style={{flexShrink:0}}><div className="page-title">Messages</div></div>
-      <div style={{display:"grid",gridTemplateColumns:"min(280px,35%) 1fr",gap:0,flex:1,overflow:"hidden",borderRadius:8,boxShadow:"0 1px 3px rgba(0,0,0,.1)"}}>
+      <div className="messages-layout">
         <div style={{background:"#fff",borderRight:"1px solid #e2e8f0",display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <div style={{padding:16,borderBottom:"1px solid #e2e8f0",flexShrink:0}}>
             <div style={{fontSize:".875rem",fontWeight:700,color:"#64748b"}}>CONVERSATIONS</div>
@@ -2935,14 +2674,14 @@ function ChatPage({ chatUsers, onChatUsersChange }) {
           <div style={{flex:1,overflowY:"auto",padding:20,display:"flex",flexDirection:"column",gap:12}}>
             {msgs.map(m=>(
               <div key={m.id} style={{display:"flex",justifyContent:m.mine?"flex-end":"flex-start"}}>
-                <div style={{maxWidth:"60%",background:m.mine?"#1a56db":"#fff",color:m.mine?"#fff":"#0f172a",padding:"10px 14px",borderRadius:8,boxShadow:"0 1px 2px rgba(0,0,0,.05)",borderTopLeftRadius:m.mine?8:4,borderTopRightRadius:m.mine?4:8}}>
+                <div className="messages-bubble" style={{background:m.mine?"#1a56db":"#fff",color:m.mine?"#fff":"#0f172a",padding:"10px 14px",borderRadius:8,boxShadow:"0 1px 2px rgba(0,0,0,.05)",borderTopLeftRadius:m.mine?8:4,borderTopRightRadius:m.mine?4:8}}>
                   <div style={{fontSize:".9rem",lineHeight:1.4}}>{m.text}</div>
                   <div style={{fontSize:".7rem",opacity:m.mine?.7:.5,marginTop:4}}>{m.time}</div>
                 </div>
               </div>
             ))}
           </div>
-          <div style={{padding:16,borderTop:"1px solid #e2e8f0",background:"#fff",display:"flex",gap:8,flexShrink:0}}>
+          <div className="messages-composer" style={{padding:16,borderTop:"1px solid #e2e8f0",background:"#fff"}}>
             <input className="form-control" style={{flex:1,padding:"10px 12px",fontSize:".9rem",border:"1px solid #d1d5db",borderRadius:6}} value={input} onChange={e=>setInput(e.target.value)} placeholder="Type a message..." onKeyDown={e=>e.key==="Enter"&&send()}/>
             <button style={{background:"#1a56db",color:"#fff",border:"none",padding:"10px 20px",borderRadius:6,fontWeight:600,cursor:"pointer",transition:"background .2s",fontSize:".9rem"}} onClick={send} onMouseEnter={(e)=>e.target.style.background="#1e40af"} onMouseLeave={(e)=>e.target.style.background="#1a56db"}>Send</button>
           </div>
@@ -3267,7 +3006,7 @@ function SchoolSelection({ schoolsData, studentData }) {
     const loadRemote = async () => {
       if (!supabase) return;
       setLoadingSelection(true);
-      const data = await fetchStudentSelection({ userEmail, studentData });
+      const data = await fetchStudentSelection({ supabase, userEmail, studentData });
       if (data) {
         const picks = normalizeSelectionList(data);
         if (picks.length) setSelected(picks);
@@ -3360,7 +3099,7 @@ function SchoolSelection({ schoolsData, studentData }) {
           <div className="alert alert-info">Selection Rules: 1A + 2B + 4C, 1A + 6C, 2B + 5C, or 7C.</div>
           {ruleWarning && <div className="alert alert-warning">{ruleWarning}</div>}
           {err && selected.length>0 && <div className="alert alert-warning">{err}</div>}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12,marginBottom:20,opacity:cfg.allowChanges?1:0.5,pointerEvents:cfg.allowChanges?"auto":"none"}}>
+          <div className="card-grid-auto" style={{marginBottom:20,opacity:cfg.allowChanges?1:0.5,pointerEvents:cfg.allowChanges?"auto":"none"}}>
             {schools.map(s=>(
               <button key={s.id} className={`selection-card ${selected.find(x=>x.id===s.id)?"selected":""}`} onClick={()=>toggle(s)}>
                 <div className={`cat-badge cat-${s.category}`}>{s.category}</div>
@@ -3453,7 +3192,7 @@ function DocumentsPage() {
   return (
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Documents</div></div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:16}}>
+      <div className="card-grid-tight">
         {[{name:"BECE Form",type:"Form",icon:"docs"},{name:"School Report",type:"Report",icon:"results"},{name:"Admission Letter",type:"Letter",icon:"enroll"},{name:"Medical Certificate",type:"Health",icon:"fees"}].map(d=>(
           <div key={d.name} className="card card-padded" style={{textAlign:"center"}}>
             <div style={{fontSize:"2.5rem",marginBottom:8,display:"flex",justifyContent:"center"}}><Ico name={d.icon} size={34} color="#1a56db"/></div>
@@ -3509,8 +3248,9 @@ function AssignmentTrackerPage() {
     { id: 1, subject: "Mathematics", title: "Algebra Worksheet", due: "2026-04-20", status: "pending" },
     { id: 2, subject: "English", title: "Essay Draft", due: "2026-04-18", status: "submitted" },
   ]);
+  const isMobile = useIsMobileLayout();
   const update = (id, status) => setTasks((t) => t.map((x) => x.id === id ? { ...x, status } : x));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Assignments</div><div className="page-sub">Track homework, due dates and submission status.</div></div><div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Task</th><th>Due</th><th>Status</th><th>Action</th></tr></thead><tbody>{tasks.map((t)=><tr key={t.id}><td>{t.subject}</td><td>{t.title}</td><td>{t.due}</td><td><span className={`badge ${t.status==="submitted"?"badge-success":t.status==="late"?"badge-danger":"badge-warning"}`}>{t.status}</span></td><td><button className="btn btn-sm btn-outline" onClick={()=>update(t.id,"submitted")}>Mark Submitted</button></td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Assignments</div><div className="page-sub">Track homework, due dates and submission status.</div></div>{isMobile ? <div className="mobile-record-list">{tasks.map((t)=><div key={t.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{t.title}</div><div className="mobile-record-sub">{t.subject} • Due {t.due}</div></div><span className={`badge ${t.status==="submitted"?"badge-success":t.status==="late"?"badge-danger":"badge-warning"}`}>{t.status}</span></div><div className="mobile-record-actions"><button className="btn btn-sm btn-outline" onClick={()=>update(t.id,"submitted")}>Mark Submitted</button></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Task</th><th>Due</th><th>Status</th><th>Action</th></tr></thead><tbody>{tasks.map((t)=><tr key={t.id}><td>{t.subject}</td><td>{t.title}</td><td>{t.due}</td><td><span className={`badge ${t.status==="submitted"?"badge-success":t.status==="late"?"badge-danger":"badge-warning"}`}>{t.status}</span></td><td><button className="btn btn-sm btn-outline" onClick={()=>update(t.id,"submitted")}>Mark Submitted</button></td></tr>)}</tbody></table></div>}</div>;
 }
 
 function ExamSchedulePage() {
@@ -3518,7 +3258,8 @@ function ExamSchedulePage() {
     { id: 1, subject: "Mathematics", date: "2026-05-03", time: "09:00", venue: "Hall A", seat: "A-14" },
     { id: 2, subject: "English", date: "2026-05-05", time: "11:00", venue: "Hall B", seat: "B-22" },
   ];
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Exam Timetable & Seat Plan</div><div className="page-sub">See your exam schedule, venue, and seat allocation.</div></div><div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Date</th><th>Time</th><th>Venue</th><th>Seat</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.subject}</td><td>{r.date}</td><td>{r.time}</td><td>{r.venue}</td><td><strong>{r.seat}</strong></td></tr>)}</tbody></table></div></div>;
+  const isMobile = useIsMobileLayout();
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Exam Timetable & Seat Plan</div><div className="page-sub">See your exam schedule, venue, and seat allocation.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.subject}</div><div className="mobile-record-sub">{r.date} • {r.time}</div></div><strong>{r.seat}</strong></div><div className="mobile-record-item"><label>Venue</label><span>{r.venue}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Date</th><th>Time</th><th>Venue</th><th>Seat</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.subject}</td><td>{r.date}</td><td>{r.time}</td><td>{r.venue}</td><td><strong>{r.seat}</strong></td></tr>)}</tbody></table></div>}</div>;
 }
 
 function ReportCardPage({ studentData, attendanceData, feesData }) {
@@ -3598,12 +3339,12 @@ function StudentResultsPage({ scoreValues }) {
         <div className="page-title">Results</div>
         <div className="page-sub">Your subject scores and grades for the current term.</div>
       </div>
-      <div className="stats-grid" style={{gridTemplateColumns:"repeat(3,minmax(0,1fr))"}}>
+      <div className="stats-grid stats-grid-3">
         <div className="stat-card" style={{background:"#eef2ff"}}><div className="stat-label" style={{color:"#1e3a8a"}}>Average Score</div><div className="stat-value" style={{color:"#1e3a8a"}}>{rows.length ? `${averageScore}%` : "N/A"}</div><div className="stat-sub" style={{color:"#1e3a8a"}}>Across all recorded subjects</div></div>
         <div className="stat-card" style={{background:"#dcfce7"}}><div className="stat-label" style={{color:"#166534"}}>Best Subject</div><div className="stat-value" style={{color:"#166534",fontSize:"1.1rem"}}>{bestSubject?.subject || "N/A"}</div><div className="stat-sub" style={{color:"#166534"}}>{bestSubject ? `${bestSubject.score}%` : "No subject score yet"}</div></div>
         <div className="stat-card" style={{background:"#fee2e2"}}><div className="stat-label" style={{color:"#991b1b"}}>Focus Subject</div><div className="stat-value" style={{color:"#991b1b",fontSize:"1.1rem"}}>{weakSubject?.subject || "N/A"}</div><div className="stat-sub" style={{color:"#991b1b"}}>{weakSubject ? `${weakSubject.score}% - prioritize revision` : "No subject score yet"}</div></div>
       </div>
-      <div className="results-visual-grid" style={{gridTemplateColumns:"1.2fr 1fr 1fr"}}>
+      <div className="results-visual-grid results-visual-grid-wide">
         <div className="results-panel">
           <h3>Subject Performance Bars</h3>
           <div className="results-bars">
@@ -3640,7 +3381,7 @@ function StudentResultsPage({ scoreValues }) {
             <div className="progress" style={{height:14,background:"#e2e8f0"}}>
               <div className="progress-bar" style={{width:`${Math.max(0, Math.min(100, averageScore))}%`,background:averageScore >= 75 ? "#16a34a" : averageScore >= 60 ? "#d97706" : "#dc2626"}}/>
             </div>
-            <div style={{display:"flex",justifyContent:"space-between",marginTop:10,fontSize:".75rem",color:"#64748b"}}><span>0%</span><span>50%</span><span>100%</span></div>
+            <div className="progress-scale"><span>0%</span><span>50%</span><span>100%</span></div>
             <div style={{marginTop:12,fontWeight:700,color:"#0f172a",fontSize:".95rem"}}>Exam Readiness: {rows.length ? `${averageScore}%` : "N/A"}</div>
             <div style={{marginTop:6,color:"#64748b",fontSize:".8rem"}}>{averageScore >= 75 ? "Strong performance profile" : averageScore >= 60 ? "Stable progress with room to improve" : "Focused intervention recommended"}</div>
           </div>
@@ -3696,10 +3437,10 @@ function StudentAnalyticsPage({ scoreValues, attendanceData, feesData }) {
       <div className="card card-padded">
         <h3 style={{fontWeight:700,marginBottom:10}}>Subject Strength Snapshot</h3>
         {values.length ? values.map((v, i) => (
-          <div key={`${i}-${v}`} style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
-            <span style={{minWidth:170,fontSize:".85rem",fontWeight:600}}>{SUBJECTS[i] || `Subject ${i + 1}`}</span>
+          <div key={`${i}-${v}`} className="subject-progress-row">
+            <span className="subject-progress-label">{SUBJECTS[i] || `Subject ${i + 1}`}</span>
             <div className="progress" style={{flex:1}}><div className="progress-bar" style={{width:`${Math.max(0, Math.min(100, v))}%`,background:v>=70?"#16a34a":v>=55?"#d97706":"#dc2626"}}/></div>
-            <span style={{width:42,textAlign:"right",fontWeight:700}}>{v}%</span>
+            <span className="subject-progress-value">{v}%</span>
           </div>
         )) : <div style={{color:"#64748b"}}>No score data to analyze yet.</div>}
       </div>
@@ -3709,17 +3450,19 @@ function StudentAnalyticsPage({ scoreValues, attendanceData, feesData }) {
 
 function SubjectProgressPage() {
   const rows = SUBJECTS.slice(0, 8).map((s) => ({ subject: s, avg: Math.floor(Math.random() * 35) + 55 }));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Subject Progress</div><div className="page-sub">View performance trend by subject.</div></div><div className="card card-padded">{rows.map((r) => <div key={r.subject} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><div style={{minWidth:160,fontWeight:600,fontSize:".85rem"}}>{r.subject}</div><div className="progress" style={{flex:1}}><div className="progress-bar" style={{width:`${r.avg}%`,background:r.avg>=70?"#16a34a":r.avg>=55?"#d97706":"#dc2626"}}/></div><div style={{width:42,textAlign:"right",fontWeight:700}}>{r.avg}%</div></div>)}</div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Subject Progress</div><div className="page-sub">View performance trend by subject.</div></div><div className="card card-padded">{rows.map((r) => <div key={r.subject} className="subject-progress-row"><div className="subject-progress-label">{r.subject}</div><div className="progress" style={{flex:1}}><div className="progress-bar" style={{width:`${r.avg}%`,background:r.avg>=70?"#16a34a":r.avg>=55?"#d97706":"#dc2626"}}/></div><div className="subject-progress-value">{r.avg}%</div></div>)}</div></div>;
 }
 
 function StudyPlannerPage() {
   const [plan, setPlan] = useState([{ id: 1, day: "Monday", focus: "Mathematics - Algebra", duration: "1h" }]);
   const [form, setForm] = useState({ day: "Monday", focus: "", duration: "1h" });
+  const isMobile = useIsMobileLayout();
   const add = () => { if (!form.focus) return; setPlan((p) => [...p, { id: Date.now(), ...form }]); setForm({ day: "Monday", focus: "", duration: "1h" }); };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Study Planner</div><div className="page-sub">Build a weekly revision plan.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Day</label><select className="form-control" value={form.day} onChange={(e)=>setForm((f)=>({...f,day:e.target.value}))}>{["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((d)=><option key={d}>{d}</option>)}</select></div><div className="form-group"><label className="form-label">Focus Area</label><input className="form-control" value={form.focus} onChange={(e)=>setForm((f)=>({...f,focus:e.target.value}))}/></div><div className="form-group"><label className="form-label">Duration</label><input className="form-control" value={form.duration} onChange={(e)=>setForm((f)=>({...f,duration:e.target.value}))}/></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Add Session</button></div><div className="card table-wrap"><table><thead><tr><th>Day</th><th>Focus</th><th>Duration</th></tr></thead><tbody>{plan.map((p)=><tr key={p.id}><td>{p.day}</td><td>{p.focus}</td><td>{p.duration}</td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Study Planner</div><div className="page-sub">Build a weekly revision plan.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Day</label><select className="form-control" value={form.day} onChange={(e)=>setForm((f)=>({...f,day:e.target.value}))}>{["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((d)=><option key={d}>{d}</option>)}</select></div><div className="form-group"><label className="form-label">Focus Area</label><input className="form-control" value={form.focus} onChange={(e)=>setForm((f)=>({...f,focus:e.target.value}))}/></div><div className="form-group"><label className="form-label">Duration</label><input className="form-control" value={form.duration} onChange={(e)=>setForm((f)=>({...f,duration:e.target.value}))}/></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Add Session</button></div>{isMobile ? <div className="mobile-record-list">{plan.map((p)=><div key={p.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{p.focus}</div><div className="mobile-record-sub">{p.day}</div></div><strong>{p.duration}</strong></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Day</th><th>Focus</th><th>Duration</th></tr></thead><tbody>{plan.map((p)=><tr key={p.id}><td>{p.day}</td><td>{p.focus}</td><td>{p.duration}</td></tr>)}</tbody></table></div>}</div>;
 }
 
 function AttendanceCorrectionPage({ attendanceData }) {
+  const isMobile = useIsMobileLayout();
   const [requests, setRequests] = useState([]);
   const [note, setNote] = useState("");
   const rows = (attendanceData || []).filter((x) => String(x.status).toLowerCase() !== "present");
@@ -3728,10 +3471,11 @@ function AttendanceCorrectionPage({ attendanceData }) {
     setRequests((r) => [{ id: Date.now(), date: row.date, status: row.status, note, state: "pending" }, ...r]);
     setNote("");
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Attendance Correction Requests</div><div className="page-sub">Request review for absent/late records.</div></div><div className="card card-padded" style={{marginBottom:12}}><label className="form-label">Evidence/Reason</label><textarea className="form-control" rows={3} value={note} onChange={(e)=>setNote(e.target.value)} placeholder="Explain why this record should be corrected"/></div><div className="card table-wrap" style={{marginBottom:12}}><table><thead><tr><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.date}</td><td>{r.status}</td><td><button className="btn btn-sm btn-outline" onClick={()=>submit(r)}>Request Correction</button></td></tr>)}{!rows.length && <tr><td colSpan="3" style={{textAlign:"center",padding:18,color:"#64748b"}}>No absent/late records to dispute.</td></tr>}</tbody></table></div><div className="card table-wrap"><table><thead><tr><th>Date</th><th>Original Status</th><th>Reason</th><th>Request Status</th></tr></thead><tbody>{requests.map((r)=><tr key={r.id}><td>{r.date}</td><td>{r.status}</td><td>{r.note}</td><td><span className="badge badge-warning">{r.state}</span></td></tr>)}{!requests.length && <tr><td colSpan="4" style={{textAlign:"center",padding:18,color:"#64748b"}}>No correction requests submitted yet.</td></tr>}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Attendance Correction Requests</div><div className="page-sub">Request review for absent/late records.</div></div><div className="card card-padded" style={{marginBottom:12}}><label className="form-label">Evidence/Reason</label><textarea className="form-control" rows={3} value={note} onChange={(e)=>setNote(e.target.value)} placeholder="Explain why this record should be corrected"/></div>{isMobile ? <><div className="mobile-record-list" style={{marginBottom:12}}>{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.date}</div><div className="mobile-record-sub">Current status: {r.status}</div></div><button className="btn btn-sm btn-outline" onClick={()=>submit(r)}>Request</button></div></div>)}{!rows.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No absent/late records to dispute.</div>}</div><div className="mobile-record-list">{requests.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.date}</div><div className="mobile-record-sub">Original: {r.status}</div></div><span className="badge badge-warning">{r.state}</span></div><div className="mobile-record-item"><label>Reason</label><span>{r.note}</span></div></div>)}{!requests.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No correction requests submitted yet.</div>}</div></> : <><div className="card table-wrap" style={{marginBottom:12}}><table><thead><tr><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.date}</td><td>{r.status}</td><td><button className="btn btn-sm btn-outline" onClick={()=>submit(r)}>Request Correction</button></td></tr>)}{!rows.length && <tr><td colSpan="3" style={{textAlign:"center",padding:18,color:"#64748b"}}>No absent/late records to dispute.</td></tr>}</tbody></table></div><div className="card table-wrap"><table><thead><tr><th>Date</th><th>Original Status</th><th>Reason</th><th>Request Status</th></tr></thead><tbody>{requests.map((r)=><tr key={r.id}><td>{r.date}</td><td>{r.status}</td><td>{r.note}</td><td><span className="badge badge-warning">{r.state}</span></td></tr>)}{!requests.length && <tr><td colSpan="4" style={{textAlign:"center",padding:18,color:"#64748b"}}>No correction requests submitted yet.</td></tr>}</tbody></table></div></>}</div>;
 }
 
 function StudentPaymentsPage({ feesData }) {
+  const isMobile = useIsMobileLayout();
   const [payments, setPayments] = useState([]);
   const [form, setForm] = useState({ term: (feesData?.[0]?.term || "First Term"), amount: "", method: "mobile-money" });
   const pay = () => {
@@ -3739,7 +3483,7 @@ function StudentPaymentsPage({ feesData }) {
     setPayments((p) => [{ id: Date.now(), ...form, receipt: `PAY-${String(Date.now()).slice(-6)}`, at: new Date().toISOString() }, ...p]);
     setForm((f) => ({ ...f, amount: "" }));
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Pay Fees</div><div className="page-sub">Initiate direct payments and get receipt references.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Term</label><select className="form-control" value={form.term} onChange={(e)=>setForm((f)=>({...f,term:e.target.value}))}>{(feesData||[]).map((x)=><option key={x.id}>{x.term}</option>)}</select></div><div className="form-group"><label className="form-label">Amount (GHS)</label><input type="number" className="form-control" value={form.amount} onChange={(e)=>setForm((f)=>({...f,amount:e.target.value}))} /></div><div className="form-group"><label className="form-label">Method</label><select className="form-control" value={form.method} onChange={(e)=>setForm((f)=>({...f,method:e.target.value}))}><option value="mobile-money">Mobile Money</option><option value="card">Card</option><option value="bank">Bank Transfer</option></select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={pay}>Pay Now</button></div><div className="card table-wrap"><table><thead><tr><th>When</th><th>Term</th><th>Amount</th><th>Method</th><th>Receipt</th></tr></thead><tbody>{payments.map((p)=><tr key={p.id}><td>{new Date(p.at).toLocaleString()}</td><td>{p.term}</td><td>GHS {p.amount}</td><td>{p.method}</td><td><strong>{p.receipt}</strong></td></tr>)}{!payments.length && <tr><td colSpan="5" style={{textAlign:"center",padding:18,color:"#64748b"}}>No payment attempts yet.</td></tr>}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Pay Fees</div><div className="page-sub">Initiate direct payments and get receipt references.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Term</label><select className="form-control" value={form.term} onChange={(e)=>setForm((f)=>({...f,term:e.target.value}))}>{(feesData||[]).map((x)=><option key={x.id}>{x.term}</option>)}</select></div><div className="form-group"><label className="form-label">Amount (GHS)</label><input type="number" className="form-control" value={form.amount} onChange={(e)=>setForm((f)=>({...f,amount:e.target.value}))} /></div><div className="form-group"><label className="form-label">Method</label><select className="form-control" value={form.method} onChange={(e)=>setForm((f)=>({...f,method:e.target.value}))}><option value="mobile-money">Mobile Money</option><option value="card">Card</option><option value="bank">Bank Transfer</option></select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={pay}>Pay Now</button></div>{isMobile ? <div className="mobile-record-list">{payments.map((p)=><div key={p.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{p.term}</div><div className="mobile-record-sub">{new Date(p.at).toLocaleString()}</div></div><strong>GHS {p.amount}</strong></div><div className="mobile-record-grid"><div className="mobile-record-item"><label>Method</label><span>{p.method}</span></div><div className="mobile-record-item"><label>Receipt</label><strong>{p.receipt}</strong></div></div></div>)}{!payments.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No payment attempts yet.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>When</th><th>Term</th><th>Amount</th><th>Method</th><th>Receipt</th></tr></thead><tbody>{payments.map((p)=><tr key={p.id}><td>{new Date(p.at).toLocaleString()}</td><td>{p.term}</td><td>GHS {p.amount}</td><td>{p.method}</td><td><strong>{p.receipt}</strong></td></tr>)}{!payments.length && <tr><td colSpan="5" style={{textAlign:"center",padding:18,color:"#64748b"}}>No payment attempts yet.</td></tr>}</tbody></table></div>}</div>;
 }
 
 function StudentPaymentPlansPage({ feesData }) {
@@ -3750,17 +3494,18 @@ function StudentPaymentPlansPage({ feesData }) {
     if (!outstanding) return;
     setPlan({ total: outstanding, months, installment: Math.ceil(outstanding / months), status: "requested" });
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Payment Plan Request</div><div className="page-sub">Apply for fee installment support.</div></div><div className="card card-padded"><div style={{marginBottom:10}}>Outstanding Balance: <strong>GHS {outstanding}</strong></div><div className="form-group" style={{maxWidth:220}}><label className="form-label">Installment Months</label><input type="number" className="form-control" min={2} max={12} value={months} onChange={(e)=>setMonths(Math.max(2, Math.min(12, Number(e.target.value || 2))))}/></div><button className="btn btn-blue" style={{marginTop:10}} onClick={requestPlan}>Request Plan</button>{plan && <div className="alert alert-info" style={{marginTop:12}}>Plan requested: {plan.months} months at GHS {plan.installment}/month ({plan.status}).</div>}</div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Payment Plan Request</div><div className="page-sub">Apply for fee installment support.</div></div><div className="card card-padded"><div style={{marginBottom:10}}>Outstanding Balance: <strong>GHS {outstanding}</strong></div><div className="form-group form-group-slim"><label className="form-label">Installment Months</label><input type="number" className="form-control" min={2} max={12} value={months} onChange={(e)=>setMonths(Math.max(2, Math.min(12, Number(e.target.value || 2))))}/></div><button className="btn btn-blue" style={{marginTop:10}} onClick={requestPlan}>Request Plan</button>{plan && <div className="alert alert-info" style={{marginTop:12}}>Plan requested: {plan.months} months at GHS {plan.installment}/month ({plan.status}).</div>}</div></div>;
 }
 
 function PersonalizedAnnouncementsPage() {
   const [readIds, setReadIds] = useState([]);
   const items = ANNOUNCEMENTS.map((a) => ({ ...a, audience: a.type === "urgent" ? "All Students" : a.type === "info" ? "JHS 3" : "My Class" }));
   const markRead = (id) => setReadIds((r) => r.includes(id) ? r : [...r, id]);
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Personalized Announcements</div><div className="page-sub">Unread/read announcements targeted to your cohort.</div></div><div style={{display:"grid",gap:10}}>{items.map((a)=><div key={a.id} className="card card-padded" style={{borderLeft:`4px solid ${readIds.includes(a.id)?"#cbd5e1":"#1d4ed8"}`}}><div style={{display:"flex",justifyContent:"space-between",gap:10}}><div style={{fontWeight:700}}>{a.title}</div><span className={`badge ${readIds.includes(a.id)?"badge-gray":"badge-blue"}`}>{readIds.includes(a.id)?"read":"unread"}</span></div><div style={{fontSize:".84rem",color:"#64748b",marginTop:4}}>Audience: {a.audience}</div><div style={{marginTop:8}}>{a.body}</div><button className="btn btn-sm btn-outline" style={{marginTop:8}} onClick={()=>markRead(a.id)}>Mark Read</button></div>)}</div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Personalized Announcements</div><div className="page-sub">Unread/read announcements targeted to your cohort.</div></div><div style={{display:"grid",gap:10}}>{items.map((a)=><div key={a.id} className="card card-padded" style={{borderLeft:`4px solid ${readIds.includes(a.id)?"#cbd5e1":"#1d4ed8"}`}}><div className="announcement-head"><div style={{fontWeight:700}}>{a.title}</div><span className={`badge ${readIds.includes(a.id)?"badge-gray":"badge-blue"}`}>{readIds.includes(a.id)?"read":"unread"}</span></div><div style={{fontSize:".84rem",color:"#64748b",marginTop:4}}>Audience: {a.audience}</div><div style={{marginTop:8}}>{a.body}</div><button className="btn btn-sm btn-outline" style={{marginTop:8}} onClick={()=>markRead(a.id)}>Mark Read</button></div>)}</div></div>;
 }
 
 function StudentUploadDocsPage() {
+  const isMobile = useIsMobileLayout();
   const [uploads, setUploads] = useState([]);
   const [docType, setDocType] = useState("ID Document");
   const onPick = (e) => {
@@ -3769,7 +3514,7 @@ function StudentUploadDocsPage() {
     setUploads((u) => [{ id: Date.now(), docType, fileName: file.name, size: file.size, status: "submitted", at: new Date().toISOString() }, ...u]);
     e.target.value = "";
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Upload Documents</div><div className="page-sub">Submit required files and track verification status.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-group" style={{maxWidth:260}}><label className="form-label">Document Type</label><select className="form-control" value={docType} onChange={(e)=>setDocType(e.target.value)}><option>ID Document</option><option>Birth Certificate</option><option>Result Slip</option><option>Payment Proof</option></select></div><input type="file" onChange={onPick} /></div><div className="card table-wrap"><table><thead><tr><th>When</th><th>Type</th><th>File</th><th>Status</th></tr></thead><tbody>{uploads.map((u)=><tr key={u.id}><td>{new Date(u.at).toLocaleString()}</td><td>{u.docType}</td><td>{u.fileName}</td><td><span className="badge badge-warning">{u.status}</span></td></tr>)}{!uploads.length && <tr><td colSpan="4" style={{textAlign:"center",padding:18,color:"#64748b"}}>No documents uploaded yet.</td></tr>}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Upload Documents</div><div className="page-sub">Submit required files and track verification status.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-group form-group-narrow"><label className="form-label">Document Type</label><select className="form-control" value={docType} onChange={(e)=>setDocType(e.target.value)}><option>ID Document</option><option>Birth Certificate</option><option>Result Slip</option><option>Payment Proof</option></select></div><input type="file" onChange={onPick} /></div>{isMobile ? <div className="mobile-record-list">{uploads.map((u)=><div key={u.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{u.docType}</div><div className="mobile-record-sub">{new Date(u.at).toLocaleString()}</div></div><span className="badge badge-warning">{u.status}</span></div><div className="mobile-record-grid"><div className="mobile-record-item"><label>File</label><span>{u.fileName}</span></div></div></div>)}{!uploads.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No documents uploaded yet.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>When</th><th>Type</th><th>File</th><th>Status</th></tr></thead><tbody>{uploads.map((u)=><tr key={u.id}><td>{new Date(u.at).toLocaleString()}</td><td>{u.docType}</td><td>{u.fileName}</td><td><span className="badge badge-warning">{u.status}</span></td></tr>)}{!uploads.length && <tr><td colSpan="4" style={{textAlign:"center",padding:18,color:"#64748b"}}>No documents uploaded yet.</td></tr>}</tbody></table></div>}</div>;
 }
 
 function CalendarSyncPage() {
@@ -3800,12 +3545,13 @@ function CalendarSyncPage() {
 function StudentTicketsPage() {
   const [tickets, setTickets] = useState([]);
   const [form, setForm] = useState({ subject: "", message: "" });
+  const isMobile = useIsMobileLayout();
   const submit = () => {
     if (!form.subject || !form.message) return;
     setTickets((t) => [{ id: Date.now(), ...form, status: "open", at: new Date().toISOString() }, ...t]);
     setForm({ subject: "", message: "" });
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Support Tickets</div><div className="page-sub">Create and track your support requests.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Subject</label><input className="form-control" value={form.subject} onChange={(e)=>setForm((f)=>({...f,subject:e.target.value}))}/></div><div className="form-group"><label className="form-label">Message</label><input className="form-control" value={form.message} onChange={(e)=>setForm((f)=>({...f,message:e.target.value}))}/></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={submit}>Submit Ticket</button></div><div className="card table-wrap"><table><thead><tr><th>When</th><th>Subject</th><th>Status</th></tr></thead><tbody>{tickets.map((t)=><tr key={t.id}><td>{new Date(t.at).toLocaleString()}</td><td>{t.subject}</td><td><span className="badge badge-warning">{t.status}</span></td></tr>)}{!tickets.length && <tr><td colSpan="3" style={{textAlign:"center",padding:18,color:"#64748b"}}>No support tickets submitted.</td></tr>}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Support Tickets</div><div className="page-sub">Create and track your support requests.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Subject</label><input className="form-control" value={form.subject} onChange={(e)=>setForm((f)=>({...f,subject:e.target.value}))}/></div><div className="form-group"><label className="form-label">Message</label><input className="form-control" value={form.message} onChange={(e)=>setForm((f)=>({...f,message:e.target.value}))}/></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={submit}>Submit Ticket</button></div>{isMobile ? <div className="mobile-record-list">{tickets.map((t)=><div key={t.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{t.subject}</div><div className="mobile-record-sub">{new Date(t.at).toLocaleString()}</div></div><span className="badge badge-warning">{t.status}</span></div><div className="mobile-record-item"><label>Message</label><span>{t.message}</span></div></div>)}{!tickets.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No support tickets submitted.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>When</th><th>Subject</th><th>Status</th></tr></thead><tbody>{tickets.map((t)=><tr key={t.id}><td>{new Date(t.at).toLocaleString()}</td><td>{t.subject}</td><td><span className="badge badge-warning">{t.status}</span></td></tr>)}{!tickets.length && <tr><td colSpan="3" style={{textAlign:"center",padding:18,color:"#64748b"}}>No support tickets submitted.</td></tr>}</tbody></table></div>}</div>;
 }
 
 function StudentGoalsPage() {
@@ -3819,7 +3565,8 @@ function ScholarshipBoardPage() {
     { id: 1, title: "STEM Excellence Scholarship", deadline: "2026-06-01", eligibility: "Aggregate <= 10" },
     { id: 2, title: "Girls in Science Fund", deadline: "2026-05-25", eligibility: "Female students in STEM" },
   ];
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Scholarship Board</div><div className="page-sub">Discover opportunities and eligibility criteria.</div></div><div className="card table-wrap"><table><thead><tr><th>Opportunity</th><th>Deadline</th><th>Eligibility</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.title}</td><td>{r.deadline}</td><td>{r.eligibility}</td></tr>)}</tbody></table></div></div>;
+  const isMobile = useIsMobileLayout();
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Scholarship Board</div><div className="page-sub">Discover opportunities and eligibility criteria.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.title}</div><div className="mobile-record-sub">Deadline: {r.deadline}</div></div></div><div className="mobile-record-item"><label>Eligibility</label><span>{r.eligibility}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Opportunity</th><th>Deadline</th><th>Eligibility</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.title}</td><td>{r.deadline}</td><td>{r.eligibility}</td></tr>)}</tbody></table></div>}</div>;
 }
 
 function LearningResourcesPage() {
@@ -3828,18 +3575,20 @@ function LearningResourcesPage() {
     { id: 2, subject: "Integrated Science", title: "Revision Video Playlist", type: "Video" },
     { id: 3, subject: "English", title: "Essay Writing Guide", type: "Guide" },
   ];
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Learning Resources</div><div className="page-sub">Access notes, past questions, and study materials.</div></div><div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Resource</th><th>Type</th><th></th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.subject}</td><td>{r.title}</td><td>{r.type}</td><td><button className="btn btn-sm btn-outline">Open</button></td></tr>)}</tbody></table></div></div>;
+  const isMobile = useIsMobileLayout();
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Learning Resources</div><div className="page-sub">Access notes, past questions, and study materials.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.title}</div><div className="mobile-record-sub">{r.subject}</div></div><span className="badge badge-blue">{r.type}</span></div><div className="mobile-record-actions"><button className="btn btn-sm btn-outline">Open</button></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Resource</th><th>Type</th><th></th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.subject}</td><td>{r.title}</td><td>{r.type}</td><td><button className="btn btn-sm btn-outline">Open</button></td></tr>)}</tbody></table></div>}</div>;
 }
 
 function AutomationRulesPage() {
   const [rules, setRules] = useState([{ id: 1, trigger: "Fees overdue 30 days", action: "Send reminder + flag" }]);
   const [form, setForm] = useState({ trigger: "", action: "" });
+  const isMobile = useIsMobileLayout();
   const add = () => {
     if (!form.trigger || !form.action) return;
     setRules((r) => [{ id: Date.now(), ...form }, ...r]);
     setForm({ trigger: "", action: "" });
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Automation Rules</div><div className="page-sub">1. If-this-then-that workflow automation.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Trigger</label><input className="form-control" value={form.trigger} onChange={(e)=>setForm((f)=>({...f,trigger:e.target.value}))} /></div><div className="form-group"><label className="form-label">Action</label><input className="form-control" value={form.action} onChange={(e)=>setForm((f)=>({...f,action:e.target.value}))} /></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Add Rule</button></div><div className="card table-wrap"><table><thead><tr><th>Trigger</th><th>Action</th></tr></thead><tbody>{rules.map((r)=><tr key={r.id}><td>{r.trigger}</td><td>{r.action}</td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Automation Rules</div><div className="page-sub">1. If-this-then-that workflow automation.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Trigger</label><input className="form-control" value={form.trigger} onChange={(e)=>setForm((f)=>({...f,trigger:e.target.value}))} /></div><div className="form-group"><label className="form-label">Action</label><input className="form-control" value={form.action} onChange={(e)=>setForm((f)=>({...f,action:e.target.value}))} /></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Add Rule</button></div>{isMobile ? <div className="mobile-record-list">{rules.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-item"><label>Trigger</label><span>{r.trigger}</span></div><div className="mobile-record-item"><label>Action</label><span>{r.action}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Trigger</th><th>Action</th></tr></thead><tbody>{rules.map((r)=><tr key={r.id}><td>{r.trigger}</td><td>{r.action}</td></tr>)}</tbody></table></div>}</div>;
 }
 
 function AiAssistantPage() {
@@ -3861,58 +3610,64 @@ function StudentRiskPage() {
     ...s,
     risk: Math.min(100, Math.max(5, Math.round((Number(s.aggregate || 0) * 4) + (s.status === "pending" ? 20 : 5)))),
   }));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Student Risk Scoring</div><div className="page-sub">3. Early warning scoring based on academics and status.</div></div><div className="card table-wrap"><table><thead><tr><th>Student</th><th>Student ID</th><th>Aggregate</th><th>Status</th><th>Risk Score</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.full_name}</td><td>{r.index}</td><td>{r.aggregate}</td><td>{r.status}</td><td><span className={`badge ${r.risk>=60?"badge-danger":r.risk>=35?"badge-warning":"badge-success"}`}>{r.risk}%</span></td></tr>)}</tbody></table></div></div>;
+  const isMobile = useIsMobileLayout();
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Student Risk Scoring</div><div className="page-sub">3. Early warning scoring based on academics and status.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.full_name}</div><div className="mobile-record-sub">{r.index}</div></div><span className={`badge ${r.risk>=60?"badge-danger":r.risk>=35?"badge-warning":"badge-success"}`}>{r.risk}%</span></div><div className="mobile-record-grid"><div className="mobile-record-item"><label>Aggregate</label><span>{r.aggregate}</span></div><div className="mobile-record-item"><label>Status</label><span>{r.status}</span></div></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Student</th><th>Student ID</th><th>Aggregate</th><th>Status</th><th>Risk Score</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.full_name}</td><td>{r.index}</td><td>{r.aggregate}</td><td>{r.status}</td><td><span className={`badge ${r.risk>=60?"badge-danger":r.risk>=35?"badge-warning":"badge-success"}`}>{r.risk}%</span></td></tr>)}</tbody></table></div>}</div>;
 }
 
 function TimetablePage() {
   const [rows, setRows] = useState([{ id: 1, day: "Monday", period: "08:00", className: "JHS 3A", subject: "Math", teacher: "Mr. Kwesi" }]);
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Timetable & Scheduling</div><div className="page-sub">4. Class schedule planning and conflict visibility.</div></div><div className="card table-wrap"><table><thead><tr><th>Day</th><th>Time</th><th>Class</th><th>Subject</th><th>Teacher</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.day}</td><td>{r.period}</td><td>{r.className}</td><td>{r.subject}</td><td>{r.teacher}</td></tr>)}</tbody></table></div></div>;
+  const isMobile = useIsMobileLayout();
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Timetable & Scheduling</div><div className="page-sub">4. Class schedule planning and conflict visibility.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.className}</div><div className="mobile-record-sub">{r.day} • {r.period}</div></div><strong>{r.subject}</strong></div><div className="mobile-record-item"><label>Teacher</label><span>{r.teacher}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Day</th><th>Time</th><th>Class</th><th>Subject</th><th>Teacher</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.day}</td><td>{r.period}</td><td>{r.className}</td><td>{r.subject}</td><td>{r.teacher}</td></tr>)}</tbody></table></div>}</div>;
 }
 
 function ExamBuilderPage() {
   const [exam, setExam] = useState({ title: "", className: "JHS 3A", total: 100 });
   const [items, setItems] = useState([]);
+  const isMobile = useIsMobileLayout();
   const create = () => {
     if (!exam.title) return;
     setItems((x) => [{ id: Date.now(), ...exam }, ...x]);
     setExam({ title: "", className: "JHS 3A", total: 100 });
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Exam Builder</div><div className="page-sub">5. Assessment creation and marking workflows.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Exam Title</label><input className="form-control" value={exam.title} onChange={(e)=>setExam((v)=>({...v,title:e.target.value}))} /></div><div className="form-group"><label className="form-label">Class</label><input className="form-control" value={exam.className} onChange={(e)=>setExam((v)=>({...v,className:e.target.value}))} /></div><div className="form-group"><label className="form-label">Total Score</label><input type="number" className="form-control" value={exam.total} onChange={(e)=>setExam((v)=>({...v,total:+e.target.value}))} /></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={create}>Create Exam</button></div><div className="card table-wrap"><table><thead><tr><th>Title</th><th>Class</th><th>Total</th></tr></thead><tbody>{items.map((i)=><tr key={i.id}><td>{i.title}</td><td>{i.className}</td><td>{i.total}</td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Exam Builder</div><div className="page-sub">5. Assessment creation and marking workflows.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Exam Title</label><input className="form-control" value={exam.title} onChange={(e)=>setExam((v)=>({...v,title:e.target.value}))} /></div><div className="form-group"><label className="form-label">Class</label><input className="form-control" value={exam.className} onChange={(e)=>setExam((v)=>({...v,className:e.target.value}))} /></div><div className="form-group"><label className="form-label">Total Score</label><input type="number" className="form-control" value={exam.total} onChange={(e)=>setExam((v)=>({...v,total:+e.target.value}))} /></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={create}>Create Exam</button></div>{isMobile ? <div className="mobile-record-list">{items.map((i)=><div key={i.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{i.title}</div><div className="mobile-record-sub">{i.className}</div></div><strong>{i.total}</strong></div></div>)}{!items.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No exams created yet.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>Title</th><th>Class</th><th>Total</th></tr></thead><tbody>{items.map((i)=><tr key={i.id}><td>{i.title}</td><td>{i.className}</td><td>{i.total}</td></tr>)}{!items.length && <tr><td colSpan="3" style={{textAlign:"center",padding:18,color:"#64748b"}}>No exams created yet.</td></tr>}</tbody></table></div>}</div>;
 }
 
 function InstallmentPlansPage() {
   const [plans, setPlans] = useState([{ id: 1, student: "Kwame Asante", amount: 350, installments: 3, nextDue: "2026-05-05" }]);
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Fee Installment Plans</div><div className="page-sub">6. Structured fee payment planning.</div></div><div className="card table-wrap"><table><thead><tr><th>Student</th><th>Total (GHS)</th><th>Installments</th><th>Next Due</th></tr></thead><tbody>{plans.map((p)=><tr key={p.id}><td>{p.student}</td><td>{p.amount}</td><td>{p.installments}</td><td>{p.nextDue}</td></tr>)}</tbody></table></div></div>;
+  const isMobile = useIsMobileLayout();
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Fee Installment Plans</div><div className="page-sub">6. Structured fee payment planning.</div></div>{isMobile ? <div className="mobile-record-list">{plans.map((p)=><div key={p.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{p.student}</div><div className="mobile-record-sub">Next due: {p.nextDue}</div></div><strong>GHS {p.amount}</strong></div><div className="mobile-record-item"><label>Installments</label><span>{p.installments}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Student</th><th>Total (GHS)</th><th>Installments</th><th>Next Due</th></tr></thead><tbody>{plans.map((p)=><tr key={p.id}><td>{p.student}</td><td>{p.amount}</td><td>{p.installments}</td><td>{p.nextDue}</td></tr>)}</tbody></table></div>}</div>;
 }
 
 function MessagingCampaignsPage() {
   const [audience, setAudience] = useState("all-students");
   const [text, setText] = useState("");
   const [history, setHistory] = useState([]);
+  const isMobile = useIsMobileLayout();
   const send = () => {
     if (!text.trim()) return;
     setHistory((h) => [{ id: Date.now(), audience, text, at: new Date().toISOString() }, ...h]);
     setText("");
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Messaging Campaigns</div><div className="page-sub">7. Segmented broadcast communication.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Audience</label><select className="form-control" value={audience} onChange={(e)=>setAudience(e.target.value)}><option value="all-students">All Students</option><option value="pending-selection">Pending Selection</option><option value="fees-overdue">Fees Overdue</option><option value="high-risk">High Risk Students</option></select></div><div className="form-group"><label className="form-label">Message</label><input className="form-control" value={text} onChange={(e)=>setText(e.target.value)} /></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={send}>Launch Campaign</button></div><div className="card table-wrap"><table><thead><tr><th>When</th><th>Audience</th><th>Message</th></tr></thead><tbody>{history.map((h)=><tr key={h.id}><td>{new Date(h.at).toLocaleString()}</td><td>{h.audience}</td><td>{h.text}</td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Messaging Campaigns</div><div className="page-sub">7. Segmented broadcast communication.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Audience</label><select className="form-control" value={audience} onChange={(e)=>setAudience(e.target.value)}><option value="all-students">All Students</option><option value="pending-selection">Pending Selection</option><option value="fees-overdue">Fees Overdue</option><option value="high-risk">High Risk Students</option></select></div><div className="form-group"><label className="form-label">Message</label><input className="form-control" value={text} onChange={(e)=>setText(e.target.value)} /></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={send}>Launch Campaign</button></div>{isMobile ? <div className="mobile-record-list">{history.map((h)=><div key={h.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{h.audience}</div><div className="mobile-record-sub">{new Date(h.at).toLocaleString()}</div></div></div><div className="mobile-record-item"><label>Message</label><span>{h.text}</span></div></div>)}{!history.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No campaigns launched yet.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>When</th><th>Audience</th><th>Message</th></tr></thead><tbody>{history.map((h)=><tr key={h.id}><td>{new Date(h.at).toLocaleString()}</td><td>{h.audience}</td><td>{h.text}</td></tr>)}{!history.length && <tr><td colSpan="3" style={{textAlign:"center",padding:18,color:"#64748b"}}>No campaigns launched yet.</td></tr>}</tbody></table></div>}</div>;
 }
 
 function RecommendationEnginePage() {
   const [agg, setAgg] = useState("");
   const [region, setRegion] = useState("All Regions");
   const [list, setList] = useState([]);
+  const isMobile = useIsMobileLayout();
   const run = () => {
     const score = Number(agg || 99);
     const filtered = SCHOOLS_DATA.filter((s) => region === "All Regions" || s.region === region).sort((a, b) => a.cutoff - b.cutoff);
     setList(filtered.filter((s) => score <= s.cutoff + 4).slice(0, 6));
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">School Recommendation Engine</div><div className="page-sub">8. Suggest schools from aggregate and region preference.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Aggregate</label><input type="number" className="form-control" value={agg} onChange={(e)=>setAgg(e.target.value)} /></div><div className="form-group"><label className="form-label">Preferred Region</label><select className="form-control" value={region} onChange={(e)=>setRegion(e.target.value)}><option>All Regions</option>{GHANA_REGIONS.map((r)=><option key={r}>{r}</option>)}</select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={run}>Recommend</button></div><div className="card table-wrap"><table><thead><tr><th>School</th><th>Region</th><th>Category</th><th>Cutoff</th></tr></thead><tbody>{list.map((s)=><tr key={s.id}><td>{s.name}</td><td>{s.region}</td><td>{s.category}</td><td>{s.cutoff}</td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">School Recommendation Engine</div><div className="page-sub">8. Suggest schools from aggregate and region preference.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Aggregate</label><input type="number" className="form-control" value={agg} onChange={(e)=>setAgg(e.target.value)} /></div><div className="form-group"><label className="form-label">Preferred Region</label><select className="form-control" value={region} onChange={(e)=>setRegion(e.target.value)}><option>All Regions</option>{GHANA_REGIONS.map((r)=><option key={r}>{r}</option>)}</select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={run}>Recommend</button></div>{isMobile ? <div className="mobile-record-list">{list.map((s)=><div key={s.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{s.name}</div><div className="mobile-record-sub">{s.region}</div></div><span className="badge badge-blue">{s.category}</span></div><div className="mobile-record-item"><label>Cutoff</label><span>{s.cutoff}</span></div></div>)}{!list.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No recommendations yet.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>School</th><th>Region</th><th>Category</th><th>Cutoff</th></tr></thead><tbody>{list.map((s)=><tr key={s.id}><td>{s.name}</td><td>{s.region}</td><td>{s.category}</td><td>{s.cutoff}</td></tr>)}{!list.length && <tr><td colSpan="4" style={{textAlign:"center",padding:18,color:"#64748b"}}>No recommendations yet.</td></tr>}</tbody></table></div>}</div>;
 }
 
 function DigitalIdPage() {
   const [query, setQuery] = useState("");
   const students = STUDENTS_DATA.filter((s) => s.full_name.toLowerCase().includes(query.toLowerCase()) || String(s.index).includes(query));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Digital ID & QR Profiles</div><div className="page-sub">9. Quick profile retrieval for check-in and verification.</div></div><input className="form-control" style={{maxWidth:320,marginBottom:12}} placeholder="Search by name or index" value={query} onChange={(e)=>setQuery(e.target.value)} /><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:12}}>{students.map((s)=><div key={s.id} className="card card-padded"><div style={{fontWeight:800,marginBottom:4}}>{s.full_name}</div><div style={{fontSize:".82rem",color:"#64748b",marginBottom:8}}>Index: {s.index}</div><div style={{height:92,borderRadius:10,background:"repeating-linear-gradient(45deg,#1e3a8a,#1e3a8a 4px,#dbeafe 4px,#dbeafe 8px)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700}}>QR-{s.index}</div></div>)}</div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Digital ID & QR Profiles</div><div className="page-sub">9. Quick profile retrieval for check-in and verification.</div></div><input className="form-control search-input-compact" placeholder="Search by name or index" value={query} onChange={(e)=>setQuery(e.target.value)} /><div className="card-grid-auto">{students.map((s)=><div key={s.id} className="card card-padded"><div style={{fontWeight:800,marginBottom:4}}>{s.full_name}</div><div style={{fontSize:".82rem",color:"#64748b",marginBottom:8}}>Index: {s.index}</div><div style={{height:92,borderRadius:10,background:"repeating-linear-gradient(45deg,#1e3a8a,#1e3a8a 4px,#dbeafe 4px,#dbeafe 8px)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700}}>QR-{s.index}</div></div>)}</div></div>;
 }
 
 function PublicStatusPage() {
@@ -3920,19 +3675,22 @@ function PublicStatusPage() {
     { id: 1, title: "Admission Update", status: "published", at: new Date().toISOString() },
     { id: 2, title: "Term Reopening Notice", status: "draft", at: new Date(Date.now() - 86400000).toISOString() },
   ]);
+  const isMobile = useIsMobileLayout();
   const toggle = (id) => setItems((x) => x.map((i) => i.id === id ? { ...i, status: i.status === "published" ? "draft" : "published" } : i));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Public Status Portal</div><div className="page-sub">10. Publish read-only public notices and status updates.</div></div><div className="card table-wrap"><table><thead><tr><th>Post</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead><tbody>{items.map((i)=><tr key={i.id}><td>{i.title}</td><td><span className={`badge ${i.status === "published" ? "badge-success" : "badge-gray"}`}>{i.status}</span></td><td>{new Date(i.at).toLocaleString()}</td><td><button className="btn btn-sm btn-outline" onClick={()=>toggle(i.id)}>{i.status === "published" ? "Unpublish" : "Publish"}</button></td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Public Status Portal</div><div className="page-sub">10. Publish read-only public notices and status updates.</div></div>{isMobile ? <div className="mobile-record-list">{items.map((i)=><div key={i.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{i.title}</div><div className="mobile-record-sub">{new Date(i.at).toLocaleString()}</div></div><span className={`badge ${i.status === "published" ? "badge-success" : "badge-gray"}`}>{i.status}</span></div><div className="mobile-record-actions"><button className="btn btn-sm btn-outline" onClick={()=>toggle(i.id)}>{i.status === "published" ? "Unpublish" : "Publish"}</button></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Post</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead><tbody>{items.map((i)=><tr key={i.id}><td>{i.title}</td><td><span className={`badge ${i.status === "published" ? "badge-success" : "badge-gray"}`}>{i.status}</span></td><td>{new Date(i.at).toLocaleString()}</td><td><button className="btn btn-sm btn-outline" onClick={()=>toggle(i.id)}>{i.status === "published" ? "Unpublish" : "Publish"}</button></td></tr>)}</tbody></table></div>}</div>;
 }
 
 function IntegrationsPage() {
   const [hooks, setHooks] = useState([{ id: 1, name: "Payment Webhook", url: "https://example.com/payment", enabled: true }]);
+  const isMobile = useIsMobileLayout();
   const toggle = (id) => setHooks((h) => h.map((x) => x.id === id ? { ...x, enabled: !x.enabled } : x));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">API & Webhook Integrations</div><div className="page-sub">11. Connect external services and webhooks.</div></div><div className="card table-wrap"><table><thead><tr><th>Name</th><th>Endpoint</th><th>Enabled</th></tr></thead><tbody>{hooks.map((h)=><tr key={h.id}><td>{h.name}</td><td>{h.url}</td><td><input type="checkbox" checked={h.enabled} onChange={()=>toggle(h.id)} /></td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">API & Webhook Integrations</div><div className="page-sub">11. Connect external services and webhooks.</div></div>{isMobile ? <div className="mobile-record-list">{hooks.map((h)=><div key={h.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{h.name}</div><div className="mobile-record-sub">{h.url}</div></div><input type="checkbox" checked={h.enabled} onChange={()=>toggle(h.id)} /></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Name</th><th>Endpoint</th><th>Enabled</th></tr></thead><tbody>{hooks.map((h)=><tr key={h.id}><td>{h.name}</td><td>{h.url}</td><td><input type="checkbox" checked={h.enabled} onChange={()=>toggle(h.id)} /></td></tr>)}</tbody></table></div>}</div>;
 }
 
 function MultiTenantPage() {
   const [schools, setSchools] = useState([{ id: 1, name: "Campus Ghana - Main", tenant: "main", activeUsers: 92 }]);
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Multi-School Tenants</div><div className="page-sub">12. Manage separate school tenants at scale.</div></div><div className="card table-wrap"><table><thead><tr><th>School</th><th>Tenant Key</th><th>Active Users</th></tr></thead><tbody>{schools.map((s)=><tr key={s.id}><td>{s.name}</td><td>{s.tenant}</td><td>{s.activeUsers}</td></tr>)}</tbody></table></div></div>;
+  const isMobile = useIsMobileLayout();
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Multi-School Tenants</div><div className="page-sub">12. Manage separate school tenants at scale.</div></div>{isMobile ? <div className="mobile-record-list">{schools.map((s)=><div key={s.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{s.name}</div><div className="mobile-record-sub">Tenant: {s.tenant}</div></div><strong>{s.activeUsers}</strong></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>School</th><th>Tenant Key</th><th>Active Users</th></tr></thead><tbody>{schools.map((s)=><tr key={s.id}><td>{s.name}</td><td>{s.tenant}</td><td>{s.activeUsers}</td></tr>)}</tbody></table></div>}</div>;
 }
 
 function DataQualityPage() {
@@ -3943,7 +3701,8 @@ function DataQualityPage() {
     { name: "Duplicate Index Numbers", value: duplicateIndexes ? 1 : 0, status: duplicateIndexes ? "warning" : "ok" },
     { name: "Incomplete Regions", value: STUDENTS_DATA.filter((s) => !s.region).length, status: "ok" },
   ];
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Data Quality Monitor</div><div className="page-sub">13. Detect missing/duplicate/inconsistent records.</div></div><div className="card table-wrap"><table><thead><tr><th>Check</th><th>Count</th><th>Status</th></tr></thead><tbody>{issues.map((i)=><tr key={i.name}><td>{i.name}</td><td>{i.value}</td><td><span className={`badge ${i.status === "warning" ? "badge-warning" : "badge-success"}`}>{i.status}</span></td></tr>)}</tbody></table></div></div>;
+  const isMobile = useIsMobileLayout();
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Data Quality Monitor</div><div className="page-sub">13. Detect missing/duplicate/inconsistent records.</div></div>{isMobile ? <div className="mobile-record-list">{issues.map((i)=><div key={i.name} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{i.name}</div></div><span className={`badge ${i.status === "warning" ? "badge-warning" : "badge-success"}`}>{i.status}</span></div><div className="mobile-record-item"><label>Count</label><span>{i.value}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Check</th><th>Count</th><th>Status</th></tr></thead><tbody>{issues.map((i)=><tr key={i.name}><td>{i.name}</td><td>{i.value}</td><td><span className={`badge ${i.status === "warning" ? "badge-warning" : "badge-success"}`}>{i.status}</span></td></tr>)}</tbody></table></div>}</div>;
 }
 
 function ApprovalSlaPage() {
@@ -3951,7 +3710,8 @@ function ApprovalSlaPage() {
     { id: 1, queue: "Pending Selections", under24: 8, under72: 4, over72: 2 },
     { id: 2, queue: "Document Review", under24: 12, under72: 5, over72: 1 },
   ]);
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Approval SLA Dashboard</div><div className="page-sub">14. Aging and turnaround performance tracking.</div></div><div className="card table-wrap"><table><thead><tr><th>Queue</th><th>&lt;24h</th><th>24-72h</th><th>&gt;72h</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.queue}</td><td>{r.under24}</td><td>{r.under72}</td><td>{r.over72}</td></tr>)}</tbody></table></div></div>;
+  const isMobile = useIsMobileLayout();
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Approval SLA Dashboard</div><div className="page-sub">14. Aging and turnaround performance tracking.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-title">{r.queue}</div><div className="mobile-record-grid"><div className="mobile-record-item"><label>&lt;24h</label><span>{r.under24}</span></div><div className="mobile-record-item"><label>24-72h</label><span>{r.under72}</span></div><div className="mobile-record-item"><label>&gt;72h</label><span>{r.over72}</span></div></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Queue</th><th>&lt;24h</th><th>24-72h</th><th>&gt;72h</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.queue}</td><td>{r.under24}</td><td>{r.under72}</td><td>{r.over72}</td></tr>)}</tbody></table></div>}</div>;
 }
 
 function FeatureFlagsPage() {
@@ -3959,8 +3719,9 @@ function FeatureFlagsPage() {
     { id: 1, key: "new-recommendation-engine", stage: "pilot", enabled: true },
     { id: 2, key: "advanced-risk-model", stage: "beta", enabled: false },
   ]);
+  const isMobile = useIsMobileLayout();
   const toggle = (id) => setFlags((f) => f.map((x) => x.id === id ? { ...x, enabled: !x.enabled } : x));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Feature Flags & Rollout</div><div className="page-sub">15. Controlled release by stage and audience.</div></div><div className="card table-wrap"><table><thead><tr><th>Flag</th><th>Stage</th><th>Enabled</th></tr></thead><tbody>{flags.map((x)=><tr key={x.id}><td>{x.key}</td><td>{x.stage}</td><td><input type="checkbox" checked={x.enabled} onChange={()=>toggle(x.id)} /></td></tr>)}</tbody></table></div></div>;
+  return <div className="fade-in"><div className="page-header"><div className="page-title">Feature Flags & Rollout</div><div className="page-sub">15. Controlled release by stage and audience.</div></div>{isMobile ? <div className="mobile-record-list">{flags.map((x)=><div key={x.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{x.key}</div><div className="mobile-record-sub">{x.stage}</div></div><input type="checkbox" checked={x.enabled} onChange={()=>toggle(x.id)} /></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Flag</th><th>Stage</th><th>Enabled</th></tr></thead><tbody>{flags.map((x)=><tr key={x.id}><td>{x.key}</td><td>{x.stage}</td><td><input type="checkbox" checked={x.enabled} onChange={()=>toggle(x.id)} /></td></tr>)}</tbody></table></div>}</div>;
 }
 
 // ADMIN NAV
@@ -4074,12 +3835,13 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const [tab, setTab] = useState(() => readStoredTab(ADMIN_TAB_KEY, "dashboard"));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
-  const [adminStudents, setAdminStudents] = useState(sortStudentsByIndex(STUDENTS_DATA));
-  const [adminSchools, setAdminSchools] = useState(SCHOOLS_DATA);
+  const [adminStudents, setAdminStudents] = useState(() => (supabase ? [] : sortStudentsByIndex(STUDENTS_DATA)));
+  const [adminSchools, setAdminSchools] = useState(() => (supabase ? [] : SCHOOLS_DATA));
   const [pendingSelections, setPendingSelections] = useState([]);
   const [confirmedSelections, setConfirmedSelections] = useState([]);
   const [feesData, setFeesData] = useState(FEES_DATA);
   const [teachersData, setTeachersData] = useState(TEACHERS_DATA);
+  const [loadingAdminData, setLoadingAdminData] = useState(!!supabase);
   const [databaseTables, setDatabaseTables] = useState({
     users: { rows: [], error: "" },
     students: { rows: [], error: "" },
@@ -4132,7 +3894,10 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
 
   useEffect(() => {
     const loadAdminPortalData = async () => {
-      if (!supabase) return;
+      if (!supabase) {
+        setLoadingAdminData(false);
+        return;
+      }
 
       const { data: students } = await supabase.from("students").select("*").order("id", { ascending: true });
       const normalizedStudents = Array.isArray(students) && students.length
@@ -4203,6 +3968,7 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
         setConfirmedSelections([]);
       }
       setLoadingPlacements(false);
+      setLoadingAdminData(false);
     };
     loadAdminPortalData();
   }, []);
@@ -4275,7 +4041,7 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const renderPage = () => {
     if (tab==="enroll") return <EnrollPage onBack={()=>goTab("students")}/>;
     const pages = {
-      dashboard:<AdminDashboard studentsData={adminStudents} schoolsData={adminSchools} pendingRows={pendingSelections} confirmedRows={confirmedSelections} financeSummary={financeSummary} recentActivity={recentActivity}/>, students:<StudentsPage onEnroll={()=>goTab("enroll")} studentsData={adminStudents}/>,
+      dashboard:<AdminDashboard studentsData={adminStudents} schoolsData={adminSchools} pendingRows={pendingSelections} confirmedRows={confirmedSelections} financeSummary={financeSummary} recentActivity={recentActivity} isLoading={loadingAdminData}/>, students:<StudentsPage onEnroll={()=>goTab("enroll")} studentsData={adminStudents}/>,
       scores:<ScoresPage studentsData={adminStudents} tableInfo={databaseTables.scores}/>, analytics:<AnalyticsPage studentsData={adminStudents} schoolsData={adminSchools} selectionsData={[...pendingSelections, ...confirmedSelections]} scoreTableInfo={databaseTables.scores}/>, results:<ResultsPage studentsData={adminStudents} tableInfo={databaseTables.results}/>, grading:<GradingPage/>,
       attendance:<AttendancePage studentsData={adminStudents} tableInfo={databaseTables.attendance}/>, fees:<FeesAdmin studentsData={adminStudents} feesData={feesData} tableInfo={databaseTables.fees}/>, teachers:<TeachersPage teachersData={teachersData} tableInfo={databaseTables.teachers}/>, events:<EventsPage eventsData={databaseTables.events?.rows} tableInfo={databaseTables.events}/>,
       schools:<SchoolsPage schoolsData={adminSchools}/>, pending:<PendingSelections rows={pendingSelections} loading={loadingPlacements} onApprove={approveSelection}/>, confirmed:<ConfirmedPlacements rows={confirmedSelections} loading={loadingPlacements}/>,
@@ -4295,7 +4061,7 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
 
   return (
     <div className="app">
-      <Topbar user={user} portal="Admin" onLogout={onLogout} onMenuClick={()=>setSidebarOpen(o=>!o)} darkMode={darkMode} onToggleDark={onToggleDark} onOpenNotifications={openNotifications} onOpenProfile={() => goTab("settings")} onReloadApp={reloadApp} notificationCount={notificationCount} chatUnread={totalChatUnread} onOpenChat={() => goTab("chat")}/>
+      <Topbar user={user} onLogout={onLogout} onMenuClick={()=>setSidebarOpen(o=>!o)} darkMode={darkMode} onToggleDark={onToggleDark} onOpenNotifications={openNotifications} onOpenProfile={() => goTab("settings")} onReloadApp={reloadApp} notificationCount={notificationCount} chatUnread={totalChatUnread} onOpenChat={() => goTab("chat")} systemName={appCfg.systemName}/>
       <div className="shell">
         {sidebarOpen && <div className="sidebar-overlay" onClick={()=>setSidebarOpen(false)}/>}
         <nav className={`sidebar ${sidebarOpen?"":"closed"}`}>
@@ -4506,7 +4272,7 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
             () => supabase.from("scores").select("score").eq("student_id", student.id),
             ...(idx ? [() => supabase.from("scores").select("score").eq("index_number", idx)] : []),
           ]),
-          fetchStudentSelection({ userEmail: user?.email || getSessionUserEmail(), studentData: {
+          fetchStudentSelection({ supabase, userEmail: user?.email || getSessionUserEmail(), studentData: {
             id: student.id,
             index: student.index || student.index_number,
             index_number: student.index_number || student.index,
@@ -4639,7 +4405,7 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
 
   return (
     <div className="app">
-      <Topbar user={user} portal="Student" onLogout={onLogout} onMenuClick={()=>setSidebarOpen(o=>!o)} darkMode={darkMode} onToggleDark={onToggleDark} onOpenNotifications={openNotifications} onOpenProfile={() => goTab("profile")} onReloadApp={reloadApp} notificationCount={notificationCount} chatUnread={totalChatUnread} onOpenChat={() => goTab("chat")}/>
+      <Topbar user={user} onLogout={onLogout} onMenuClick={()=>setSidebarOpen(o=>!o)} darkMode={darkMode} onToggleDark={onToggleDark} onOpenNotifications={openNotifications} onOpenProfile={() => goTab("profile")} onReloadApp={reloadApp} notificationCount={notificationCount} chatUnread={totalChatUnread} onOpenChat={() => goTab("chat")} systemName={appCfg.systemName}/>
       <div className="shell">
         {sidebarOpen && <div className="sidebar-overlay" onClick={()=>setSidebarOpen(false)}/>}
         <nav className={`sidebar ${sidebarOpen?"":"closed"}`}>
@@ -4973,7 +4739,7 @@ export default function GhanaCampus() {
     <SettingsContext.Provider value={{ cfg: appSettings, updateCfg: setAppSettings }}>
       <style>{css}</style>
       {!session
-        ? <Landing onSelect={(portal, user, password) => login(portal, user, password)}/>
+        ? <Landing onSelect={(portal, user, password) => login(portal, user, password)} hasSupabase={!!supabase}/>
         : session.portal === "admin"
           ? <AdminPortal user={session.user} onLogout={logout} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}/>
           : <StudentPortal user={session.user} onLogout={logout} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}/>
