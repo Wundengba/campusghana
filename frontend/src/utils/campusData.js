@@ -138,6 +138,13 @@ export function normalizeTeacherRow(teacher, i = 0) {
     subject: teacher?.subject || teacher?.department || "General",
     class: teacher?.class || teacher?.classes || teacher?.assigned_class || "-",
     phone: teacher?.phone || teacher?.contact || "-",
+    email: teacher?.email || null,
+    employee_id: teacher?.employee_id || null,
+    gender: teacher?.gender || null,
+    date_of_birth: teacher?.date_of_birth || null,
+    qualification: teacher?.qualification || null,
+    hire_date: teacher?.hire_date || null,
+    address: teacher?.address || null,
   };
 }
 

@@ -1561,6 +1561,7 @@ const css = `
   .bottom-nav-item { display:flex; flex-direction:column; align-items:center; justify-content:center;
     background:none; border:none; cursor:pointer; font-family:var(--font); font-size:.64rem;
     color:#64748b; gap:1px; border-radius:8px; transition:all .2s; position:relative; }
+  .bottom-nav-item svg { width:30px; height:30px; }
   .bottom-nav-item span { font-weight:700; letter-spacing:.1px; }
   .bottom-nav-item:hover { background:#eef5ff; transform:translateY(-1px); }
   .bottom-nav-item.active { color:#64748b; background:none; box-shadow:none; }
@@ -1711,9 +1712,10 @@ const css = `
     .registered-school-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 
     .selection-card { padding:11px 12px; }
-    .bottom-nav { height:calc(58px + env(safe-area-inset-bottom)); padding:3px 5px calc(3px + env(safe-area-inset-bottom)); }
-    .bottom-nav-item { font-size:.6rem; gap:1px; }
-    .bottom-nav-item span { font-size:.58rem; }
+    .bottom-nav { height:calc(76px + env(safe-area-inset-bottom)); padding:6px 5px calc(6px + env(safe-area-inset-bottom)); }
+    .bottom-nav-item { font-size:.6rem; gap:4px; }
+    .bottom-nav-item svg { width:30px; height:30px; }
+    .bottom-nav-item span { font-size:.56rem; }
   }
 
   @media (max-width:479px) {
@@ -1802,10 +1804,11 @@ const css = `
     .subject-progress-label { min-width:110px; }
     .subject-progress-value { width:36px; }
 
-    .bottom-nav { height:calc(56px + env(safe-area-inset-bottom)); padding:3px 4px calc(3px + env(safe-area-inset-bottom)); }
+    .bottom-nav { height:calc(72px + env(safe-area-inset-bottom)); padding:5px 4px calc(5px + env(safe-area-inset-bottom)); }
     .bottom-nav-grid { gap:2px; }
-    .bottom-nav-item { font-size:.56rem; }
-    .bottom-nav-item span { font-size:.54rem; }
+    .bottom-nav-item { font-size:.56rem; gap:3px; }
+    .bottom-nav-item svg { width:28px; height:28px; }
+    .bottom-nav-item span { font-size:.52rem; }
     .enroll-hero { padding:18px 16px; border-radius:18px; }
     .enroll-hero-title { font-size:1.38rem; }
     .enroll-sidebar { padding:14px; border-radius:18px; }
@@ -1953,15 +1956,20 @@ function AdminDashboard({ studentsData, schoolsData, pendingRows, confirmedRows,
 }
 
 function ActionStatusModal({ state, onClose }) {
-  if (!state?.open) return null;
   const isSuccess = state.type === "success";
 
   useEffect(() => {
+    if (!state?.open) {
+      return undefined;
+    }
+
     const timer = setTimeout(() => {
       onClose();
-    }, 1000);
+    }, state.type === "failure" ? 4500 : 2200);
     return () => clearTimeout(timer);
   }, [onClose, state?.open, state?.type, state?.title, state?.message]);
+
+  if (!state?.open) return null;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -2010,11 +2018,21 @@ const normalizeStudentRecord = (student = {}, fallbackIndex = 0) => ({
 
 const buildTeacherDraft = (teacher = null) => ({
   name: teacher?.name || teacher?.full_name || "",
+  employee_id: teacher?.employee_id || "",
   role: normalizeRoleKey(teacher?.role || teacher?.user_role || "teacher") || "teacher",
+  gender: teacher?.gender || "",
   subject: teacher?.subject || "",
   class: teacher?.class || teacher?.class_name || "",
   phone: teacher?.phone || "",
+  email: teacher?.email || "",
+  qualification: teacher?.qualification || "",
+  date_of_birth: teacher?.date_of_birth || "",
+  hire_date: teacher?.hire_date || "",
+  address: teacher?.address || "",
 });
+
+const TEACHER_PROFILE_FIELD_KEYS = ["employee_id", "gender", "qualification", "date_of_birth", "hire_date", "address"];
+const TEACHER_FORM_SCHEMA_VERSION = "teacher-form-v2";
 
 function StudentEditorModal({ open, title, draft, saving, onChange, onClose, onSave }) {
   if (!open) return null;
@@ -2050,7 +2068,7 @@ function TeacherEditorModal({ open, title, draft, roleOptions, saving, onChange,
   if (!open) return null;
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-card" style={{ maxWidth: 760 }} onClick={(event) => event.stopPropagation()}>
         <div className="modal-head">
           <div>
             <div className="modal-title">{title}</div>
@@ -2058,12 +2076,22 @@ function TeacherEditorModal({ open, title, draft, roleOptions, saving, onChange,
           </div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
+        <div className="alert alert-info" style={{ marginBottom: 14 }}>
+          Fill in the staff profile fields below. Scroll inside this dialog if you do not see the full form.
+        </div>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">Teacher Name</label><input className="form-control" value={draft.name} onChange={(e) => onChange("name", e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Employee ID</label><input className="form-control" value={draft.employee_id} onChange={(e) => onChange("employee_id", e.target.value)} placeholder="Optional staff ID" /></div>
           <div className="form-group"><label className="form-label">Role</label><select className="form-control" value={draft.role} onChange={(e) => onChange("role", e.target.value)}>{roleOptions.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Gender</label><select className="form-control" value={draft.gender} onChange={(e) => onChange("gender", e.target.value)}><option value="">Select gender</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></div>
           <div className="form-group"><label className="form-label">Subject</label><input className="form-control" value={draft.subject} onChange={(e) => onChange("subject", e.target.value)} /></div>
           <div className="form-group"><label className="form-label">Class</label><input className="form-control" value={draft.class} onChange={(e) => onChange("class", e.target.value)} /></div>
           <div className="form-group"><label className="form-label">Phone</label><input className="form-control" value={draft.phone} onChange={(e) => onChange("phone", e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Email</label><input className="form-control" type="email" value={draft.email} onChange={(e) => onChange("email", e.target.value)} placeholder="teacher@school.edu" /></div>
+          <div className="form-group"><label className="form-label">Qualification</label><input className="form-control" value={draft.qualification} onChange={(e) => onChange("qualification", e.target.value)} placeholder="e.g. B.Ed Mathematics" /></div>
+          <div className="form-group"><label className="form-label">Date of Birth</label><input className="form-control" type="date" value={draft.date_of_birth} onChange={(e) => onChange("date_of_birth", e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Hire Date</label><input className="form-control" type="date" value={draft.hire_date} onChange={(e) => onChange("hire_date", e.target.value)} /></div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}><label className="form-label">Address</label><input className="form-control" value={draft.address} onChange={(e) => onChange("address", e.target.value)} placeholder="Residential address" /></div>
         </div>
         <div className="modal-actions">
           <button className="btn btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
@@ -3850,7 +3878,7 @@ function FinancePage({ financeSummary, tableInfo }) {
 }
 
 // â”€â”€â”€ TEACHERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdateTeacher = null, currentUser = null }) {
+function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdateTeacher = null, currentUser = null, emptyRemoteMessage = "No teacher rows available from Supabase." }) {
   const { cfg: globalCfg } = useContext(SettingsContext);
   const hasTeachersError = hasRealTableError(tableInfo);
   const isMobile = useIsMobileLayout();
@@ -3862,11 +3890,18 @@ function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdat
   const canCreateTeacher = typeof onCreateTeacher === "function";
   const canEditTeacher = typeof onUpdateTeacher === "function";
   const actorRole = currentUser?.role || "admin";
-  const availableRoleCatalog = buildRoleCatalog(globalCfg);
   const assignableRolesBase = getAssignableRoles(globalCfg, actorRole, "teacher");
   const roleOptions = assignableRolesBase.some((role) => role.key === teacherDraft.role)
     ? assignableRolesBase
     : [...assignableRolesBase, getRoleMeta(globalCfg, teacherDraft.role || "teacher")].filter((role, index, list) => list.findIndex((entry) => entry.key === role.key) === index);
+
+  useEffect(() => {
+    if (editingTeacher === undefined) return;
+    setTeacherDraft((current) => ({
+      ...buildTeacherDraft(editingTeacher || null),
+      ...current,
+    }));
+  }, [editingTeacher]);
 
   const openCreateTeacher = () => {
     setEditingTeacher(null);
@@ -3923,35 +3958,56 @@ function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdat
               </div>
               <div className="mobile-record-grid">
                 <div className="mobile-record-item"><label>Role</label><span>{getRoleMeta(globalCfg, teacher.role || "teacher").label}</span></div>
+                <div className="mobile-record-item"><label>Employee ID</label><span>{teacher.employee_id || "-"}</span></div>
                 <div className="mobile-record-item"><label>Class</label><span>{teacher.class || "-"}</span></div>
                 <div className="mobile-record-item"><label>Phone</label><span>{teacher.phone || "-"}</span></div>
+                <div className="mobile-record-item"><label>Email</label><span>{teacher.email || "-"}</span></div>
+                <div className="mobile-record-item"><label>Gender</label><span>{teacher.gender || "-"}</span></div>
+                <div className="mobile-record-item"><label>Qualification</label><span>{teacher.qualification || "-"}</span></div>
+                <div className="mobile-record-item"><label>Date of Birth</label><span>{teacher.date_of_birth || "-"}</span></div>
+                <div className="mobile-record-item"><label>Hire Date</label><span>{teacher.hire_date || "-"}</span></div>
+                <div className="mobile-record-item"><label>Address</label><span>{teacher.address || "-"}</span></div>
               </div>
               {canEditTeacher && <div className="mobile-record-actions"><button className="btn btn-outline" onClick={() => openEditTeacher(teacher)}>Edit</button></div>}
             </div>
           ))}
-          {!rows.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No teacher rows available from Supabase.</div>}
+          {!rows.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>{emptyRemoteMessage}</div>}
         </div>
       ) : (
         <div className="card table-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Role</th><th>Subject</th><th>Classes</th><th>Phone</th>{canEditTeacher && <th>Actions</th>}</tr></thead>
+            <thead><tr><th>Name</th><th>Employee ID</th><th>Role</th><th>Subject</th><th>Classes</th><th>Contact</th><th>Profile</th>{canEditTeacher && <th>Actions</th>}</tr></thead>
             <tbody>
               {rows.map(t=>(
                 <tr key={t.id}>
-                  <td><strong>{t.name}</strong></td>
+                  <td>
+                    <strong>{t.name}</strong>
+                    <div style={{ fontSize: ".78rem", color: "#64748b", marginTop: 4 }}>{t.address || "No address added"}</div>
+                  </td>
+                  <td>{t.employee_id || "-"}</td>
                   <td>{getRoleMeta(globalCfg, t.role || "teacher").label}</td>
                   <td>{t.subject}</td>
                   <td>{t.class}</td>
-                  <td style={{fontFamily:"monospace"}}>{t.phone}</td>
+                  <td>
+                    <div style={{ fontFamily:"monospace" }}>{t.phone}</div>
+                    <div style={{ fontSize: ".78rem", color: "#64748b", marginTop: 4 }}>{t.email || "-"}</div>
+                  </td>
+                  <td>
+                    <div>{t.qualification || "-"}</div>
+                    <div style={{ fontSize: ".78rem", color: "#64748b", marginTop: 4 }}>
+                      {t.gender || "-"} • DOB: {t.date_of_birth || "-"} • Hired: {t.hire_date || "-"}
+                    </div>
+                  </td>
                   {canEditTeacher && <td><button className="btn btn-outline btn-sm" onClick={() => openEditTeacher(t)}>Edit</button></td>}
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan={canEditTeacher ? "6" : "5"} style={{textAlign:"center",padding:24,color:"#64748b"}}>No teacher rows available from Supabase.</td></tr>}
+              {!rows.length && <tr><td colSpan={canEditTeacher ? "8" : "7"} style={{textAlign:"center",padding:24,color:"#64748b"}}>{emptyRemoteMessage}</td></tr>}
             </tbody>
           </table>
         </div>
       )}
       <TeacherEditorModal
+        key={`${TEACHER_FORM_SCHEMA_VERSION}-${editingTeacher?.id || "new"}`}
         open={editingTeacher !== undefined}
         title={editingTeacher ? "Edit Teacher" : "Add Teacher"}
         draft={teacherDraft}
@@ -6856,12 +6912,21 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   };
 
   const saveAdminTeacher = async (existingTeacher, draft) => {
+    const scopedSchoolId = user?.registered_school_id || null;
     const payload = {
       name: draft.name.trim(),
+      employee_id: draft.employee_id.trim() || null,
       role: normalizeRoleKey(draft.role || "teacher") || "teacher",
+      gender: draft.gender.trim() || null,
       subject: draft.subject.trim(),
       class: draft.class.trim(),
       phone: draft.phone.trim(),
+      email: draft.email.trim() || null,
+      qualification: draft.qualification.trim() || null,
+      date_of_birth: draft.date_of_birth || null,
+      hire_date: draft.hire_date || null,
+      address: draft.address.trim() || null,
+      ...(scopedSchoolId != null ? { registered_school_id: scopedSchoolId } : {}),
     };
 
     let savedRow = normalizeTeacherRow({ id: existingTeacher?.id || Date.now(), ...payload });
@@ -6870,6 +6935,20 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       let response = existingTeacher?.id
         ? await supabase.from("teachers").update(payload).eq("id", existingTeacher.id).select("*").single()
         : await supabase.from("teachers").insert(payload).select("*").single();
+
+      if (response.error && isMissingColumnError(response.error)) {
+        const fallbackPayload = { ...payload };
+        TEACHER_PROFILE_FIELD_KEYS.forEach((key) => {
+          delete fallbackPayload[key];
+        });
+        response = existingTeacher?.id
+          ? await supabase.from("teachers").update(fallbackPayload).eq("id", existingTeacher.id).select("*").single()
+          : await supabase.from("teachers").insert(fallbackPayload).select("*").single();
+      }
+
+      if (response.error && isMissingColumnError(response.error) && scopedSchoolId != null) {
+        throw new Error("School-scoped teacher updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.");
+      }
 
       if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "role")) {
         const { role, ...fallbackPayload } = payload;
@@ -7141,7 +7220,7 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
             {BOTTOM.map(k=>{
               const item = ADMIN_NAV.find(n=>n.key===k);
               return <button key={k} className={`bottom-nav-item ${tab===k?"active":""}`} onClick={()=>goTab(k)}>
-                <Ico name={item.icon} size={17} color={item.color}/><span>{item.label}</span>
+                <Ico name={item.icon} size={30} color={item.color}/><span>{item.label}</span>
               </button>;
             })}
           </div>
@@ -7286,10 +7365,17 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     const scopedSchoolId = school?.id || user?.registered_school_id || null;
     const payload = {
       name: draft.name.trim(),
+      employee_id: draft.employee_id.trim() || null,
       role: normalizeRoleKey(draft.role || "teacher") || "teacher",
+      gender: draft.gender.trim() || null,
       subject: draft.subject.trim(),
       class: draft.class.trim(),
       phone: draft.phone.trim(),
+      email: draft.email.trim() || null,
+      qualification: draft.qualification.trim() || null,
+      date_of_birth: draft.date_of_birth || null,
+      hire_date: draft.hire_date || null,
+      address: draft.address.trim() || null,
       ...(scopedSchoolId != null ? { registered_school_id: scopedSchoolId } : {}),
     };
 
@@ -7303,6 +7389,16 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       let response = existingTeacher?.id
         ? await supabase.from("teachers").update(payload).eq("id", existingTeacher.id).select("*").single()
         : await supabase.from("teachers").insert(payload).select("*").single();
+
+      if (response.error && isMissingColumnError(response.error)) {
+        const fallbackPayload = { ...payload };
+        TEACHER_PROFILE_FIELD_KEYS.forEach((key) => {
+          delete fallbackPayload[key];
+        });
+        response = existingTeacher?.id
+          ? await supabase.from("teachers").update(fallbackPayload).eq("id", existingTeacher.id).select("*").single()
+          : await supabase.from("teachers").insert(fallbackPayload).select("*").single();
+      }
 
       if (response.error && isMissingColumnError(response.error) && scopedSchoolId != null) {
         throw new Error("School-scoped teacher updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.");
@@ -7334,6 +7430,7 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       const scopedSchoolName = user?.managed_school_name || "";
       const scopedSchoolId = user?.registered_school_id;
       const scopeColumnMessage = "School-scoped data columns are not installed in Supabase yet. Run backend/supabase/migrations/004_add_registered_school_scope.sql, then refresh.";
+      setSchoolScopeError("");
 
       if (!supabase) {
         setSchool(scopedSchoolName ? normalizeSchoolRow({ name: scopedSchoolName, region: "Unknown", category: "C" }) : null);
@@ -7362,6 +7459,10 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
         ? { ...normalizeSchoolRow(schoolRow), tenant_key: schoolRow.tenant_key || "" }
         : (scopedSchoolName ? normalizeSchoolRow({ name: scopedSchoolName, region: "Unknown", category: "C" }) : null);
       setSchool(normalizedSchool);
+
+      if (!schoolRow?.id) {
+        setSchoolScopeError("This school admin account is not linked to a registered school record yet, so teacher rows cannot be loaded. Link the account to a row in registered_schools, then refresh.");
+      }
 
       if (schoolRow?.id != null) {
         const { data: admins, error: adminsError } = await supabase.from("school_admins").select("*").eq("registered_school_id", schoolRow.id).order("created_at", { ascending: false });
@@ -7421,6 +7522,19 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
         setSchoolEventsInfo({ rows: Array.isArray(eventsResponse.data) ? eventsResponse.data : [], error: eventsResponse.error?.message || "" });
         setSchoolResultsInfo({ rows: Array.isArray(resultsResponse.data) ? resultsResponse.data : [], error: resultsResponse.error?.message || "" });
         setSchoolChoiceSchools(Array.isArray(schoolsResponse.data) && schoolsResponse.data.length ? sortSchoolsByCategory(schoolsResponse.data.map(normalizeSchoolRow)) : SCHOOLS_DATA);
+
+        if (!teachersResponse.error && Array.isArray(teachersResponse.data) && !teachersResponse.data.length) {
+          const { data: legacyTeacherRows, error: legacyTeacherError } = await supabase
+            .from("teachers")
+            .select("id")
+            .is("registered_school_id", null)
+            .limit(1);
+
+          if (!legacyTeacherError && Array.isArray(legacyTeacherRows) && legacyTeacherRows.length) {
+            setSchoolScopeError("Teacher records exist in Supabase, but they are not linked to this school with registered_school_id, so they will not appear here. Re-save the teachers from this school workspace or backfill registered_school_id in Supabase.");
+          }
+        }
+
         setSchoolTableInfo({
           attendance: { rows: [], error: isMissingColumnError(teachersResponse.error) || isMissingColumnError(feesResponse.error) || isMissingColumnError(resultsResponse.error) || isMissingColumnError(scoresResponse.error) || isMissingColumnError(eventsResponse.error) ? scopeColumnMessage : "" },
           fees: { rows: Array.isArray(feesResponse.data) ? feesResponse.data : [], error: feesResponse.error?.message || "" },
@@ -7475,7 +7589,7 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       analytics: <AnalyticsPage studentsData={schoolStudents} schoolsData={schoolChoiceSchools} selectionsData={[...pendingSelections, ...confirmedSelections]} scoreTableInfo={schoolScoresInfo} />,
       attendance: <AttendancePage studentsData={schoolStudents} tableInfo={schoolTableInfo.attendance} registeredSchoolId={school?.id || null} />,
       fees: <FeesAdmin studentsData={schoolStudents} feesData={schoolFeesData} tableInfo={schoolTableInfo.fees} />,
-      teachers: <TeachersPage teachersData={schoolTeachers} tableInfo={schoolTableInfo.teachers} onCreateTeacher={(draft) => saveSchoolTeacher(null, draft)} onUpdateTeacher={saveSchoolTeacher} currentUser={user} />,
+      teachers: <TeachersPage teachersData={schoolTeachers} tableInfo={schoolTableInfo.teachers} onCreateTeacher={(draft) => saveSchoolTeacher(null, draft)} onUpdateTeacher={saveSchoolTeacher} currentUser={user} emptyRemoteMessage="No teachers are currently linked to this school. If teacher records already exist in Supabase, they may still be missing registered_school_id and need to be re-saved from this school workspace or backfilled in Supabase." />,
       schools: <SchoolsPage schoolsData={schoolChoiceSchools} />,
       results: <ResultsPage studentsData={schoolStudents} tableInfo={schoolResultsInfo} />,
       grading: <GradingPage />,
@@ -7565,7 +7679,7 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
             {BOTTOM.map((key) => {
               const item = SCHOOL_ADMIN_NAV.find((entry) => entry.key === key);
               return <button key={key} className={`bottom-nav-item ${tab===key?"active":""}`} onClick={() => goTab(key)}>
-                <Ico name={item.icon} size={17} color={item.color}/><span>{item.label}</span>
+                <Ico name={item.icon} size={30} color={item.color}/><span>{item.label}</span>
               </button>;
             })}
           </div>
@@ -7908,7 +8022,7 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
             {BOTTOM.map(k=>{
               const item = STUDENT_NAV.find(n=>n.key===k);
               return <button key={k} className={`bottom-nav-item ${tab===k?"active":""}`} onClick={()=>goTab(k)}>
-                <Ico name={item.icon} size={17} color={item.color}/><span style={{fontSize:".6rem"}}>{item.label}</span>
+                <Ico name={item.icon} size={30} color={item.color}/><span style={{fontSize:".56rem"}}>{item.label}</span>
               </button>;
             })}
           </div>

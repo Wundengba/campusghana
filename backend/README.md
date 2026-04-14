@@ -8,6 +8,10 @@ For the separate registered-school registry and school-admin login flow, also ru
 
 For real school-scoped portal data isolation, also run [supabase/migrations/004_add_registered_school_scope.sql](supabase/migrations/004_add_registered_school_scope.sql).
 
+For legacy teacher rows that already exist but still do not appear in the school-admin workspace, also run [supabase/migrations/007_backfill_teacher_registered_school_scope.sql](supabase/migrations/007_backfill_teacher_registered_school_scope.sql).
+
+For the expanded teacher add/edit form, also run [supabase/migrations/008_expand_teacher_profile_fields.sql](supabase/migrations/008_expand_teacher_profile_fields.sql).
+
 That migration creates the missing public tables currently referenced by the frontend:
 
 - `attendance`
@@ -42,5 +46,9 @@ Migration `004_add_registered_school_scope.sql` adds `registered_school_id` to t
 - `chat_messages`
 
 Without migration `004`, the school portal can still open, but school-specific student, staff, attendance, finance, and results views cannot be safely scoped.
+
+Migration `007_backfill_teacher_registered_school_scope.sql` backfills `teachers.registered_school_id` from matching `users` or `profiles` rows by teacher email when that mapping is unambiguous. Teachers without email, or emails that map to multiple schools, still need a manual Supabase update.
+
+Migration `008_expand_teacher_profile_fields.sql` adds teacher profile columns used by the frontend add/edit form: `employee_id`, `gender`, `date_of_birth`, `qualification`, `hire_date`, and `address`.
 
 Security note: the generated policies are intentionally open because the current app already uses public client-side reads and writes. For production, replace them with proper authenticated policies.
