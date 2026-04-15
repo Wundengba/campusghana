@@ -5,6 +5,7 @@ import { Landing } from "./src/components/Landing.jsx";
 import { Topbar } from "./src/components/Topbar.jsx";
 import { SettingsContext } from "./src/context/SettingsContext.js";
 import { useIsMobileLayout } from "./src/hooks/useIsMobileLayout.js";
+import AcademicScores from "./src/components/AcademicScores.jsx";
 import { DEFAULT_SETTINGS, getGrade } from "./src/config/campusConfig.js";
 import {
   ANNOUNCEMENTS,
@@ -6592,7 +6593,7 @@ function FeatureFlagsPage() {
 const ADMIN_NAV = [
   {section:"Overview"},{key:"dashboard",icon:"dashboard",label:"Dashboard",color:"#6366f1"},
   {section:"Admissions & Mock Placement"},{key:"students",icon:"students",label:"Students",color:"#3b82f6"},{key:"enroll",icon:"enroll",label:"Enroll Student",color:"#0ea5e9"},{key:"schools",icon:"schools",label:"Schools",color:"#06b6d4"},{key:"pending",icon:"pending",label:"Pending Selections",badge:true,color:"#ef4444"},{key:"confirmed",icon:"confirmed",label:"Confirmed",color:"#16a34a"},
-  {section:"Academic Management"},{key:"scores",icon:"scores",label:"Test Scores",color:"#f43f5e"},{key:"results",icon:"results",label:"Results",color:"#f97316"},{key:"grading",icon:"grading",label:"Grade Report",color:"#ec4899"},{key:"analytics",icon:"analytics",label:"Analytics",color:"#7c3aed"},
+  {section:"Academic Management"},{key:"scores",icon:"scores",label:"Test Scores",color:"#f43f5e"},{key:"academic-scores",icon:"grading",label:"Academic Scores",color:"#0ea5e9"},{key:"results",icon:"results",label:"Results",color:"#f97316"},{key:"grading",icon:"grading",label:"Grade Report",color:"#ec4899"},{key:"analytics",icon:"analytics",label:"Analytics",color:"#7c3aed"},
   {section:"Student Services"},{key:"attendance",icon:"attendance",label:"Attendance",color:"#14b8a6"},{key:"fees",icon:"fees",label:"Fees",color:"#22c55e"},{key:"teachers",icon:"teachers",label:"Teachers",color:"#8b5cf6"},
   {section:"Communication"},{key:"chat",icon:"chat",label:"Chat",color:"#10b981"},{key:"events",icon:"events",label:"Events",color:"#f59e0b"},
   {section:"Administration"},{key:"finance",icon:"finance",label:"Finance",color:"#d97706"},{key:"settings",icon:"settings",label:"Settings",color:"#64748b"},
@@ -6634,6 +6635,7 @@ const ADMIN_SUBPAGE_MAP = {
   "registered-schools": ["school-register"],
   settings: ["auto-rules", "integrations", "flags"],
   analytics: ["insights", "risk-score", "recommend", "quality"],
+  // Add Academic Scores as a standalone page (not a subpage)
   events: ["calendar", "timetable", "exam-builder", "public-status"],
   fees: ["payments", "installments"],
   notify: ["campaigns", "helpdesk"],
@@ -7143,7 +7145,9 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     if (tab==="enroll") return <EnrollPage onBack={()=>goTab("students")}/>;
     const pages = {
       dashboard:<AdminDashboard studentsData={adminStudents} schoolsData={adminSchools} pendingRows={pendingSelections} confirmedRows={confirmedSelections} financeSummary={financeSummary} recentActivity={recentActivity} isLoading={loadingAdminData}/>, students:<StudentsPage onEnroll={()=>goTab("enroll")} onEditStudent={saveAdminStudent} studentsData={adminStudents}/> ,
-      scores:<ScoresPage studentsData={adminStudents} tableInfo={databaseTables.scores}/>, analytics:<AnalyticsPage studentsData={adminStudents} schoolsData={adminSchools} selectionsData={[...pendingSelections, ...confirmedSelections]} scoreTableInfo={databaseTables.scores}/>, results:<ResultsPage studentsData={adminStudents} tableInfo={databaseTables.results}/>, grading:<GradingPage/>,
+      scores:<ScoresPage studentsData={adminStudents} tableInfo={databaseTables.scores}/>,
+      "academic-scores":<AcademicScores/>,
+      analytics:<AnalyticsPage studentsData={adminStudents} schoolsData={adminSchools} selectionsData={[...pendingSelections, ...confirmedSelections]} scoreTableInfo={databaseTables.scores}/>, results:<ResultsPage studentsData={adminStudents} tableInfo={databaseTables.results}/>, grading:<GradingPage/>,
       attendance:<AttendancePage studentsData={adminStudents} tableInfo={databaseTables.attendance}/>, fees:<FeesAdmin studentsData={adminStudents} feesData={feesData} tableInfo={databaseTables.fees}/>, teachers:<TeachersPage teachersData={teachersData} tableInfo={databaseTables.teachers} onCreateTeacher={(draft) => saveAdminTeacher(null, draft)} onUpdateTeacher={saveAdminTeacher} currentUser={user}/>, events:<EventsPage eventsData={databaseTables.events?.rows} tableInfo={databaseTables.events}/> ,
       schools:<SchoolsPage schoolsData={adminSchools}/>, "registered-schools":<RegisteredSchoolsPage schools={registeredSchools} admins={schoolAdmins} onRegisterNew={()=>goTab("school-register")} onCreateSchoolAdmin={createSchoolAdmin} setupError={registrySetupError} currentUser={user}/>, "school-register":<SchoolRegistrationPage onBack={()=>goTab("registered-schools")} onRegisterSchool={registerSchool} setupError={registrySetupError}/>, pending:<PendingSelections rows={pendingSelections} loading={loadingPlacements} onApprove={approveSelection}/>, confirmed:<ConfirmedPlacements rows={confirmedSelections} loading={loadingPlacements}/>,
       finance:<FinancePage financeSummary={financeSummary} tableInfo={databaseTables.fees}/>, chat:<ChatPage chatUsers={chatUsers} onChatUsersChange={setChatUsers}/>, settings:<SettingsPage/>,
