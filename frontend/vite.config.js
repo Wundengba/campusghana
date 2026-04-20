@@ -84,4 +84,7 @@ export default defineConfig({
       "react-dom": fileURLToPath(new URL("./node_modules/react-dom", import.meta.url)),
     },
   },
+  server: {
+    port: 3000, // Change this to your desired port
+  },
 });

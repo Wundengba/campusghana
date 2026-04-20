@@ -1,4 +1,4 @@
-﻿﻿import { useState, useEffect, useCallback, useContext, useMemo } from "react";
+﻿import { useState, useEffect, useCallback, useContext, useMemo } from "react";
 import { supabase } from "./src/lib/supabaseClient.js";
 import { Ico } from "./src/components/Ico.jsx";
 import { Landing } from "./src/components/Landing.jsx";
@@ -3566,44 +3566,75 @@ function PendingSelections({ rows, loading, onApprove, readOnly = false, pageTit
       {loading && <div className="alert alert-info">Loading pending selections...</div>}
       {isMobile ? (
         <div className="mobile-record-list">
-          {displayRows.map(s=>(
-            <div key={s.id} className="mobile-record-card">
-              <div className="mobile-record-head">
-                <div>
-                  <div className="mobile-record-title">{String(s.user_email).split("@")[0].replace(/\./g, " ")}</div>
-                  <div className="mobile-record-sub">{s.user_email}</div>
+          {displayRows.map(s => {
+            const picks = normalizeSelectionList(s.rawRow || s);
+            return (
+              <div key={s.id} className="mobile-record-card">
+                <div className="mobile-record-head">
+                  <div>
+                    <div className="mobile-record-title">{String(s.user_email).split("@")[0].replace(/\./g, " ")}</div>
+                    <div className="mobile-record-sub">{s.user_email}</div>
+                  </div>
+                  <strong style={{color:"#0f172a"}}>{s.aggregate}</strong>
                 </div>
-                <strong style={{color:"#0f172a"}}>{s.aggregate}</strong>
+                <div className="mobile-record-grid">
+                  {picks.length > 0 ? picks.map((pick, idx) => (
+                    <div className="mobile-record-item" key={pick.id || idx}><label>{pick.rank ? `${pick.rank}${pick.rank === 1 ? 'st' : pick.rank === 2 ? 'nd' : pick.rank === 3 ? 'rd' : 'th'} Choice` : `Choice`}</label><span>{pick.name}</span></div>
+                  )) : <div className="mobile-record-item"><span>No selections</span></div>}
+                </div>
+                <div className="mobile-record-actions">
+                  {s.approved ? <span className="badge badge-success">Approved</span> : readOnly ? <span className="badge badge-blue">Review only</span> : <button className="btn btn-sm btn-green" onClick={()=>onApprove?.(s.id)}>Approve</button>}
+                </div>
               </div>
-              <div className="mobile-record-grid">
-                <div className="mobile-record-item"><label>1st Choice</label><span>{s.first}</span></div>
-                <div className="mobile-record-item"><label>2nd Choice</label><span>{s.second}</span></div>
-              </div>
-              <div className="mobile-record-actions">
-                {s.approved ? <span className="badge badge-success">Approved</span> : readOnly ? <span className="badge badge-blue">Review only</span> : <button className="btn btn-sm btn-green" onClick={()=>onApprove?.(s.id)}>Approve</button>}
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {!displayRows.length && !loading && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>{emptyMessage}</div>}
         </div>
       ) : (
       <div className="card table-wrap">
         <table>
-          <thead><tr><th>Student</th><th>1st Choice</th><th>2nd Choice</th><th>Aggregate</th><th>Action</th></tr></thead>
+          <thead><tr><th>Student</th><th>Selected Schools</th><th>Aggregate</th><th>Action</th></tr></thead>
           <tbody>
-            {displayRows.map(s=>(
-              <tr key={s.id}>
-                <td><strong>{String(s.user_email).split("@")[0].replace(/\./g, " ")}</strong><br/><span style={{fontSize:".75rem",color:"#94a3b8"}}>{s.user_email}</span></td>
-                <td>{s.first}</td>
-                <td>{s.second}</td>
-                <td style={{fontWeight:700}}>{s.aggregate}</td>
-                <td>
-                  {s.approved ? <span className="badge badge-success">Approved</span> : readOnly ? <span className="badge badge-blue">Review only</span> :
-                    <button className="btn btn-sm btn-green" onClick={()=>onApprove?.(s.id)}>Approve</button>}
-                </td>
-              </tr>
-            ))}
-            {!displayRows.length && !loading && <tr><td colSpan="5" style={{textAlign:"center",padding:24,color:"#64748b"}}>{emptyMessage}</td></tr>}
+            {displayRows.map(s => {
+              const picks = normalizeSelectionList(s.rawRow || s);
+              return (
+                <tr key={s.id}>
+                  <td><strong>{String(s.user_email).split("@")[0].replace(/\./g, " ")}</strong><br/><span style={{fontSize:".75rem",color:"#94a3b8"}}>{s.user_email}</span></td>
+                  <td>
+                    {picks.length > 0 ? (
+                      <div style={{display:'flex', flexWrap:'wrap', gap:'6px'}}>
+                        {picks.map((pick, idx) => (
+                          <span
+                            key={pick.id || idx}
+                            style={{
+                              display: 'inline-block',
+                              background: '#e0e7ff',
+                              color: '#3730a3',
+                              borderRadius: '8px',
+                              padding: '3px 10px',
+                              fontWeight: 600,
+                              fontSize: '.88em',
+                              border: '1px solid #c7d2fe',
+                              letterSpacing: '.01em',
+                            }}
+                          >
+                            {pick.rank ? `${pick.rank}${pick.rank === 1 ? 'st' : pick.rank === 2 ? 'nd' : pick.rank === 3 ? 'rd' : 'th'}: ` : ''}{pick.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span>No selections</span>
+                    )}
+                  </td>
+                  <td style={{fontWeight:700}}>{s.aggregate}</td>
+                  <td>
+                    {s.approved ? <span className="badge badge-success">Approved</span> : readOnly ? <span className="badge badge-blue">Review only</span> :
+                      <button className="btn btn-sm btn-green" onClick={()=>onApprove?.(s.id)}>Approve</button>}
+                  </td>
+                </tr>
+              );
+            })}
+            {!displayRows.length && !loading && <tr><td colSpan="4" style={{textAlign:"center",padding:24,color:"#64748b"}}>{emptyMessage}</td></tr>}
           </tbody>
         </table>
       </div>
@@ -5675,6 +5706,8 @@ function StudentProfile({ user, studentData }) {
   const supportEmail = cfg.supportEmail || "support@campusghana.edu";
   const supportPhone = cfg.supportPhone || "+233 00 000 0000";
 
+
+
   return (
     <div className="fade-in">
       <div className="page-header"><div className="page-title">My Profile</div><div className="page-sub">{cfg.systemName} • {cfg.currentTerm} • {cfg.academicYear}</div></div>
@@ -5690,8 +5723,9 @@ function StudentProfile({ user, studentData }) {
           </div>
           <div>
             <div className="student-profile-title">{student.full_name || user?.name || "Student"}</div>
-            <div className="student-profile-meta">Student ID: {student.index || "-"} • {student.class || "-"} • {student.region || "-"} Region</div>
-            <span className="student-profile-pill">Student Profile</span>
+            <div className="student-profile-meta">
+              Student ID: {student.index || "-"} • {student.class || "-"} • {student.region || "-"} Region
+            </div>
           </div>
           <div className="student-profile-term">
             <small>Academic Session</small>
@@ -5708,20 +5742,136 @@ function StudentProfile({ user, studentData }) {
             </div>
             <div className="student-profile-card-body">
               <div className="student-profile-list">
-                {[
-                  ["Full Name", student.full_name || user?.name || "-"],
-                  ["Student ID", student.index || "-"],
-                  ["Class", student.class || "-"],
-                  ["Region", student.region || "-"],
-                  ["Aggregate", Number.isFinite(aggregateValue) ? aggregateValue : "-"],
-                ].map(([label, value]) => (
-                  <div key={label} className="student-profile-row">
-                    <label>{label}</label>
-                    <span>{value}</span>
-                  </div>
-                ))}
+                <div className="student-profile-row">
+                  <label>Full Name</label>
+                  <span>{student.full_name || user?.name || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Student ID</label>
+                  <span>{student.index || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Class</label>
+                  <span>{student.class || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Region</label>
+                  <span>{student.region || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Gender</label>
+                  <span>{student.gender || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Date of Birth</label>
+                  <span>{
+                    student.date_of_birth
+                      ? (() => {
+                          const dt = new Date(student.date_of_birth);
+                          if (isNaN(dt.getTime())) return student.date_of_birth;
+                          return dt.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+                        })()
+                      : "-"
+                  }</span>
+                </div>
               </div>
             </div>
+          </article>
+
+          <article className="student-profile-card">
+            <div className="student-profile-card-head">
+              <h3>Contact & Address</h3>
+            </div>
+            <div className="student-profile-card-body">
+              <div className="student-profile-list">
+                <div className="student-profile-row">
+                  <label>Parent Contact</label>
+                  <span>{student.parent_contact || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Personal Contact</label>
+                  <span>{student.personal_contact || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Home Address</label>
+                  <span>{student.home_address || "-"}</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article className="student-profile-card">
+            <div className="student-profile-card-head">
+              <h3>More Details</h3>
+            </div>
+            <div className="student-profile-card-body">
+              <div className="student-profile-list">
+                <div className="student-profile-row">
+                  <label>Home Town</label>
+                  <span>{student.home_town || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Place of Residence</label>
+                  <span>{student.place_of_residence || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Postal Town</label>
+                  <span>{student.postal_town || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>PO Box</label>
+                  <span>{student.po_box || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Aggregate</label>
+                  <span>{Number.isFinite(aggregateValue) ? aggregateValue : "-"}</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article className="student-profile-card">
+            <div className="student-profile-card-head">
+              <h3>Contact & Address</h3>
+            </div>
+            <div className="student-profile-card-body">
+              <div className="student-profile-list">
+                <div className="student-profile-row">
+                  <label>Parent Contact</label>
+                  <span>{student.parent_contact || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Personal Contact</label>
+                  <span>{student.personal_contact || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Home Address</label>
+                  <span>{student.home_address || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Home Town</label>
+                  <span>{student.home_town || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Place of Residence</label>
+                  <span>{student.place_of_residence || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Postal Town</label>
+                  <span>{student.postal_town || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>PO Box</label>
+                  <span>{student.po_box || "-"}</span>
+                </div>
+                <div className="student-profile-row">
+                  <label>Aggregate</label>
+                  <span>{Number.isFinite(aggregateValue) ? aggregateValue : "-"}</span>
+                </div>
+
+              </div>
+            </div>
+            {/* Edit mode removed: read-only profile fields only */}
           </article>
 
           <article className="student-profile-card">
@@ -7171,6 +7321,28 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
         {sidebarOpen && <div className="sidebar-overlay" onClick={()=>setSidebarOpen(false)}/>}
         <nav className={`sidebar ${sidebarOpen?"":"closed"}`}>
           <button className="sidebar-brand brand-btn" onClick={reloadApp} title="Reload app"><img src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png" alt="Campus Ghana"/></button>
+          {/* Pending Selections Sidebar Preview */}
+          {pendingSelections.length > 0 && (
+            <div className="sidebar-section" style={{marginBottom:12}}>
+              <div style={{fontWeight:700, color:'#1d4ed8', marginBottom:4}}>Pending Selections</div>
+              <div style={{fontSize:'.82rem', color:'#64748b', marginBottom:6}}>Awaiting review:</div>
+              <div style={{display:'grid', gap:6, marginBottom:6}}>
+                {pendingSelections.slice(0,3).map((s) => {
+                  const picks = normalizeSelectionList(s.rawRow || s);
+                  return (
+                    <div key={s.id} style={{background:'#eef2ff',borderRadius:8,padding:'6px 8px',display:'flex',flexDirection:'column',gap:2}}>
+                      <span style={{fontWeight:700, color:'#0f172a', fontSize:'.93em'}}>{String(s.user_email).split("@")[0].replace(/\./g, " ")}</span>
+                      <span style={{fontSize:'.75em', color:'#64748b'}}>{s.user_email}</span>
+                      <span style={{fontSize:'.78em', color:'#334155',marginTop:2}}>
+                        {picks.length > 0 ? picks.map((pick, idx) => <span key={pick.id || idx} style={{marginRight:4}}>{pick.rank ? `${pick.rank}${pick.rank === 1 ? 'st' : pick.rank === 2 ? 'nd' : pick.rank === 3 ? 'rd' : 'th'}: ` : ''}{pick.name}</span>) : <span>No selections</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <button className="btn btn-sm btn-blue" style={{width:'100%',marginTop:2}} onClick={()=>goTab('pending')}>View All ({pendingSelections.length})</button>
+            </div>
+          )}
           {ADMIN_NAV.map((item,i)=> {
             if (item.section) return <div key={i} className="sidebar-section" style={item.section === "Admissions & Mock Placement" ? { textAlign: "center" } : undefined}>{item.section}</div>;
             if (childToParent[item.key]) return null;
@@ -7808,6 +7980,16 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
           region: student.region || "Unknown",
           aggregate: Number(student.aggregate ?? 0),
           photo_url: resolveStudentPhotoUrl(student),
+          gender: student.gender || "",
+          date_of_birth: student.date_of_birth || "",
+          parent_contact: student.parent_contact || "",
+          personal_contact: student.personal_contact || "",
+          home_address: student.home_address || "",
+          home_town: student.home_town || "",
+          place_of_residence: student.place_of_residence || "",
+          postal_town: student.postal_town || "",
+          po_box: student.po_box || "",
+          status: student.status || "",
         });
 
         const runFirstSuccessful = async (runs) => {
@@ -8318,11 +8500,11 @@ function GhanaCampus() {
   }, [hydrateSessionFromSupabase]);
 
   return (
-    <SettingsContext.Provider value={{ cfg: appSettings, updateCfg: setAppSettings }}>
+    <SettingsContext.Provider value={{ session, cfg: appSettings, updateCfg: setAppSettings }}>
       <style>{css}</style>
       {!session
         ? <Landing onSelect={(portal, user, password) => login(portal, user, password)} hasSupabase={!!supabase}/>
-        : session.portal === "admin"
+        : session.portal === "admin" || session.portal === "super_admin"
           ? <AdminPortal user={session.user} onLogout={logout} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}/>
           : session.portal === "school-admin"
             ? <SchoolAdminPortal user={session.user} onLogout={logout} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}/>
@@ -8332,6 +8514,8 @@ function GhanaCampus() {
   );
 }
 
+
+// --- END DEBUG PROVIDER WRAP ---
 export { GhanaCampus };
 export default GhanaCampus;
 

@@ -1,1 +1,2 @@
-export { default } from "../GhanaCampus.jsx";
+import GhanaCampus from "../GhanaCampus.jsx";
+export default GhanaCampus;

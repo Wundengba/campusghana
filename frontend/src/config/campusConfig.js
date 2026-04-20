@@ -11,8 +11,50 @@ export const DEFAULT_SETTINGS = {
   auditRetentionDays: 180, apiRateLimitPerMin: 120,
   roleDefinitions: [],
   roleMetaOverrides: {},
-  rolePrivileges: {},
+  // Ensure super_admin has all admin privileges
+  rolePrivileges: {
+    admin: {
+      "students.view": true,
+      "students.edit": true,
+      "schools.view": true,
+      "placements.review": true,
+      "teachers.manage": true,
+      "scores.manage": true,
+      "results.publish": true,
+      "attendance.manage": true,
+      "fees.manage": true,
+      "payments.manage": true,
+      "finance.view": true,
+      "roles.manage": true,
+      "settings.manage": true,
+      "audit.view": true,
+      "registered_schools.manage": true
+    },
+    super_admin: {
+      "students.view": true,
+      "students.edit": true,
+      "schools.view": true,
+      "placements.review": true,
+      "teachers.manage": true,
+      "scores.manage": true,
+      "results.publish": true,
+      "attendance.manage": true,
+      "fees.manage": true,
+      "payments.manage": true,
+      "finance.view": true,
+      "roles.manage": true,
+      "settings.manage": true,
+      "audit.view": true,
+      "registered_schools.manage": true
+    }
+  },
 };
+
+// Helper: check if user is at least admin (admin or super_admin)
+export function isAtLeastAdmin(role) {
+  const r = String(role || "").toLowerCase();
+  return r === "admin" || r === "super_admin";
+}
 
 export const getGrade = (score) => {
   if (score == null) return { grade: "-", color: "#94a3b8", bg: "#f1f5f9" };

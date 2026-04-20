@@ -14,6 +14,17 @@
 			],
 			"isBackground": true,
 			"group": "build"
+		},
+		{
+			"label": "Run Vite Dev Server",
+			"type": "shell",
+			"command": "npm run dev",
+			"args": [],
+			"isBackground": true,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
 		}
 	]
 }

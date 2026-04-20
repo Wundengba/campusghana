@@ -212,7 +212,7 @@ export function summarizeSelectionRecord(row, studentsMap) {
   return {
     id: row?.id,
     studentName: student?.full_name || student?.name || row?.student_name || row?.user_email || "Student",
-    user_email: row?.user_email || student?.email || "student@campus.local",
+    user_email: row?.user_email || student?.email || ((student?.full_name || student?.name) && student?.index ? `${student?.full_name || student?.name} (${student?.index})` : "Student"),
     index_number: row?.index_number || student?.index || student?.index_number || "-",
     aggregate: row?.aggregate ?? student?.aggregate ?? "-",
     first: first?.name || "-",
@@ -222,6 +222,7 @@ export function summarizeSelectionRecord(row, studentsMap) {
     reviewedAt: row?.reviewed_at || row?.updated_at || row?.created_at || null,
     status: normalizedStatus,
     approved: isApproved,
+    rawRow: row,
   };
 }
 
