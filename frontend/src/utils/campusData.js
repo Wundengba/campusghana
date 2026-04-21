@@ -118,8 +118,31 @@ export function hasRealTableError(tableInfo) {
 
 export function normalizeSelectionList(row) {
   if (!row) return [];
-  const raw = row.selections || row.selected_schools || [];
-  if (!Array.isArray(raw)) return [];
+  const rawCandidates = [
+    row.selections,
+    row.selected_schools,
+    row.school_choices,
+    row.choices,
+    row.selection_details,
+  ];
+
+  let raw = rawCandidates.find((value) => value != null) ?? [];
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = [];
+    }
+  }
+  if (!Array.isArray(raw)) {
+    if (raw && typeof raw === "object") {
+      const values = Object.values(raw);
+      raw = values.every((entry) => entry && typeof entry === "object") ? values : [];
+    } else {
+      raw = [];
+    }
+  }
+
   return raw.map((x, i) => ({
     id: x.school_id || x.id || `${i + 1}`,
     name: x.school_name || x.name || "Unknown School",
@@ -209,6 +232,20 @@ export function summarizeSelectionRecord(row, studentsMap) {
   const second = picks[1] || null;
   const isApproved = !!row?.approved || String(row?.status || "").toLowerCase() === "confirmed";
   const normalizedStatus = isApproved ? "confirmed" : String(row?.status || "pending").toLowerCase();
+  const hasStudentId = row?.student_id != null && String(row.student_id).trim() !== "";
+  const hasIndexNumber = row?.index_number != null && String(row.index_number).trim() !== "";
+  const hasEmail = row?.user_email != null && String(row.user_email).trim() !== "";
+  const hasStudentName = row?.student_name != null && String(row.student_name).trim() !== "";
+  const matchSource = hasStudentId
+    ? "student_id"
+    : hasIndexNumber
+      ? "index_number"
+      : hasEmail
+        ? "user_email"
+        : hasStudentName
+          ? "student_name"
+          : "unknown";
+  const parseStatus = picks.length > 0 ? "ok" : "no_picks";
   return {
     id: row?.id,
     studentName: student?.full_name || student?.name || row?.student_name || row?.user_email || "Student",
@@ -222,6 +259,9 @@ export function summarizeSelectionRecord(row, studentsMap) {
     reviewedAt: row?.reviewed_at || row?.updated_at || row?.created_at || null,
     status: normalizedStatus,
     approved: isApproved,
+    selection_count: picks.length,
+    match_source: matchSource,
+    parse_status: parseStatus,
     rawRow: row,
   };
 }
@@ -319,17 +359,34 @@ export function buildRecentActivity({ students, selections, fees, events }) {
 export async function fetchStudentSelection({ supabase, userEmail, studentData }) {
   if (!supabase) return null;
 
+  const runLatestSelection = async (builder) => {
+    const { data, error } = await builder.limit(1);
+    if (error) return { data: null, error };
+    if (Array.isArray(data)) return { data: data[0] || null, error: null };
+    return { data: data || null, error: null };
+  };
+
+  const normalizedEmail = String(userEmail || "").trim().toLowerCase();
+  const normalizedIndex = String(studentData?.index_number || studentData?.index || "").trim();
+  const normalizedName = String(studentData?.full_name || studentData?.name || "").trim();
   const tries = [];
   if (studentData?.id) {
-    tries.push(() => supabase.from("school_selections").select("*").eq("student_id", studentData.id).order("created_at", { ascending: false }).limit(1).maybeSingle());
-    tries.push(() => supabase.from("school_selections").select("*").eq("student_id", String(studentData.id)).order("created_at", { ascending: false }).limit(1).maybeSingle());
+    tries.push(() => runLatestSelection(supabase.from("school_selections").select("*").eq("student_id", studentData.id).order("created_at", { ascending: false })));
+    tries.push(() => runLatestSelection(supabase.from("school_selections").select("*").eq("student_id", String(studentData.id)).order("created_at", { ascending: false })));
   }
-  if (studentData?.index_number || studentData?.index) {
-    const idx = studentData.index_number || studentData.index;
-    tries.push(() => supabase.from("school_selections").select("*").eq("index_number", idx).order("created_at", { ascending: false }).limit(1).maybeSingle());
+  if (normalizedIndex) {
+    tries.push(() => runLatestSelection(supabase.from("school_selections").select("*").eq("index_number", normalizedIndex).order("created_at", { ascending: false })));
+    // Some datasets keep index in different column names.
+    tries.push(() => runLatestSelection(supabase.from("school_selections").select("*").eq("index", normalizedIndex).order("created_at", { ascending: false })));
+    tries.push(() => runLatestSelection(supabase.from("school_selections").select("*").eq("index_no", normalizedIndex).order("created_at", { ascending: false })));
   }
-  if (userEmail) {
-    tries.push(() => supabase.from("school_selections").select("*").eq("user_email", userEmail).order("created_at", { ascending: false }).limit(1).maybeSingle());
+  if (normalizedEmail) {
+    tries.push(() => runLatestSelection(supabase.from("school_selections").select("*").eq("user_email", normalizedEmail).order("created_at", { ascending: false })));
+    tries.push(() => runLatestSelection(supabase.from("school_selections").select("*").ilike("user_email", normalizedEmail).order("created_at", { ascending: false })));
+  }
+  if (normalizedName) {
+    tries.push(() => runLatestSelection(supabase.from("school_selections").select("*").eq("student_name", normalizedName).order("created_at", { ascending: false })));
+    tries.push(() => runLatestSelection(supabase.from("school_selections").select("*").ilike("student_name", normalizedName).order("created_at", { ascending: false })));
   }
 
   for (const run of tries) {

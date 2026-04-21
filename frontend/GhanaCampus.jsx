@@ -52,6 +52,47 @@ import {
   writeStoredTab,
 } from "./src/utils/sessionState.js";
 
+
+import { NotificationContext } from "./src/components/NotificationSystem.jsx";
+
+// List of tables to subscribe for realtime notifications
+const REALTIME_TABLES = [
+  "events",
+  "school_selections",
+  "students",
+  "teachers",
+  "fees",
+  "profiles",
+  "users",
+  "schools",
+  "attendance",
+];
+
+function getEventMessage(table, eventType, payload) {
+  switch (table) {
+    case "events":
+      return `Event ${eventType}: ${payload?.title || payload?.name || "Untitled"}`;
+    case "school_selections":
+      return `School selection ${eventType}`;
+    case "students":
+      return `Student ${eventType}: ${payload?.full_name || payload?.name || payload?.index_number || ""}`;
+    case "teachers":
+      return `Teacher ${eventType}: ${payload?.name || payload?.email || ""}`;
+    case "fees":
+      return `Fee record ${eventType}`;
+    case "profiles":
+      return `Profile ${eventType}`;
+    case "users":
+      return `User ${eventType}: ${payload?.email || ""}`;
+    case "schools":
+      return `School ${eventType}: ${payload?.name || ""}`;
+    case "attendance":
+      return `Attendance ${eventType}`;
+    default:
+      return `${table} ${eventType}`;
+  }
+}
+
 let profilesTableAvailable = true;
 
 const normalizeRoleKey = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -344,7 +385,7 @@ const css = `
   .bottom-nav-item svg { opacity:.9; transition:opacity .15s, filter .15s; }
   .bottom-nav-item:hover svg, .bottom-nav-item.active svg { opacity:1; filter:none; }
   
-  .main { flex:1; margin-left:var(--sidebar-w); padding:24px; min-height:calc(100vh - var(--topbar-h)); overflow-x:hidden; }
+  .main { flex:1; margin-left:var(--sidebar-w); padding:24px; min-height:calc(100vh - var(--topbar-h)); overflow-x:hidden; width:calc(100vw - var(--sidebar-w)); max-width:100%; }
   .main.full { margin-left:0; }
   .page-actions-row { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
   .page-actions-row .form-control { flex:1 1 220px; min-width:0; }
@@ -1246,7 +1287,7 @@ const css = `
   /* CARDS & LAYOUT */
   .card { background:#fff; border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow); }
   .card-padded { padding:20px; }
-  .page-header { background:linear-gradient(135deg,#1e293b,#0f172a); border-radius:var(--radius); padding:24px 28px; margin-bottom:24px; color:#fff; }
+  .page-header { background:linear-gradient(135deg,#1e293b,#0f172a); border-radius:var(--radius); padding:24px 28px; margin-bottom:24px; color:#fff; overflow-wrap:anywhere; }
   .page-title { font-size:1.75rem; font-weight:800; }
   .page-sub { color:#94a3b8; margin-top:4px; font-size:.9rem; }
   
@@ -1323,6 +1364,7 @@ const css = `
   
   /* TABLE */
   .table-wrap { overflow-x:auto; border-radius:var(--radius); }
+  .table-wrap table { min-width:680px; }
   table { width:100%; border-collapse:collapse; font-size:.875rem; }
   th { background:#f8fafc; padding:10px 14px; text-align:left; font-weight:700; color:var(--text2); font-size:.78rem; text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid var(--border); }
   .students-table thead th {
@@ -1575,17 +1617,28 @@ const css = `
   @keyframes spin { to { transform:rotate(360deg); } }
   
   .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:109; }
+  @media (max-width:1280px) {
+    .stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .students-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .students-table-head { flex-wrap:wrap; gap:10px; }
+    .students-table-status { width:100%; text-align:center; }
+  }
   @media (max-width:1023px) {
     .sidebar-overlay { display:block; }
   }
 
   @media (max-width:1023px) {
     .stats-grid { grid-template-columns:1fr 1fr; }
-    .main { margin-left:0 !important; }
+    .main { margin-left:0 !important; width:100%; }
     .sidebar { transform:translateX(-100%); z-index:110; }
     .sidebar:not(.closed) { transform:translateX(0); box-shadow:4px 0 24px rgba(15,23,42,.18); }
     .bottom-nav { display:block; }
     .main { padding-bottom:calc(80px + env(safe-area-inset-bottom)); }
+    .school-workspace-summary { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .school-workspace-grid { grid-template-columns:1fr; }
+    .school-settings-grid { grid-template-columns:1fr 1fr; }
+    .registered-school-head { flex-wrap:wrap; }
+    .registered-school-badges { justify-content:flex-start; }
   }
 
   @media (max-width:767px) {
@@ -1661,6 +1714,7 @@ const css = `
     .mobile-record-actions { flex-direction:column; }
 
     .table-wrap { font-size:.8rem; -webkit-overflow-scrolling:touch; }
+    .table-wrap table { min-width:620px; }
     th, td { padding:8px 10px; }
 
     .btn { padding:9px 14px; font-size:.82rem; }
@@ -1711,6 +1765,20 @@ const css = `
     .school-reg-actions-row { width:100%; }
     .school-reg-actions-row .btn { flex:1; justify-content:center; }
     .registered-school-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .registered-school-head,
+    .registered-school-body { padding:16px; }
+    .school-admin-row,
+    .school-admin-mini-row { flex-direction:column; align-items:stretch; }
+    .school-admin-block-head,
+    .school-admin-form-head,
+    .school-workspace-panel-head,
+    .school-settings-head { flex-direction:column; align-items:flex-start; }
+    .school-workspace-hero { flex-direction:column; padding:20px 18px; }
+    .school-workspace-title { font-size:1.55rem; }
+    .school-workspace-meta { justify-items:start; min-width:0; width:100%; }
+    .school-workspace-note { max-width:none; width:100%; }
+    .school-workspace-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .school-settings-grid { grid-template-columns:1fr; }
 
     .selection-card { padding:11px 12px; }
     .bottom-nav { height:calc(76px + env(safe-area-inset-bottom)); padding:6px 5px calc(6px + env(safe-area-inset-bottom)); }
@@ -1777,6 +1845,11 @@ const css = `
     .mobile-record-head { flex-direction:column; }
     .mobile-record-identity { width:100%; }
     .metric-row-count { margin-left:auto; }
+    .school-reg-summary-grid,
+    .registered-school-grid,
+    .school-workspace-summary { grid-template-columns:1fr; }
+    .school-reg-toolbar { flex-direction:column; align-items:stretch; }
+    .school-reg-toolbar .btn { width:100%; justify-content:center; }
   }
 
   @media (max-width:430px) {
@@ -1998,7 +2071,7 @@ const buildStudentDraft = (student = null) => ({
   index: student?.index || student?.index_number || student?.index_no || "",
   class: student?.class || student?.class_name || "JHS 3A",
   region: student?.region || "Ashanti",
-  aggregate: String(student?.aggregate ?? 0),
+  // aggregate removed
   status: student?.status || "pending",
   photo_url: student?.photo_url || "",
 });
@@ -2009,9 +2082,10 @@ const normalizeStudentRecord = (student = {}, fallbackIndex = 0) => ({
   index: student.index || student.index_number || student.index_no || `AUTO${fallbackIndex + 1}`,
   class: student.class || student.class_name || "JHS 3A",
   region: student.region || "Unknown",
-  aggregate: Number(student.aggregate ?? 0),
+  // aggregate removed
   status: student.status || "pending",
   email: student.email || null,
+  parent_contact: student.parent_contact || student.parent_phone || student.guardian_phone || student.guardian_contact || "",
   photo_url: resolveStudentPhotoUrl(student),
   created_at: student.created_at || null,
   updated_at: student.updated_at || null,
@@ -2034,8 +2108,16 @@ const buildTeacherDraft = (teacher = null) => ({
 
 const TEACHER_PROFILE_FIELD_KEYS = ["employee_id", "gender", "qualification", "date_of_birth", "hire_date", "address"];
 const TEACHER_FORM_SCHEMA_VERSION = "teacher-form-v2";
+const DEFAULT_CLASS_OPTIONS = ["JHS 3A", "JHS 3B", "JHS 3C"];
+const resolveClassOptions = (cfg) => {
+  const rows = Array.isArray(cfg?.classOptions) ? cfg.classOptions : [];
+  const cleaned = rows.map((row) => String(row || "").trim()).filter(Boolean);
+  return cleaned.length ? cleaned : DEFAULT_CLASS_OPTIONS;
+};
 
 function StudentEditorModal({ open, title, draft, saving, onChange, onClose, onSave }) {
+  const { cfg } = useContext(SettingsContext);
+  const classOptions = resolveClassOptions(cfg);
   if (!open) return null;
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -2050,9 +2132,9 @@ function StudentEditorModal({ open, title, draft, saving, onChange, onClose, onS
         <div className="form-grid">
           <div className="form-group"><label className="form-label">Full Name</label><input className="form-control" value={draft.full_name} onChange={(e) => onChange("full_name", e.target.value)} /></div>
           <div className="form-group"><label className="form-label">Student ID</label><input className="form-control" value={draft.index} onChange={(e) => onChange("index", e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Class</label><select className="form-control" value={draft.class} onChange={(e) => onChange("class", e.target.value)}>{["JHS 3A", "JHS 3B", "JHS 3C"].map((value) => <option key={value}>{value}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Class</label><select className="form-control" value={draft.class} onChange={(e) => onChange("class", e.target.value)}>{classOptions.map((value) => <option key={value}>{value}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Region</label><select className="form-control" value={draft.region} onChange={(e) => onChange("region", e.target.value)}>{GHANA_REGIONS.map((value) => <option key={value}>{value}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Aggregate</label><input type="number" min="0" className="form-control" value={draft.aggregate} onChange={(e) => onChange("aggregate", e.target.value)} /></div>
+          {/* Aggregate input removed */}
           <div className="form-group"><label className="form-label">Status</label><select className="form-control" value={draft.status} onChange={(e) => onChange("status", e.target.value)}><option value="pending">pending</option><option value="confirmed">confirmed</option><option value="active">active</option></select></div>
           <div className="form-group" style={{ gridColumn: "1 / -1" }}><label className="form-label">Photo URL</label><input className="form-control" value={draft.photo_url} onChange={(e) => onChange("photo_url", e.target.value)} placeholder="Optional photo URL" /></div>
         </div>
@@ -2104,17 +2186,62 @@ function TeacherEditorModal({ open, title, draft, roleOptions, saving, onChange,
 }
 
 // STUDENTS LIST
-function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnrollAction = true, heroKicker = "Admissions Registry", heroTitle = "Student records, cleaned up and ready for action", heroSub = "Review the current intake pipeline, search across enrolled learners quickly, and move straight into adding a new student without leaving the admissions workspace.", heroNote = "Live list view for JHS 3 records across class grouping, region origin, and aggregate readiness.", directoryTitle = "Student directory", directorySub = "Search by name or student ID, then review class placement and aggregate status at a glance.", emptyRemoteMessage = "No student rows are currently available from Supabase." }) {
+function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnrollAction = true, heroKicker = "Admissions Registry", heroTitle = "Student records, cleaned up and ready for action", heroSub = "Review the current intake pipeline, search across enrolled learners quickly, and move straight into adding a new student without leaving the admissions workspace.", heroNote = "Live list view for JHS 3 records across class grouping and region origin.", directoryTitle = "Student directory", directorySub = "Search by name or student ID, then review class placement at a glance.", emptyRemoteMessage = "No student rows are currently available from Supabase.", onReloadStudents }) {
   const [search, setSearch] = useState("");
   const [editingStudent, setEditingStudent] = useState(null);
   const [studentDraft, setStudentDraft] = useState(() => buildStudentDraft());
   const [savingStudent, setSavingStudent] = useState(false);
   const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
   const isMobile = useIsMobileLayout();
+  const [deletingId, setDeletingId] = useState(null);
+  const { notify } = useContext(NotificationContext) || {};
+
+  const handleDelete = async (student) => {
+    if (!window.confirm(`Delete student '${student.full_name}' (ID: ${student.index})? This cannot be undone.`)) return;
+    setDeletingId(student.id);
+    try {
+      if (supabase) {
+        const hasRealId = student.id != null && !String(student.id).startsWith("local-");
+        const hasIndex = !!String(student.index || "").trim();
+
+        let deleteRequest = supabase.from("students").delete();
+        if (hasRealId) {
+          deleteRequest = deleteRequest.eq("id", student.id);
+        } else if (hasIndex) {
+          deleteRequest = deleteRequest.eq("index", student.index);
+        } else {
+          throw new Error("Student record is missing a database id/index key, so it cannot be deleted reliably.");
+        }
+
+        const { error } = await deleteRequest;
+        if (error) throw error;
+
+        // Verify persistence: with strict RLS/policies, delete can no-op without throwing.
+        const verifyQuery = hasRealId
+          ? supabase.from("students").select("id").eq("id", student.id).limit(1)
+          : supabase.from("students").select("id").eq("index", student.index).limit(1);
+        const { data: stillThere, error: verifyError } = await verifyQuery;
+        if (verifyError) throw verifyError;
+        if (Array.isArray(stillThere) && stillThere.length > 0) {
+          throw new Error("Delete request was sent, but the record is still present. Check Supabase Row Level Security/policies for students delete.");
+        }
+
+        notify && notify("Student deleted successfully.", "success");
+        if (typeof onReloadStudents === "function") {
+          await onReloadStudents();
+        }
+      }
+    } catch (err) {
+      notify && notify("Failed to delete student: " + (err?.message || "Unknown error"), "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
   const students = studentsData?.length ? sortStudentsByIndex(studentsData) : [];
   const filtered = students.filter(s => s.full_name.toLowerCase().includes(search.toLowerCase()) || String(s.index).includes(search));
+  const parentContactOf = (student) => student?.parent_contact || student?.parent_phone || student?.guardian_phone || student?.guardian_contact || "-";
   const initialsFor = (name) => String(name || "ST").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-  const excellentCount = students.filter((student) => Number(student.aggregate || 0) > 0 && Number(student.aggregate || 0) <= 8).length;
+  // Aggregate logic removed
   const pendingCount = students.filter((student) => student.status === "pending").length;
   const regionsCovered = new Set(students.map((student) => student.region).filter(Boolean)).size;
   const canEditStudents = typeof onEditStudent === "function";
@@ -2168,11 +2295,7 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
             <div className="students-summary-value">{filtered.length}</div>
             <div className="students-summary-sub">Matching the current filter</div>
           </div>
-          <div className="students-summary-card">
-            <div className="students-summary-label">Aggregate 8 Or Better</div>
-            <div className="students-summary-value">{excellentCount}</div>
-            <div className="students-summary-sub">High-priority placement candidates</div>
-          </div>
+          {/* Aggregate summary card removed */}
           <div className="students-summary-card">
             <div className="students-summary-label">Regions Covered</div>
             <div className="students-summary-value">{regionsCovered}</div>
@@ -2207,13 +2330,19 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
                     <div className="mobile-record-sub">Student ID: {s.index}</div>
                   </div>
                 </div>
-                <span className="grade-chip" style={s.aggregate<=8?{background:"#dcfce7",color:"#16a34a"}:s.aggregate<=12?{background:"#dbeafe",color:"#1e40af"}:{background:"#fef3c7",color:"#d97706"}}>{s.aggregate}</span>
+                {/* Aggregate chip removed from mobile view */}
               </div>
               <div className="mobile-record-grid">
                 <div className="mobile-record-item"><label>Class</label><span>{s.class}</span></div>
                 <div className="mobile-record-item"><label>Region</label><span>{s.region}</span></div>
+                <div className="mobile-record-item"><label>Parent Contact</label><span>{parentContactOf(s)}</span></div>
               </div>
-              {canEditStudents && <div className="mobile-record-actions"><button className="btn btn-outline" onClick={() => openStudentEditor(s)}>Edit</button></div>}
+              {canEditStudents && (
+                <div className="mobile-record-actions">
+                  <button className="btn btn-outline" onClick={() => openStudentEditor(s)}>Edit</button>
+                  <button className="btn btn-danger" style={{marginLeft:8}} disabled={deletingId===s.id} onClick={() => handleDelete(s)}>{deletingId===s.id?"Deleting...":"Delete"}</button>
+                </div>
+              )}
             </div>
           ))}
           {!filtered.length && <div className="students-empty-state">No students match the current search. Try a different name or student ID.</div>}
@@ -2223,13 +2352,13 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
         <div className="students-table-head">
           <div>
             <div className="students-table-title">Admissions ledger</div>
-            <div className="students-table-sub">{filtered.length} visible record{filtered.length === 1 ? "" : "s"} with class, region, and aggregate tracking.</div>
+            <div className="students-table-sub">{filtered.length} visible record{filtered.length === 1 ? "" : "s"} with class and region tracking.</div>
           </div>
           <div className="students-table-status">{pendingCount} pending review</div>
         </div>
         <div className="table-wrap">
         <table className="students-table">
-          <thead><tr><th>#</th><th data-col="photo"><span className="students-th-label">Photo</span></th><th data-col="name"><span className="students-th-label">Name</span></th><th data-col="student-id"><span className="students-th-label">Student ID</span></th><th data-col="class"><span className="students-th-label">Class</span></th><th data-col="region"><span className="students-th-label">Region</span></th><th data-col="aggregate"><span className="students-th-label">Aggregate</span></th>{canEditStudents && <th><span className="students-th-label">Actions</span></th>}</tr></thead>
+          <thead><tr><th>#</th><th data-col="photo"><span className="students-th-label">Photo</span></th><th data-col="name"><span className="students-th-label">Name</span></th><th data-col="student-id"><span className="students-th-label">Student ID</span></th><th data-col="class"><span className="students-th-label">Class</span></th><th data-col="region"><span className="students-th-label">Region</span></th><th data-col="parent-contact"><span className="students-th-label">Parent Contact</span></th>{canEditStudents && <th><span className="students-th-label">Actions</span></th>}</tr></thead>
           <tbody>
             {filtered.map((s,i)=>(
               <tr key={s.id}>
@@ -2251,8 +2380,14 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
                 <td className="students-id-cell">{s.index}</td>
                 <td>{s.class}</td>
                 <td>{s.region}</td>
-                <td className="students-aggregate-cell"><span className="grade-chip" style={s.aggregate<=8?{background:"#dcfce7",color:"#16a34a"}:s.aggregate<=12?{background:"#dbeafe",color:"#1e40af"}:{background:"#fef3c7",color:"#d97706"}}>{s.aggregate}</span></td>
-                {canEditStudents && <td><button className="btn btn-outline btn-sm" onClick={() => openStudentEditor(s)}>Edit</button></td>}
+                <td>{parentContactOf(s)}</td>
+                {/* Aggregate column removed */}
+                {canEditStudents && (
+                  <td>
+                    <button className="btn btn-outline btn-sm" onClick={() => openStudentEditor(s)}>Edit</button>
+                    <button className="btn btn-danger btn-sm" style={{marginLeft:8}} disabled={deletingId===s.id} onClick={() => handleDelete(s)}>{deletingId===s.id?"Deleting...":"Delete"}</button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -2277,12 +2412,19 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
 
 // ENROLL
 function EnrollPage({ onBack, registeredSchoolId = null }) {
-  const [form, setForm] = useState({name:"",index:"",dob:"",class:"JHS 3A",region:"Ashanti",guardian:"",phone:"",photoUrl:""});
+  const { cfg } = useContext(SettingsContext);
+  const classOptions = resolveClassOptions(cfg);
+  const [form, setForm] = useState({name:"",index:"",dob:"",class:classOptions[0] || "JHS 3A",region:"Ashanti",guardian:"",phone:"",photoUrl:""});
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoFileName, setPhotoFileName] = useState("");
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  useEffect(() => {
+    if (!classOptions.includes(form.class)) {
+      setForm((current) => ({ ...current, class: classOptions[0] || "JHS 3A" }));
+    }
+  }, [classOptions, form.class]);
   const completionCount = [form.name, form.index, form.dob, form.class, form.region, form.guardian, form.phone].filter((value) => String(value || "").trim()).length;
 
   const handlePhotoChange = (e) => {
@@ -2310,7 +2452,7 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
       index: form.index.trim(),
       class: form.class,
       region: form.region,
-      aggregate: 0,
+      // aggregate removed
       status: "pending",
       photo_url: form.photoUrl.trim() || "",
     };
@@ -2321,7 +2463,7 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
         index: student.index,
         class: student.class,
         region: student.region,
-        aggregate: student.aggregate,
+        // aggregate removed
         status: student.status,
         ...(registeredSchoolId != null ? { registered_school_id: registeredSchoolId } : {}),
         dob: form.dob || null,
@@ -2469,7 +2611,7 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
                 <div className="enroll-fields">
                   <div className="form-group"><label className="form-label">Class</label>
                     <select className="form-control" value={form.class} onChange={e=>set("class",e.target.value)}>
-                      {["JHS 3A","JHS 3B","JHS 3C"].map(c=><option key={c}>{c}</option>)}
+                      {classOptions.map(c=><option key={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="form-group"><label className="form-label">Region</label>
@@ -2522,7 +2664,7 @@ function ScoresPage({ studentsData, tableInfo }) {
   return (
     <div className="fade-in">
       <div className="page-header"><div className="page-title">Test Scores</div></div>
-      {hasScoresError && <div className="alert alert-warning">Supabase scores table is unavailable. Showing live student aggregates instead.</div>}
+      {hasScoresError && <div className="alert alert-warning">Supabase scores table is unavailable.</div>}
       {isMobile ? (
         <div className="mobile-record-list">
           {(scoreRows.length ? scoreRows : students).map((student) => {
@@ -2544,8 +2686,7 @@ function ScoresPage({ studentsData, tableInfo }) {
                 </div>
               );
             }
-            const aggregate = Number(student.aggregate ?? 0);
-            const grade = getGrade(100 - Math.min(aggregate * 5, 95));
+            // Aggregate removed; fallback grade logic removed
             return (
               <div key={student.id} className="mobile-record-card">
                 <div className="mobile-record-head">
@@ -2553,6 +2694,7 @@ function ScoresPage({ studentsData, tableInfo }) {
                     <div className="mobile-record-title">{student.full_name}</div>
                     <div className="mobile-record-sub">Student ID: {student.index}</div>
                   </div>
+                  {/* No aggregate/grade shown */}
                   <span className={`badge ${student.status === "confirmed" ? "badge-success" : "badge-warning"}`}>{student.status}</span>
                 </div>
                 <div className="mobile-record-grid">
@@ -3574,6 +3716,7 @@ function PendingSelections({ rows, loading, onApprove, readOnly = false, pageTit
                   <div>
                     <div className="mobile-record-title">{String(s.user_email).split("@")[0].replace(/\./g, " ")}</div>
                     <div className="mobile-record-sub">{s.user_email}</div>
+                    <div className="mobile-record-sub">Diag: {s.match_source || "unknown"} | picks: {Number(s.selection_count || 0)} | parse: {s.parse_status || "unknown"}</div>
                   </div>
                   <strong style={{color:"#0f172a"}}>{s.aggregate}</strong>
                 </div>
@@ -3599,7 +3742,7 @@ function PendingSelections({ rows, loading, onApprove, readOnly = false, pageTit
               const picks = normalizeSelectionList(s.rawRow || s);
               return (
                 <tr key={s.id}>
-                  <td><strong>{String(s.user_email).split("@")[0].replace(/\./g, " ")}</strong><br/><span style={{fontSize:".75rem",color:"#94a3b8"}}>{s.user_email}</span></td>
+                  <td><strong>{String(s.user_email).split("@")[0].replace(/\./g, " ")}</strong><br/><span style={{fontSize:".75rem",color:"#94a3b8"}}>{s.user_email}</span><br/><span style={{fontSize:".72rem",color:"#64748b"}}>Diag: {s.match_source || "unknown"} | picks: {Number(s.selection_count || 0)} | parse: {s.parse_status || "unknown"}</span></td>
                   <td>
                     {picks.length > 0 ? (
                       <div style={{display:'flex', flexWrap:'wrap', gap:'6px'}}>
@@ -3660,6 +3803,7 @@ function ConfirmedPlacements({ rows, loading }) {
                 <div>
                   <div className="mobile-record-title">{s.studentName}</div>
                   <div className="mobile-record-sub">Placed at {s.placedAt}</div>
+                  <div className="mobile-record-sub">Diag: {s.match_source || "unknown"} | picks: {Number(s.selection_count || 0)} | parse: {s.parse_status || "unknown"}</div>
                 </div>
                 <span className={`badge ${s.category==="A"?"badge-warning":s.category==="B"?"badge-blue":"badge-success"}`}>Cat {s.category}</span>
               </div>
@@ -3679,7 +3823,7 @@ function ConfirmedPlacements({ rows, loading }) {
             {displayRows.map(s=>{
               return (
                 <tr key={s.id}>
-                  <td><strong>{s.studentName}</strong></td>
+                  <td><strong>{s.studentName}</strong><br/><span style={{fontSize:".72rem",color:"#64748b"}}>Diag: {s.match_source || "unknown"} | picks: {Number(s.selection_count || 0)} | parse: {s.parse_status || "unknown"}</span></td>
                   <td>{s.placedAt}</td>
                   <td><span className={`badge ${s.category==="A"?"badge-warning":s.category==="B"?"badge-blue":"badge-success"}`}>Cat {s.category}</span></td>
                   <td style={{fontWeight:700}}>{s.aggregate}</td>
@@ -4173,12 +4317,32 @@ function EventsPage({ eventsData, tableInfo, registeredSchoolId = null }) {
 function SettingsPage() {
   const { cfg: globalCfg, updateCfg } = useContext(SettingsContext);
   const [cfg, setCfg] = useState(globalCfg);
+  const [newClassOption, setNewClassOption] = useState("");
   const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
 
   // Sync local form state when global settings change (e.g. on first load from Supabase)
   useEffect(() => { setCfg(globalCfg); }, [globalCfg]);
 
   const set = (k,v)=>setCfg(c=>({...c,[k]:v}));
+  const classOptions = resolveClassOptions(cfg);
+  const addClassOption = () => {
+    const candidate = String(newClassOption || "").trim();
+    if (!candidate) return;
+    if (classOptions.some((existing) => existing.toLowerCase() === candidate.toLowerCase())) {
+      setStatusModal({ open: true, type: "failure", title: "Class Exists", message: "That class already exists in the list." });
+      return;
+    }
+    set("classOptions", [...classOptions, candidate]);
+    setNewClassOption("");
+  };
+  const removeClassOption = (className) => {
+    const next = classOptions.filter((row) => row !== className);
+    if (!next.length) {
+      setStatusModal({ open: true, type: "failure", title: "At Least One Class Required", message: "Keep at least one class in the list." });
+      return;
+    }
+    set("classOptions", next);
+  };
   const runConfigCheck = () => {
     const issues = [];
     if (!String(cfg.systemName || "").trim()) issues.push("System Name is required.");
@@ -4346,6 +4510,21 @@ function SettingsPage() {
           <div className="form-group">
             <label className="form-label">Selection Deadline</label>
             <input type="date" className="form-control" value={cfg.selectionDeadline||""} onChange={e=>set("selectionDeadline",e.target.value)}/>
+          </div>
+          <div className="form-group" style={{gridColumn:"1 / -1"}}>
+            <label className="form-label">Manage Classes</label>
+            <div style={{display:"flex",gap:8,marginBottom:8}}>
+              <input className="form-control" value={newClassOption} onChange={(e)=>setNewClassOption(e.target.value)} placeholder="e.g. JHS 2A" onKeyDown={(e)=>{ if (e.key === "Enter") { e.preventDefault(); addClassOption(); } }} />
+              <button className="btn btn-outline" type="button" onClick={addClassOption}>Add Class</button>
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {classOptions.map((className) => (
+                <span key={className} style={{display:"inline-flex",alignItems:"center",gap:6,background:"#eef2ff",border:"1px solid #c7d2fe",borderRadius:999,padding:"4px 10px",fontSize:".82rem",fontWeight:700,color:"#3730a3"}}>
+                  {className}
+                  <button type="button" onClick={()=>removeClassOption(className)} style={{border:"none",background:"transparent",cursor:"pointer",color:"#4338ca",fontWeight:800,lineHeight:1}}>x</button>
+                </span>
+              ))}
+            </div>
           </div>
         </div>
         <Toggle k="allowChanges" label="Allow Selection Changes" sub="Students can edit their school choices"/>
@@ -7039,15 +7218,48 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     let savedRow = normalizeStudentRecord({ id: existingStudent?.id || Date.now(), ...payload });
 
     if (supabase) {
-      let response = existingStudent?.id
-        ? await supabase.from("students").update(payload).eq("id", existingStudent.id).select("*").single()
-        : await supabase.from("students").insert(payload).select("*").single();
+      const updateStudentRow = async (nextPayload) => {
+        if (!existingStudent) {
+          return supabase.from("students").insert(nextPayload).select("*").maybeSingle();
+        }
+
+        if (existingStudent.id != null && !String(existingStudent.id).startsWith("local-")) {
+          const byId = await supabase.from("students").update(nextPayload).eq("id", existingStudent.id).select("*").maybeSingle();
+          if (!byId.error && byId.data) return byId;
+        }
+
+        const studentIndex = String(existingStudent.index || "").trim();
+        if (studentIndex) {
+          const byIndex = await supabase.from("students").update(nextPayload).eq("index", studentIndex).select("*").maybeSingle();
+          if (!byIndex.error && byIndex.data) return byIndex;
+          const byIndexNumber = await supabase.from("students").update(nextPayload).eq("index_number", studentIndex).select("*").maybeSingle();
+          if (!byIndexNumber.error && byIndexNumber.data) return byIndexNumber;
+        }
+
+        const lookupChecks = [];
+        if (existingStudent.id != null && !String(existingStudent.id).startsWith("local-")) {
+          lookupChecks.push(supabase.from("students").select("id").eq("id", existingStudent.id).limit(1));
+        }
+        const lookupStudentIndex = String(existingStudent.index || "").trim();
+        if (lookupStudentIndex) {
+          lookupChecks.push(supabase.from("students").select("id").eq("index", lookupStudentIndex).limit(1));
+          lookupChecks.push(supabase.from("students").select("id").eq("index_number", lookupStudentIndex).limit(1));
+        }
+        const lookupResults = await Promise.all(lookupChecks);
+        const visibleRowExists = lookupResults.some((result) => Array.isArray(result.data) && result.data.length > 0);
+
+        if (visibleRowExists) {
+          return { data: null, error: new Error("Student exists but update is blocked by Supabase permissions (RLS). Add/adjust an UPDATE policy for public.students.") };
+        }
+
+        return { data: null, error: new Error("Could not find this student in Supabase to update. The row key may have changed (id/index/index_number).") };
+      };
+
+      let response = await updateStudentRow(payload);
 
       if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "photo_url")) {
         const { photo_url, ...fallbackPayload } = payload;
-        response = existingStudent?.id
-          ? await supabase.from("students").update(fallbackPayload).eq("id", existingStudent.id).select("*").single()
-          : await supabase.from("students").insert(fallbackPayload).select("*").single();
+        response = await updateStudentRow(fallbackPayload);
       }
 
       if (response.error) throw response.error;
@@ -7129,8 +7341,7 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     }
   }, [tab, childToParent]);
 
-  useEffect(() => {
-    const loadAdminPortalData = async () => {
+  const loadAdminPortalData = useCallback(async () => {
       if (!supabase) {
         setLoadingAdminData(false);
         return;
@@ -7147,11 +7358,12 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
             aggregate: Number(s.aggregate ?? 0),
             status: s.status || "pending",
             email: s.email || null,
+            parent_contact: s.parent_contact || s.parent_phone || s.guardian_phone || s.guardian_contact || "",
             photo_url: resolveStudentPhotoUrl(s),
             created_at: s.created_at || null,
             updated_at: s.updated_at || null,
           }))
-        : STUDENTS_DATA;
+        : [];
       setAdminStudents(sortStudentsByIndex(normalizedStudents));
 
       const { data: schools } = await supabase.from("schools").select("*").order("name", { ascending: true });
@@ -7206,7 +7418,20 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       }
 
       setLoadingPlacements(true);
-      const { data: selectionRows } = await supabase.from("school_selections").select("*").order("created_at", { ascending: false });
+      const loadSelectionRows = async () => {
+        const attempts = [
+          () => supabase.from("school_selections").select("*").order("created_at", { ascending: false }),
+          () => supabase.from("school_selections").select("*").order("updated_at", { ascending: false }),
+          () => supabase.from("school_selections").select("*").order("id", { ascending: false }),
+          () => supabase.from("school_selections").select("*"),
+        ];
+        for (const run of attempts) {
+          const { data, error } = await run();
+          if (!error && Array.isArray(data)) return data;
+        }
+        return [];
+      };
+      const selectionRows = await loadSelectionRows();
       const studentsMap = new Map();
       normalizedStudents.forEach((student) => {
         studentsMap.set(String(student.id), student);
@@ -7222,9 +7447,11 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       }
       setLoadingPlacements(false);
       setLoadingAdminData(false);
-    };
+    }, [supabase]);
+
+  useEffect(() => {
     loadAdminPortalData();
-  }, []);
+  }, [loadAdminPortalData]);
 
   const approveSelection = async (id) => {
     const target = pendingSelections.find((item) => String(item.id) === String(id));
@@ -7294,7 +7521,7 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const renderPage = () => {
     if (tab==="enroll") return <EnrollPage onBack={()=>goTab("students")}/>;
     const pages = {
-      dashboard:<AdminDashboard studentsData={adminStudents} schoolsData={adminSchools} pendingRows={pendingSelections} confirmedRows={confirmedSelections} financeSummary={financeSummary} recentActivity={recentActivity} isLoading={loadingAdminData}/>, students:<StudentsPage onEnroll={()=>goTab("enroll")} onEditStudent={saveAdminStudent} studentsData={adminStudents}/> ,
+      dashboard:<AdminDashboard studentsData={adminStudents} schoolsData={adminSchools} pendingRows={pendingSelections} confirmedRows={confirmedSelections} financeSummary={financeSummary} recentActivity={recentActivity} isLoading={loadingAdminData}/>, students:<StudentsPage onEnroll={()=>goTab("enroll")} onEditStudent={saveAdminStudent} studentsData={adminStudents} onReloadStudents={loadAdminPortalData}/> ,
       scores:<ScoresPage studentsData={adminStudents} tableInfo={databaseTables.scores}/>,
       "academic-scores":<AcademicScores/>,
       analytics:<AnalyticsPage studentsData={adminStudents} schoolsData={adminSchools} selectionsData={[...pendingSelections, ...confirmedSelections]} scoreTableInfo={databaseTables.scores}/>, results:<ResultsPage studentsData={adminStudents} tableInfo={databaseTables.results}/>, grading:<GradingPage/>,
@@ -7509,9 +7736,44 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     let savedRow = normalizeStudentRecord({ id: existingStudent?.id || Date.now(), ...payload });
 
     if (supabase) {
-      let response = existingStudent?.id
-        ? await supabase.from("students").update(payload).eq("id", existingStudent.id).select("*").single()
-        : await supabase.from("students").insert(payload).select("*").single();
+      const updateStudentRow = async (nextPayload) => {
+        if (!existingStudent) {
+          return supabase.from("students").insert(nextPayload).select("*").maybeSingle();
+        }
+
+        if (existingStudent.id != null && !String(existingStudent.id).startsWith("local-")) {
+          const byId = await supabase.from("students").update(nextPayload).eq("id", existingStudent.id).select("*").maybeSingle();
+          if (!byId.error && byId.data) return byId;
+        }
+
+        const studentIndex = String(existingStudent.index || "").trim();
+        if (studentIndex) {
+          const byIndex = await supabase.from("students").update(nextPayload).eq("index", studentIndex).select("*").maybeSingle();
+          if (!byIndex.error && byIndex.data) return byIndex;
+          const byIndexNumber = await supabase.from("students").update(nextPayload).eq("index_number", studentIndex).select("*").maybeSingle();
+          if (!byIndexNumber.error && byIndexNumber.data) return byIndexNumber;
+        }
+
+        const lookupChecks = [];
+        if (existingStudent.id != null && !String(existingStudent.id).startsWith("local-")) {
+          lookupChecks.push(supabase.from("students").select("id").eq("id", existingStudent.id).limit(1));
+        }
+        const lookupStudentIndex = String(existingStudent.index || "").trim();
+        if (lookupStudentIndex) {
+          lookupChecks.push(supabase.from("students").select("id").eq("index", lookupStudentIndex).limit(1));
+          lookupChecks.push(supabase.from("students").select("id").eq("index_number", lookupStudentIndex).limit(1));
+        }
+        const lookupResults = await Promise.all(lookupChecks);
+        const visibleRowExists = lookupResults.some((result) => Array.isArray(result.data) && result.data.length > 0);
+
+        if (visibleRowExists) {
+          return { data: null, error: new Error("Student exists but update is blocked by Supabase permissions (RLS). Add/adjust an UPDATE policy for public.students.") };
+        }
+
+        return { data: null, error: new Error("Could not find this student in Supabase to update. The row key may have changed (id/index/index_number).") };
+      };
+
+      let response = await updateStudentRow(payload);
 
       if (response.error && isMissingColumnError(response.error) && scopedSchoolId != null) {
         throw new Error("School-scoped student updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.");
@@ -7519,9 +7781,7 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
 
       if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "photo_url")) {
         const { photo_url, ...fallbackPayload } = payload;
-        response = existingStudent?.id
-          ? await supabase.from("students").update(fallbackPayload).eq("id", existingStudent.id).select("*").single()
-          : await supabase.from("students").insert(fallbackPayload).select("*").single();
+        response = await updateStudentRow(fallbackPayload);
       }
 
       if (response.error) throw response.error;
@@ -7672,6 +7932,7 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
             aggregate: Number(s.aggregate ?? 0),
             status: s.status || "pending",
             email: s.email || null,
+            parent_contact: s.parent_contact || s.parent_phone || s.guardian_phone || s.guardian_contact || "",
             photo_url: resolveStudentPhotoUrl(s),
           }));
         }
@@ -7740,7 +8001,20 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
         studentsMap.set(String(student.index), student);
       });
 
-      const { data: selectionRows } = await supabase.from("school_selections").select("*").order("created_at", { ascending: false });
+      const loadSelectionRows = async () => {
+        const attempts = [
+          () => supabase.from("school_selections").select("*").order("created_at", { ascending: false }),
+          () => supabase.from("school_selections").select("*").order("updated_at", { ascending: false }),
+          () => supabase.from("school_selections").select("*").order("id", { ascending: false }),
+          () => supabase.from("school_selections").select("*"),
+        ];
+        for (const run of attempts) {
+          const { data, error } = await run();
+          if (!error && Array.isArray(data)) return data;
+        }
+        return [];
+      };
+      const selectionRows = await loadSelectionRows();
       const matchingRows = (selectionRows || []).filter((row) => normalizeSelectionList(row).some((pick) => normalizeSchoolIdentity(pick.name) === normalizeSchoolIdentity(normalizedSchool?.name || scopedSchoolName)));
       const summarized = matchingRows.map((row) => summarizeSelectionRecord(row, studentsMap));
       setPendingSelections(sortRecordsByStudentIndex(summarized.filter((row) => !row.approved && row.status !== "confirmed")));
@@ -8022,6 +8296,7 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
             id: student.id,
             index: student.index || student.index_number,
             index_number: student.index_number || student.index,
+            full_name: student.full_name || student.name || user?.name || "",
           } }),
         ]);
 
@@ -8516,7 +8791,6 @@ function GhanaCampus() {
 
 
 // --- END DEBUG PROVIDER WRAP ---
-export { GhanaCampus };
 export default GhanaCampus;
 
 
