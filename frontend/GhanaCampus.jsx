@@ -1054,28 +1054,51 @@ const css = `
   .school-workspace-panel-title { font-size:1rem; font-weight:800; color:#312e81; }
   .school-workspace-panel-sub { margin-top:4px; font-size:.82rem; color:#475569; line-height:1.5; }
   .school-insight-stack { display:grid; gap:18px; }
-  .school-profile-list { display:grid; gap:10px; }
+  .school-profile-list { display:grid; gap:0; }
   .school-profile-row {
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
-    padding:12px 0;
+    display:grid;
+    grid-template-columns:minmax(104px,38%) minmax(0,1fr);
+    align-items:start;
+    gap:12px 16px;
+    padding:11px 0;
     border-bottom:1px solid #dbeafe;
   }
-  .school-profile-row span { color:#475569; font-size:.82rem; }
-  .school-profile-row strong { color:#1e293b; text-align:right; }
+  .school-profile-row span {
+    color:#475569;
+    font-size:.78rem;
+    font-weight:700;
+    letter-spacing:.02em;
+    padding-top:2px;
+  }
+  .school-profile-row strong {
+    color:#1e293b;
+    font-size:.88rem;
+    font-weight:700;
+    text-align:right;
+    justify-self:end;
+    line-height:1.45;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+  }
   .school-profile-row:last-child { border-bottom:none; }
   .school-admin-mini-list { display:grid; gap:10px; }
   .school-admin-mini-row {
     display:flex;
-    align-items:flex-start;
+    align-items:center;
     justify-content:space-between;
     gap:12px;
     padding:12px 14px;
     border-radius:14px;
     border:1px solid #dbeafe;
     background:linear-gradient(135deg,#ffffff 0%,#f8fbff 100%);
+  }
+  .school-settings-readonly-note {
+    margin:0;
+    border-radius:14px;
+    border:1px solid #bfdbfe;
+    padding:14px 16px;
+    font-size:.84rem;
+    line-height:1.55;
   }
   .school-admin-mini-copy strong { display:block; color:#1e1b4b; }
   .school-admin-mini-copy span { display:block; margin-top:4px; font-size:.78rem; color:#475569; overflow-wrap:anywhere; }
@@ -1089,18 +1112,33 @@ const css = `
     line-height:1.6;
   }
   .school-settings-shell { display:grid; gap:18px; }
-  .school-settings-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; align-items:start; }
+  .school-settings-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; align-items:stretch; }
   .school-settings-card {
     background:linear-gradient(145deg,#ffffff 0%,#f8fbff 40%,#ecfeff 100%);
     border:1px solid #bfdbfe;
     border-radius:20px;
-    padding:18px;
+    padding:0;
     box-shadow:0 18px 36px rgba(14,165,233,.1);
+    display:flex;
+    flex-direction:column;
+    min-height:100%;
+    overflow:hidden;
   }
-  .school-settings-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+  .school-settings-card-body { padding:0 18px 18px; flex:1; display:flex; flex-direction:column; min-height:0; }
+  .school-settings-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:18px 18px 14px; border-bottom:1px solid rgba(191,219,254,.65); margin-bottom:0; }
   .school-settings-title { font-size:1rem; font-weight:800; color:#1d4ed8; }
   .school-settings-sub { margin-top:4px; font-size:.82rem; color:#475569; line-height:1.5; }
   .school-settings-form-grid { display:grid; gap:14px; }
+  .school-settings-card-actions {
+    display:flex;
+    justify-content:flex-end;
+    align-items:center;
+    gap:10px;
+    margin-top:16px;
+    padding-top:16px;
+    border-top:1px solid rgba(191,219,254,.55);
+    flex-wrap:wrap;
+  }
   .school-settings-switch {
     display:flex;
     align-items:center;
@@ -3466,7 +3504,7 @@ function SchoolAdminDashboardPage({ user, school, admins, pendingRows, confirmed
           </div>
           <div className="school-workspace-meta">
             <div className="school-workspace-chip"><Ico name="schools" size={14} color="#99f6e4"/> {school?.region || "Region pending"}</div>
-            <div className="school-workspace-note">Use this workspace to monitor school operations, confirm admin assignments, and keep the school profile accurate.</div>
+            <div className="school-workspace-note">Use this workspace to monitor school operations and confirm admin assignments. Registry school profile changes are done by platform administrators.</div>
           </div>
         </div>
 
@@ -3576,7 +3614,7 @@ function SchoolAdminDashboardPage({ user, school, admins, pendingRows, confirmed
   );
 }
 
-function ManagedSchoolPage({ school, admins, user, onSaveProfile }) {
+function ManagedSchoolPage({ school, admins, user, onSaveProfile, allowProfileEdit = true }) {
   const [form, setForm] = useState({ name: "", location: "", region: "", type: "", category: "" });
   const [saving, setSaving] = useState(false);
   const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
@@ -3594,6 +3632,10 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile }) {
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   const saveProfile = async () => {
+    if (!allowProfileEdit) {
+      setStatusModal({ open: true, type: "failure", title: "Not allowed", message: "School registry profile can only be changed by platform administrators." });
+      return;
+    }
     if (!form.name.trim()) {
       setStatusModal({ open: true, type: "failure", title: "Save Failed", message: "School name is required." });
       return;
@@ -3623,11 +3665,11 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile }) {
           <div className="school-workspace-copy">
             <div className="school-workspace-kicker">Managed School</div>
             <div className="school-workspace-title">School profile and access</div>
-            <div className="school-workspace-sub">Review the official school record, update profile details, and confirm which administrators currently manage the school.</div>
+            <div className="school-workspace-sub">{allowProfileEdit ? "Review the official school record, update profile details, and confirm which administrators currently manage the school." : "Review the official school record and which administrators currently manage the school. Profile changes are managed by platform administrators."}</div>
           </div>
           <div className="school-workspace-meta">
             <div className="school-workspace-chip"><Ico name="profile" size={14} color="#99f6e4"/> Admin settings</div>
-            <div className="school-workspace-note">Changes made here affect how the school appears across its workspace and onboarding registry.</div>
+            <div className="school-workspace-note">{allowProfileEdit ? "Changes made here affect how the school appears across its workspace and onboarding registry." : "Registry details are read-only in this portal. Contact a super admin to update the school record."}</div>
           </div>
         </div>
 
@@ -3639,16 +3681,19 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile }) {
                 <div className="school-settings-sub">The current school identity record as stored in the platform registry.</div>
               </div>
             </div>
-            <div className="school-profile-list">
-              <div className="school-profile-row"><span>School Name</span><strong>{school?.name || user?.managed_school_name || "-"}</strong></div>
-              <div className="school-profile-row"><span>Region</span><strong>{school?.region || "-"}</strong></div>
-              <div className="school-profile-row"><span>Location</span><strong>{school?.location || "-"}</strong></div>
-              <div className="school-profile-row"><span>Grade</span><strong>{school?.category || "-"}</strong></div>
-              <div className="school-profile-row"><span>Type</span><strong>{school?.type || "-"}</strong></div>
-              <div className="school-profile-row"><span>Status</span><strong>{school?.active ? "Active" : "Inactive"}</strong></div>
+            <div className="school-settings-card-body">
+              <div className="school-profile-list">
+                <div className="school-profile-row"><span>School Name</span><strong>{school?.name || user?.managed_school_name || "—"}</strong></div>
+                <div className="school-profile-row"><span>Region</span><strong>{school?.region || "—"}</strong></div>
+                <div className="school-profile-row"><span>Location</span><strong>{school?.location || "—"}</strong></div>
+                <div className="school-profile-row"><span>Grade</span><strong>{school?.category || "—"}</strong></div>
+                <div className="school-profile-row"><span>Type</span><strong>{school?.type || "—"}</strong></div>
+                <div className="school-profile-row"><span>Status</span><strong>{school?.active ? "Active" : "Inactive"}</strong></div>
+              </div>
             </div>
           </div>
 
+          {allowProfileEdit ? (
           <div className="school-settings-card">
             <div className="school-settings-head">
               <div>
@@ -3656,19 +3701,34 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile }) {
                 <div className="school-settings-sub">Update the school profile details used throughout the school-admin portal.</div>
               </div>
             </div>
-            <div className="school-settings-form-grid">
-              <div className="form-grid">
-            <div className="form-group"><label className="form-label">School Name</label><input className="form-control" value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Location</label><input className="form-control" value={form.location} onChange={(e) => set("location", e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Region</label><select className="form-control" value={form.region} onChange={(e) => set("region", e.target.value)}>{GHANA_REGIONS.map((region) => <option key={region}>{region}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">School Type</label><select className="form-control" value={form.type} onChange={(e) => set("type", e.target.value)}><option value="">Select school type</option><option>Mixed</option><option>Boys</option><option>Girls</option></select></div>
-            <div className="form-group"><label className="form-label">Grade</label><select className="form-control" value={form.category} onChange={(e) => set("category", e.target.value)}><option value="">Select grade</option><option>A</option><option>B</option><option>C</option></select></div>
+            <div className="school-settings-card-body">
+              <div className="school-settings-form-grid">
+                <div className="form-grid">
+                  <div className="form-group"><label className="form-label">School Name</label><input className="form-control" value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
+                  <div className="form-group"><label className="form-label">Location</label><input className="form-control" value={form.location} onChange={(e) => set("location", e.target.value)} /></div>
+                  <div className="form-group"><label className="form-label">Region</label><select className="form-control" value={form.region} onChange={(e) => set("region", e.target.value)}>{GHANA_REGIONS.map((region) => <option key={region}>{region}</option>)}</select></div>
+                  <div className="form-group"><label className="form-label">School Type</label><select className="form-control" value={form.type} onChange={(e) => set("type", e.target.value)}><option value="">Select school type</option><option>Mixed</option><option>Boys</option><option>Girls</option></select></div>
+                  <div className="form-group"><label className="form-label">Grade</label><select className="form-control" value={form.category} onChange={(e) => set("category", e.target.value)}><option value="">Select grade</option><option>A</option><option>B</option><option>C</option></select></div>
+                </div>
+              </div>
+              <div className="school-settings-card-actions">
+                <button type="button" className="btn btn-blue" onClick={saveProfile} disabled={saving}>{saving ? "Saving..." : "Save Profile"}</button>
               </div>
             </div>
-            <div className="modal-actions" style={{justifyContent:"flex-start"}}>
-              <button className="btn btn-blue" onClick={saveProfile} disabled={saving}>{saving ? "Saving..." : "Save Profile"}</button>
+          </div>
+          ) : (
+          <div className="school-settings-card">
+            <div className="school-settings-head">
+              <div>
+                <div className="school-settings-title">School profile</div>
+                <div className="school-settings-sub">School name, location, and registry fields are maintained by platform administrators.</div>
+              </div>
+            </div>
+            <div className="school-settings-card-body">
+              <div className="alert alert-info school-settings-readonly-note">You can review registry details in the first column. To request a correction, contact your super admin or support team.</div>
             </div>
           </div>
+          )}
 
           <div className="school-settings-card">
             <div className="school-settings-head">
@@ -3677,21 +3737,23 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile }) {
                 <div className="school-settings-sub">People currently responsible for managing this school on the platform.</div>
               </div>
             </div>
-            <div className="school-admin-mini-list">
-            {admins.map((admin) => (
-              <div key={admin.id} className="school-admin-mini-row">
-                <div className="school-admin-mini-copy">
-                  <strong>{admin.full_name}</strong>
-                  <span>{admin.email}</span>
-                  <span>{admin.phone || "No phone added"}</span>
-                </div>
-                <span className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}>{admin.status || "active"}</span>
+            <div className="school-settings-card-body">
+              <div className="school-admin-mini-list">
+                {admins.map((admin) => (
+                  <div key={admin.id} className="school-admin-mini-row">
+                    <div className="school-admin-mini-copy">
+                      <strong>{admin.full_name}</strong>
+                      <span>{admin.email}</span>
+                      <span>{admin.phone || "No phone added"}</span>
+                    </div>
+                    <span className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}>{admin.status || "active"}</span>
+                  </div>
+                ))}
+                {!admins.length && <div className="school-activity-empty">No school-admin records found for this school yet.</div>}
               </div>
-            ))}
-            {!admins.length && <div className="school-activity-empty">No school-admin records found for this school yet.</div>}
+            </div>
           </div>
         </div>
-      </div>
       </div>
     </div>
   );
@@ -7698,22 +7760,8 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     }
   }, [tab, childToParent]);
 
-  const saveManagedSchoolProfile = async (updates) => {
-    if (!school?.id) {
-      throw new Error("This school record is not fully linked yet, so profile changes cannot be saved.");
-    }
-    if (!supabase) {
-      setSchool((current) => ({ ...current, ...updates }));
-      return;
-    }
-    const { data, error } = await supabase.from("registered_schools").update(updates).eq("id", school.id).select("*").single();
-    if (error) {
-      if (isMissingTableError(error, "registered_schools")) {
-        throw new Error("Registered school setup is not available yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
-      }
-      throw error;
-    }
-    setSchool({ ...normalizeSchoolRow(data), tenant_key: data?.tenant_key || school?.tenant_key || "" });
+  const saveManagedSchoolProfile = async () => {
+    throw new Error("School registry profile cannot be updated from the school admin portal. Contact a platform administrator.");
   };
 
   const saveSchoolStudent = async (existingStudent, draft) => {
@@ -8045,7 +8093,7 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       grading: <GradingPage />,
       events: <EventsPage eventsData={schoolEventsInfo.rows} tableInfo={schoolTableInfo.events} registeredSchoolId={school?.id || null} />,
       finance: <FinancePage financeSummary={schoolFinanceSummary} tableInfo={schoolTableInfo.fees} />,
-      "school-profile": <ManagedSchoolPage school={school} admins={schoolAdmins} user={user} onSaveProfile={saveManagedSchoolProfile} />,
+      "school-profile": <ManagedSchoolPage school={school} admins={schoolAdmins} user={user} onSaveProfile={saveManagedSchoolProfile} allowProfileEdit={false} />,
       pending: <PendingSelections rows={pendingSelections} loading={loadingSchoolData} readOnly pageTitle="Candidate Reviews" pageSub="Selections that currently mention this school." emptyMessage="No candidate reviews are currently in scope for this school." />,
       confirmed: <ConfirmedPlacements rows={confirmedSelections} loading={loadingSchoolData} />,
       chat: <ChatPage chatUsers={chatUsers} onChatUsersChange={setChatUsers} />,
