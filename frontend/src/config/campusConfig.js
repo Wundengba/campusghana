@@ -1,9 +1,11 @@
 export const DEFAULT_SETTINGS = {
   systemName: "Campus Ghana", academicYear: "2023/2024", currentTerm: "Second Term",
   selectionDeadline: "2024-05-15", maxChoices: 7, schoolRegion: "All Regions",
-  classOptions: ["JHS 3A", "JHS 3B", "JHS 3C"],
+  classOptions: [],
   allowChanges: true, studentPortalOpen: true, emailNotifs: true, smsNotifs: false,
   maintenanceMode: false, showResultsToStudents: true, autoApproveSelections: false,
+  adminFeesPortalEnabled: true, studentFeesPortalEnabled: true,
+  studentSelectionPortalEnabled: true,
   locale: "en-GH", timezone: "Africa/Accra", currency: "GHS",
   supportEmail: "support@campusghana.edu.gh", supportPhone: "0240000000",
   sessionTimeoutMins: 30, passwordMinLength: 8, lockoutAttempts: 5,

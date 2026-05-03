@@ -1,3 +1,5 @@
+# Ignore Windows reserved file
+frontend/nul
 node_modules/
 .vite/
 

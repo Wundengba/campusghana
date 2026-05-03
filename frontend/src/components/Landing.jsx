@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Ico } from "./Ico.jsx";
+import "./Landing.module.css";
 
 export function Landing({ onSelect, hasSupabase }) {
   const [mode, setMode] = useState(null);

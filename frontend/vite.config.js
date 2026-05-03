@@ -81,10 +81,13 @@ export default defineConfig({
   resolve: {
     alias: {
       react: fileURLToPath(new URL("./node_modules/react", import.meta.url)),
-      "react-dom": fileURLToPath(new URL("./node_modules/react-dom", import.meta.url)),
+      "react-dom": fileURLToPath(
+        new URL("./node_modules/react-dom", import.meta.url),
+      ),
     },
   },
   server: {
-    port: 3000, // Change this to your desired port
+    port: 3000,
+    strictPort: true,
   },
 });

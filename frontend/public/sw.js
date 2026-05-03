@@ -1,4 +1,4 @@
-const CACHE_NAME = "campus-ghana-shell-v1";
+const CACHE_NAME = "campus-ghana-shell-v2";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/icons/campus-icon.svg", "/icons/campus-icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
@@ -25,19 +25,38 @@ self.addEventListener("fetch", (event) => {
 
   if (!isNavigation && !isStaticAsset) return;
 
+  if (isNavigation) {
+    // Keep page shell fresh on every navigation and fall back offline.
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(request).then((res) => res || caches.match("/")))
+    );
+    return;
+  }
+
+  // Stale-while-revalidate for static assets.
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
+      const fetchPromise = fetch(request)
+        .then((networkResponse) => {
+          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== "basic") {
+            return networkResponse;
+          }
 
-      return fetch(request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== "basic") {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
           return networkResponse;
-        }
+        })
+        .catch(() => cachedResponse || null);
 
-        const responseClone = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-        return networkResponse;
-      }).catch(() => (isNavigation ? caches.match("/") : null));
+      return cachedResponse || fetchPromise;
     })
   );
 });

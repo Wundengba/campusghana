@@ -52,7 +52,6 @@ import {
   writeStoredTab,
 } from "./src/utils/sessionState.js";
 
-
 import { NotificationContext } from "./src/components/NotificationSystem.jsx";
 
 // List of tables to subscribe for realtime notifications
@@ -95,9 +94,22 @@ function getEventMessage(table, eventType, payload) {
 
 let profilesTableAvailable = true;
 
-const normalizeRoleKey = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-const normalizeSchoolIdentity = (value) => String(value || "").trim().toLowerCase();
-const isSchoolScopedAccount = (record) => !!(record && (record.registered_school_id != null || String(record.managed_school_name || "").trim()));
+const normalizeRoleKey = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+const normalizeSchoolIdentity = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+const isSchoolScopedAccount = (record) =>
+  !!(
+    record &&
+    (record.registered_school_id != null ||
+      String(record.managed_school_name || "").trim())
+  );
 const resolvePortalFromAccount = (record, fallback = "student") => {
   if (isSchoolScopedAccount(record)) return "school-admin";
   const roleKey = normalizeRoleKey(record?.role || fallback);
@@ -105,12 +117,42 @@ const resolvePortalFromAccount = (record, fallback = "student") => {
 };
 
 const BASE_ROLE_CATALOG = [
-  { key: "super_admin", label: "Super Admin", color: "#1d4ed8", note: "Full platform control" },
-  { key: "admin", label: "Admin", color: "#0f766e", note: "School and operations management" },
-  { key: "school_admin", label: "School Admin", color: "#7c3aed", note: "School-scoped operations" },
-  { key: "teacher", label: "Teacher", color: "#d97706", note: "Academic records and attendance" },
-  { key: "staff", label: "Staff", color: "#475569", note: "Support and office workflows" },
-  { key: "student", label: "Student", color: "#dc2626", note: "Self-service access only" },
+  {
+    key: "super_admin",
+    label: "Super Admin",
+    color: "#1d4ed8",
+    note: "Full platform control",
+  },
+  {
+    key: "admin",
+    label: "Admin",
+    color: "#0f766e",
+    note: "School and operations management",
+  },
+  {
+    key: "school_admin",
+    label: "School Admin",
+    color: "#7c3aed",
+    note: "School-scoped operations",
+  },
+  {
+    key: "teacher",
+    label: "Teacher",
+    color: "#d97706",
+    note: "Academic records and attendance",
+  },
+  {
+    key: "staff",
+    label: "Staff",
+    color: "#475569",
+    note: "Support and office workflows",
+  },
+  {
+    key: "student",
+    label: "Student",
+    color: "#dc2626",
+    note: "Self-service access only",
+  },
 ];
 
 const DEFAULT_ROLE_MANAGE_FLAGS = {
@@ -124,16 +166,22 @@ const DEFAULT_ROLE_MANAGE_FLAGS = {
 
 const buildRoleCatalog = (cfg = null) => {
   const roleMetaOverrides = cfg?.roleMetaOverrides || {};
-  const customRoles = Array.isArray(cfg?.roleDefinitions) ? cfg.roleDefinitions : [];
+  const customRoles = Array.isArray(cfg?.roleDefinitions)
+    ? cfg.roleDefinitions
+    : [];
   return [
-    ...BASE_ROLE_CATALOG.map((role) => ({ ...role, ...(roleMetaOverrides?.[role.key] || {}) })),
+    ...BASE_ROLE_CATALOG.map((role) => ({
+      ...role,
+      ...(roleMetaOverrides?.[role.key] || {}),
+    })),
     ...customRoles,
   ];
 };
 
 const canManageRoles = (cfg = null, roleKey = "") => {
   const normalizedRoleKey = normalizeRoleKey(roleKey);
-  const storedValue = cfg?.rolePrivileges?.[normalizedRoleKey]?.["roles.manage"];
+  const storedValue =
+    cfg?.rolePrivileges?.[normalizedRoleKey]?.["roles.manage"];
   if (typeof storedValue === "boolean") return storedValue;
   return !!DEFAULT_ROLE_MANAGE_FLAGS[normalizedRoleKey];
 };
@@ -141,18 +189,25 @@ const canManageRoles = (cfg = null, roleKey = "") => {
 const getAssignableRoles = (cfg = null, actorRole = "", scope = "teacher") => {
   const allRoles = buildRoleCatalog(cfg);
   if (canManageRoles(cfg, normalizeRoleKey(actorRole))) return allRoles;
-  const allowedKeys = scope === "school-admin" ? ["school_admin"] : ["teacher", "staff"];
-  const filteredRoles = allRoles.filter((role) => allowedKeys.includes(role.key));
+  const allowedKeys =
+    scope === "school-admin" ? ["school_admin"] : ["teacher", "staff"];
+  const filteredRoles = allRoles.filter((role) =>
+    allowedKeys.includes(role.key),
+  );
   return filteredRoles.length ? filteredRoles : allRoles;
 };
 
 const getRoleMeta = (cfg = null, roleKey = "") => {
   const normalizedRoleKey = normalizeRoleKey(roleKey);
-  const catalogRole = buildRoleCatalog(cfg).find((role) => role.key === normalizedRoleKey);
+  const catalogRole = buildRoleCatalog(cfg).find(
+    (role) => role.key === normalizedRoleKey,
+  );
   if (catalogRole) return catalogRole;
   return {
     key: normalizedRoleKey,
-    label: String(normalizedRoleKey || "user").replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+    label: String(normalizedRoleKey || "user")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase()),
     color: "#475569",
     note: "",
   };
@@ -184,9 +239,9 @@ const css = `
   body { font-family: var(--font); background: var(--bg); color: var(--text); overflow-x:hidden; -webkit-text-size-adjust:100%; }
   img { max-width:100%; height:auto; }
   input, select, textarea, button { font-family: var(--font); }
-  
+
   .app { display:flex; flex-direction:column; min-height:100vh; }
-  
+
   /* LANDING */
   .landing { min-height:100vh; display:flex; align-items:center; justify-content:center;
     background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #1a56db 100%); padding:20px; }
@@ -230,7 +285,7 @@ const css = `
   .modal-sub { font-size:.86rem; color:#64748b; margin-top:4px; }
   .modal-close { border:none; background:#eef2ff; color:#1e3a8a; width:36px; height:36px; border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
   .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
-  
+
   /* LOGIN */
   .login-form { display:flex; flex-direction:column; gap:12px; }
   .login-back { background:none; border:none; color:#1a56db; font-family:var(--font); cursor:pointer; font-size:.9rem; margin-bottom:4px; text-align:left; font-weight:600; display:flex; align-items:center; gap:6px; }
@@ -247,7 +302,7 @@ const css = `
     font-size:1rem; cursor:pointer; transition:opacity .2s; display:flex; align-items:center; justify-content:center; gap:8px; }
   .btn-primary:hover { opacity:.9; }
   .demo-hint { font-size:.78rem; color:#94a3b8; margin-top:4px; }
-  
+
   /* TOPBAR */
   .topbar { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--topbar-h);
     background:linear-gradient(135deg,#1a56db 0%,#1e3a8a 100%);
@@ -352,10 +407,22 @@ const css = `
   body.dark-mode .alert-danger { background:#3b1317; color:#fecaca; border-color:#b91c1c; }
   body.dark-mode .student-profile-row { background:#0b1324; border-color:#23324a; }
   body.dark-mode .student-profile-row span { color:#e2e8f0; }
+  body.dark-mode .school-profile-list {
+    background:#0b1324;
+    border-color:#23324a;
+    box-shadow:none;
+  }
+  body.dark-mode .school-profile-row {
+    border-bottom-color:#23324a;
+    background:#0f172a;
+  }
+  body.dark-mode .school-profile-row:nth-child(even) { background:#111d31; }
+  body.dark-mode .school-profile-label { color:#94a3b8; }
+  body.dark-mode .school-profile-value { color:#e2e8f0; }
   body.dark-mode .student-profile-help,
   body.dark-mode .page-sub,
   body.dark-mode .stat-sub { color:#94a3b8; }
-  
+
   /* SHELL */
   .shell { display:flex; padding-top:var(--topbar-h); min-height:100vh; }
   .sidebar { width:var(--sidebar-w); background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%); border-right:1px solid #dbe5f3;
@@ -384,7 +451,7 @@ const css = `
   .nav-item:hover svg, .nav-item.active svg { opacity:1; transition:opacity .15s; filter:drop-shadow(0 1px 2px rgba(30,58,138,.18)); }
   .bottom-nav-item svg { opacity:.9; transition:opacity .15s, filter .15s; }
   .bottom-nav-item:hover svg, .bottom-nav-item.active svg { opacity:1; filter:none; }
-  
+
   .main { flex:1; margin-left:var(--sidebar-w); padding:24px; min-height:calc(100vh - var(--topbar-h)); overflow-x:hidden; width:calc(100vw - var(--sidebar-w)); max-width:100%; }
   .main.full { margin-left:0; }
   .page-actions-row { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
@@ -740,7 +807,15 @@ const css = `
   .students-table-title { font-size:1rem; font-weight:800; color:#0f172a; }
   .students-table-sub { margin-top:4px; font-size:.8rem; color:#64748b; }
   .students-table-status { font-size:.74rem; font-weight:800; color:#0f766e; background:#ecfeff; border:1px solid #a5f3fc; padding:8px 12px; border-radius:999px; }
-  .students-avatar,
+  .students-avatar {
+    display:block;
+    width:40px;
+    height:40px;
+    border-radius:12px;
+    object-fit:cover;
+    border:1px solid #dbeafe;
+    flex-shrink:0;
+  }
   .students-avatar-placeholder {
     width:40px;
     height:40px;
@@ -750,9 +825,12 @@ const css = `
     justify-content:center;
     overflow:hidden;
     flex-shrink:0;
+    background:#dbeafe;
+    color:#1e40af;
+    border:1px solid #bfdbfe;
+    font-weight:800;
+    font-size:.74rem;
   }
-  .students-avatar { border:1px solid #dbeafe; object-fit:cover; }
-  .students-avatar-placeholder { background:#dbeafe; color:#1e40af; border:1px solid #bfdbfe; font-weight:800; font-size:.74rem; }
   .students-name-cell strong { display:block; font-size:.92rem; color:#0f172a; }
   .students-name-cell span { display:block; margin-top:3px; font-size:.76rem; color:#64748b; }
   .students-id-cell { font-weight:700; color:#1e3a8a; }
@@ -1054,33 +1132,64 @@ const css = `
   .school-workspace-panel-title { font-size:1rem; font-weight:800; color:#312e81; }
   .school-workspace-panel-sub { margin-top:4px; font-size:.82rem; color:#475569; line-height:1.5; }
   .school-insight-stack { display:grid; gap:18px; }
-  .school-profile-list { display:grid; gap:0; }
+  .school-profile-list {
+    display:grid;
+    gap:0;
+    border:1px solid #e2e8f0;
+    border-radius:14px;
+    overflow:hidden;
+    background:#f8fafc;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.85);
+  }
   .school-profile-row {
     display:grid;
-    grid-template-columns:minmax(104px,38%) minmax(0,1fr);
-    align-items:start;
-    gap:12px 16px;
-    padding:11px 0;
-    border-bottom:1px solid #dbeafe;
+    grid-template-columns:clamp(118px,36%,168px) minmax(0,1fr);
+    align-items:center;
+    column-gap:18px;
+    row-gap:4px;
+    padding:11px 14px;
+    border-bottom:1px solid #e2e8f0;
+    background:#fff;
+    min-height:46px;
   }
-  .school-profile-row span {
-    color:#475569;
-    font-size:.78rem;
+  .school-profile-row:nth-child(even) { background:#fafbff; }
+  .school-profile-row:last-child { border-bottom:none; }
+  .school-profile-label {
+    color:#64748b;
+    font-size:.74rem;
     font-weight:700;
-    letter-spacing:.02em;
-    padding-top:2px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    line-height:1.35;
+    align-self:center;
+    max-width:100%;
   }
-  .school-profile-row strong {
-    color:#1e293b;
-    font-size:.88rem;
-    font-weight:700;
+  .school-profile-value {
+    margin:0;
+    color:#0f172a;
+    font-size:.895rem;
+    font-weight:600;
     text-align:right;
     justify-self:end;
+    align-self:center;
     line-height:1.45;
     overflow-wrap:anywhere;
     word-break:break-word;
+    max-width:100%;
   }
-  .school-profile-row:last-child { border-bottom:none; }
+  @media (max-width:520px) {
+    .school-profile-row {
+      grid-template-columns:1fr;
+      align-items:start;
+      row-gap:6px;
+      min-height:0;
+      padding:12px 14px;
+    }
+    .school-profile-value {
+      text-align:left;
+      justify-self:start;
+    }
+  }
   .school-admin-mini-list { display:grid; gap:10px; }
   .school-admin-mini-row {
     display:flex;
@@ -1321,14 +1430,14 @@ const css = `
   .mobile-record-item span { display:block; color:#0f172a; font-size:.88rem; }
   .mobile-record-actions { display:flex; gap:10px; margin-top:12px; }
   .mobile-record-actions .btn { flex:1; justify-content:center; }
-  
+
   /* CARDS & LAYOUT */
   .card { background:#fff; border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow); }
   .card-padded { padding:20px; }
   .page-header { background:linear-gradient(135deg,#1e293b,#0f172a); border-radius:var(--radius); padding:24px 28px; margin-bottom:24px; color:#fff; overflow-wrap:anywhere; }
   .page-title { font-size:1.75rem; font-weight:800; }
   .page-sub { color:#94a3b8; margin-top:4px; font-size:.9rem; }
-  
+
   .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
   .stat-card { background:#fff; border-radius:var(--radius); border:1px solid var(--border); padding:20px; box-shadow:var(--shadow); }
   .stat-label { font-size:.78rem; color:var(--text3); font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
@@ -1396,10 +1505,10 @@ const css = `
     background:rgba(15,23,42,.22) !important;
     box-shadow:inset 0 0 0 1px rgba(191,219,254,.12);
   }
-  
+
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
-  
+
   /* TABLE */
   .table-wrap { overflow-x:auto; border-radius:var(--radius); }
   .table-wrap table { min-width:680px; }
@@ -1455,7 +1564,7 @@ const css = `
   td { padding:12px 14px; border-bottom:1px solid #f1f5f9; color:var(--text); }
   tr:last-child td { border-bottom:none; }
   tr:hover td { background:#f9fbff; }
-  
+
   /* BADGE */
   .badge { display:inline-flex; align-items:center; padding:3px 10px; border-radius:99px; font-size:.72rem; font-weight:700; }
   .badge-success { background:#dcfce7; color:#16a34a; }
@@ -1463,7 +1572,7 @@ const css = `
   .badge-danger { background:#fee2e2; color:#dc2626; }
   .badge-blue { background:#dbeafe; color:#1e40af; }
   .badge-gray { background:#f1f5f9; color:#64748b; }
-  
+
   /* FORM */
   .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   .form-group { display:flex; flex-direction:column; gap:6px; }
@@ -1480,7 +1589,15 @@ const css = `
   .btn-green { background:#16a34a; color:#fff; }
   .btn-outline { background:#fff; border:2px solid var(--border); color:var(--text2); }
   .btn-outline:hover { border-color:var(--primary); color:var(--primary); }
-  
+  .record-action-group { display:inline-flex; align-items:center; gap:8px; }
+  .record-action-btn { border-radius:999px; padding:7px 13px; border:1px solid transparent; font-weight:700; letter-spacing:.01em; }
+  .record-action-btn.action-edit { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+  .record-action-btn.action-edit:hover { background:#dbeafe; border-color:#93c5fd; color:#1e3a8a; }
+  .record-action-btn.action-delete { background:#fff1f2; border-color:#fecdd3; color:#be123c; }
+  .record-action-btn.action-delete:hover { background:#ffe4e6; border-color:#fda4af; color:#9f1239; }
+  body.dark-mode .record-action-btn.action-edit { background:rgba(30,64,175,.2); border-color:rgba(96,165,250,.45); color:#bfdbfe; }
+  body.dark-mode .record-action-btn.action-delete { background:rgba(159,18,57,.2); border-color:rgba(251,113,133,.4); color:#fecdd3; }
+
   /* PROFILE CARD */
   .profile-header { display:flex; align-items:center; gap:20px; padding:24px; background:linear-gradient(135deg,#1e3a8a,#1a56db); color:#fff; border-radius:var(--radius); margin-bottom:20px; }
   .profile-avatar { width:80px; height:80px; border-radius:16px; background:rgba(255,255,255,.2);
@@ -1574,7 +1691,7 @@ const css = `
   .student-profile-kpi strong { display:block; font-size:1rem; font-weight:800; }
   .student-profile-kpi small { display:block; font-size:.76rem; margin-top:4px; }
   .student-profile-help { margin-top:10px; font-size:.82rem; color:#64748b; line-height:1.45; }
-  
+
   /* GRADE CHIP */
   .grade-chip { display:inline-flex; align-items:center; justify-content:center; min-width:48px;
     padding:3px 10px; border-radius:8px; font-weight:700; font-size:.85rem; }
@@ -1601,15 +1718,15 @@ const css = `
   .results-line-chart .area { fill:url(#resultsLineFill); stroke:none; opacity:.9; }
   .results-line-chart .point { fill:#1d4ed8; stroke:#fff; stroke-width:2; }
   .results-axis-labels { display:flex; justify-content:space-between; margin-top:8px; font-size:.72rem; color:#64748b; }
-  
+
   /* PROGRESS */
   .progress { background:#e2e8f0; border-radius:99px; height:8px; overflow:hidden; }
   .progress-bar { height:100%; border-radius:99px; transition:width .4s; }
-  
+
   /* ATTENDANCE CIRCLE */
   .att-circle { width:80px; height:80px; border-radius:50%; display:flex; flex-direction:column;
     align-items:center; justify-content:center; font-weight:800; font-size:1.1rem; }
-  
+
   /* SELECTION */
   .selection-card { border:2px solid var(--border); border-radius:var(--radius); padding:14px 16px;
     cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:12px; background:#fff; }
@@ -1620,19 +1737,19 @@ const css = `
   .cat-A { background:#fef3c7; color:#92400e; }
   .cat-B { background:#dbeafe; color:#1e40af; }
   .cat-C { background:#dcfce7; color:#166534; }
-  
+
   /* ALERT */
   .alert { padding:12px 16px; border-radius:var(--radius); font-size:.875rem; margin-bottom:16px; }
   .alert-success { background:#dcfce7; color:#16a34a; border:1px solid #bbf7d0; }
   .alert-warning { background:#fef9c3; color:#854d0e; border:1px solid #fde68a; }
   .alert-danger { background:#fee2e2; color:#dc2626; border:1px solid #fecaca; }
   .alert-info { background:#dbeafe; color:#1e40af; border:1px solid #bfdbfe; }
-  
+
   /* CHAT */
   .chat-msg { padding:10px 14px; border-radius:12px; max-width:70%; margin-bottom:8px; font-size:.9rem; }
   .chat-msg.mine { background:var(--primary); color:#fff; margin-left:auto; }
   .chat-msg.theirs { background:#f1f5f9; color:var(--text); }
-  
+
   /* MOBILE */
   .bottom-nav { display:none; position:fixed; bottom:0; left:0; right:0;
     background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
@@ -1646,14 +1763,14 @@ const css = `
   .bottom-nav-item span { font-weight:700; letter-spacing:.1px; }
   .bottom-nav-item:hover { background:#eef5ff; transform:translateY(-1px); }
   .bottom-nav-item.active { color:#64748b; background:none; box-shadow:none; }
-  
+
   .fade-in { animation: fadeIn .3s ease; }
   @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
-  
+
   .spinner { width:32px; height:32px; border:3px solid #e2e8f0; border-top-color:var(--primary);
     border-radius:50%; animation:spin .7s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
-  
+
   .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:109; }
   @media (max-width:1280px) {
     .stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -2007,58 +2124,221 @@ const css = `
 `;
 
 // DASHBOARD (Admin)
-function AdminDashboard({ studentsData, schoolsData, pendingRows, confirmedRows, financeSummary, recentActivity, isLoading }) {
+function AdminDashboard({
+  studentsData,
+  schoolsData,
+  pendingRows,
+  confirmedRows,
+  financeSummary,
+  recentActivity,
+  isLoading,
+}) {
   const { cfg } = useContext(SettingsContext);
   const schoolCount = Array.isArray(schoolsData) ? schoolsData.length : 0;
   const totalStudents = Array.isArray(studentsData) ? studentsData.length : 0;
   const pendingCount = pendingRows?.length || 0;
   const confirmedCount = confirmedRows?.length || 0;
-  const placementCounts = (confirmedRows?.length ? confirmedRows : []).reduce((acc, row) => {
-    const cat = String(row.category || "C").toUpperCase();
-    if (cat === "A" || cat === "B" || cat === "C") acc[cat] += 1;
-    return acc;
-  }, { A: 0, B: 0, C: 0 });
+  const placementCounts = (confirmedRows?.length ? confirmedRows : []).reduce(
+    (acc, row) => {
+      const cat = String(row.category || "C").toUpperCase();
+      if (cat === "A" || cat === "B" || cat === "C") acc[cat] += 1;
+      return acc;
+    },
+    { A: 0, B: 0, C: 0 },
+  );
   return (
     <div className="fade-in">
       <div className="page-header">
         <div className="page-title">Dashboard</div>
-        <div className="page-sub">Academic Year {cfg.academicYear} &mdash; {cfg.currentTerm} &mdash; Welcome back! Here's what's happening today.</div>
+        <div className="page-sub">
+          Academic Year {cfg.academicYear} &mdash; {cfg.currentTerm} &mdash;
+          Welcome back! Here's what's happening today.
+        </div>
       </div>
       <div className="stats-grid">
         {[
-          {label:"Total Students",value:String(totalStudents),sub:isLoading ? "Loading live student records..." : "Live student records",icon:"students",ic:"#0059ff",bgStart:"#eff5ff",bgEnd:"#9cc2ff",text:"#0039a6",border:"rgba(0,89,255,.22)",glow:"rgba(191,219,254,.98)",shadow:"rgba(0,89,255,.28)"},
-          {label:"Pending Selections",value:String(pendingCount),sub:"Awaiting review",icon:"pending",ic:"#ff7a00",bgStart:"#fff4e8",bgEnd:"#ffc47a",text:"#a54800",border:"rgba(255,122,0,.24)",glow:"rgba(255,221,181,.98)",shadow:"rgba(255,122,0,.26)"},
-          {label:"Confirmed Mock Placements",value:String(confirmedCount),sub:"Approved mock placements",icon:"confirmed",ic:"#00b86b",bgStart:"#ecfff5",bgEnd:"#92f0c2",text:"#007a46",border:"rgba(0,184,107,.22)",glow:"rgba(187,247,208,.98)",shadow:"rgba(0,184,107,.24)"},
-          {label:"Schools Available",value:schoolCount,sub:isLoading ? "Loading school records..." : "Across all regions",icon:"schools",ic:"#c026ff",bgStart:"#fdf0ff",bgEnd:"#efadff",text:"#8610b3",border:"rgba(192,38,255,.22)",glow:"rgba(243,205,255,.98)",shadow:"rgba(192,38,255,.24)"},
-        ].map(s=>(
-          <div key={s.label} className="stat-card dashboard-stat-card" style={{"--dash-bg-start":s.bgStart,"--dash-bg-end":s.bgEnd,"--dash-accent":s.ic,"--dash-text":s.text,"--dash-border":s.border,"--dash-glow":s.glow,"--dash-shadow":s.shadow}}>
-            <div className="stat-icon"><Ico name={s.icon} size={20} color={s.ic}/></div>
+          {
+            label: "Total Students",
+            value: String(totalStudents),
+            sub: isLoading
+              ? "Loading live student records..."
+              : "Live student records",
+            icon: "students",
+            ic: "#0059ff",
+            bgStart: "#eff5ff",
+            bgEnd: "#9cc2ff",
+            text: "#0039a6",
+            border: "rgba(0,89,255,.22)",
+            glow: "rgba(191,219,254,.98)",
+            shadow: "rgba(0,89,255,.28)",
+          },
+          {
+            label: "Pending Selections",
+            value: String(pendingCount),
+            sub: "Awaiting review",
+            icon: "pending",
+            ic: "#ff7a00",
+            bgStart: "#fff4e8",
+            bgEnd: "#ffc47a",
+            text: "#a54800",
+            border: "rgba(255,122,0,.24)",
+            glow: "rgba(255,221,181,.98)",
+            shadow: "rgba(255,122,0,.26)",
+          },
+          {
+            label: "Confirmed Mock Placements",
+            value: String(confirmedCount),
+            sub: "Approved mock placements",
+            icon: "confirmed",
+            ic: "#00b86b",
+            bgStart: "#ecfff5",
+            bgEnd: "#92f0c2",
+            text: "#007a46",
+            border: "rgba(0,184,107,.22)",
+            glow: "rgba(187,247,208,.98)",
+            shadow: "rgba(0,184,107,.24)",
+          },
+          {
+            label: "Schools Available",
+            value: schoolCount,
+            sub: isLoading ? "Loading school records..." : "Across all regions",
+            icon: "schools",
+            ic: "#c026ff",
+            bgStart: "#fdf0ff",
+            bgEnd: "#efadff",
+            text: "#8610b3",
+            border: "rgba(192,38,255,.22)",
+            glow: "rgba(243,205,255,.98)",
+            shadow: "rgba(192,38,255,.24)",
+          },
+        ].map((s) => (
+          <div
+            key={s.label}
+            className="stat-card dashboard-stat-card"
+            style={{
+              "--dash-bg-start": s.bgStart,
+              "--dash-bg-end": s.bgEnd,
+              "--dash-accent": s.ic,
+              "--dash-text": s.text,
+              "--dash-border": s.border,
+              "--dash-glow": s.glow,
+              "--dash-shadow": s.shadow,
+            }}
+          >
+            <div className="stat-icon">
+              <Ico name={s.icon} size={20} color={s.ic} />
+            </div>
             <div className="stat-label">{s.label}</div>
             <div className="stat-value">{s.value}</div>
             <div className="stat-sub">{s.sub}</div>
           </div>
         ))}
       </div>
-      <div className="grid2" style={{marginBottom:16}}>
+      <div className="grid2" style={{ marginBottom: 16 }}>
         <div className="card card-padded">
-          <h3 style={{fontWeight:700,marginBottom:16,fontSize:"1rem",color:"#0f172a"}}>Recent Activity</h3>
-          {(recentActivity?.length ? recentActivity : [{ id:"empty", text:"No recent activity available from current records.", timeLabel:"", dot:"#94a3b8" }]).map((a,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"8px 0",borderBottom:i<3?"1px solid #f1f5f9":"none"}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:a.dot,flexShrink:0}}/>
-              <span style={{fontSize:".85rem",flex:1}}>{a.text}</span>
-              <span style={{fontSize:".75rem",color:"#94a3b8",flexShrink:0}}>{a.timeLabel}</span>
+          <h3
+            style={{
+              fontWeight: 700,
+              marginBottom: 16,
+              fontSize: "1rem",
+              color: "#0f172a",
+            }}
+          >
+            Recent Activity
+          </h3>
+          {(recentActivity?.length
+            ? recentActivity
+            : [
+                {
+                  id: "empty",
+                  text: "No recent activity available from current records.",
+                  timeLabel: "",
+                  dot: "#94a3b8",
+                },
+              ]
+          ).map((a, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "8px 0",
+                borderBottom: i < 3 ? "1px solid #f1f5f9" : "none",
+              }}
+            >
+              <div
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: a.dot,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ fontSize: ".85rem", flex: 1 }}>{a.text}</span>
+              <span
+                style={{ fontSize: ".75rem", color: "#94a3b8", flexShrink: 0 }}
+              >
+                {a.timeLabel}
+              </span>
             </div>
           ))}
         </div>
         <div className="card card-padded">
-          <h3 style={{fontWeight:700,marginBottom:16,fontSize:"1rem"}}>Mock Placement Summary</h3>
-          {[{cat:"Category A",count:placementCounts.A,color:"#92400e",bg:"#fef3c7"},{cat:"Category B",count:placementCounts.B,color:"#1e40af",bg:"#dbeafe"},{cat:"Category C",count:placementCounts.C,color:"#166534",bg:"#dcfce7"}].map(c=>(
-            <div key={c.cat} style={{marginBottom:12}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontWeight:600,fontSize:".85rem"}}>{c.cat}</span>
-                <span style={{color:c.color,fontWeight:700,fontSize:".85rem"}}>{c.count}</span>
+          <h3 style={{ fontWeight: 700, marginBottom: 16, fontSize: "1rem" }}>
+            Mock Placement Summary
+          </h3>
+          {[
+            {
+              cat: "Category A",
+              count: placementCounts.A,
+              color: "#92400e",
+              bg: "#fef3c7",
+            },
+            {
+              cat: "Category B",
+              count: placementCounts.B,
+              color: "#1e40af",
+              bg: "#dbeafe",
+            },
+            {
+              cat: "Category C",
+              count: placementCounts.C,
+              color: "#166534",
+              bg: "#dcfce7",
+            },
+          ].map((c) => (
+            <div key={c.cat} style={{ marginBottom: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 4,
+                }}
+              >
+                <span style={{ fontWeight: 600, fontSize: ".85rem" }}>
+                  {c.cat}
+                </span>
+                <span
+                  style={{
+                    color: c.color,
+                    fontWeight: 700,
+                    fontSize: ".85rem",
+                  }}
+                >
+                  {c.count}
+                </span>
               </div>
-              <div className="progress"><div className="progress-bar" style={{width:`${confirmedCount ? (c.count/confirmedCount)*100 : 0}%`,background:c.color}}/></div>
+              <div className="progress">
+                <div
+                  className="progress-bar"
+                  style={{
+                    width: `${confirmedCount ? (c.count / confirmedCount) * 100 : 0}%`,
+                    background: c.color,
+                  }}
+                />
+              </div>
             </div>
           ))}
         </div>
@@ -2075,9 +2355,12 @@ function ActionStatusModal({ state, onClose }) {
       return undefined;
     }
 
-    const timer = setTimeout(() => {
-      onClose();
-    }, state.type === "failure" ? 4500 : 2200);
+    const timer = setTimeout(
+      () => {
+        onClose();
+      },
+      state.type === "failure" ? 4500 : 2200,
+    );
     return () => clearTimeout(timer);
   }, [onClose, state?.open, state?.type, state?.title, state?.message]);
 
@@ -2085,19 +2368,38 @@ function ActionStatusModal({ state, onClose }) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" style={{maxWidth:460}} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head" style={{marginBottom:12}}>
+      <div
+        className="modal-card"
+        style={{ maxWidth: 460 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head" style={{ marginBottom: 12 }}>
           <div>
-            <div className="modal-title" style={{color:isSuccess ? "#166534" : "#991b1b"}}>
-              {state.title || (isSuccess ? "Update Successful" : "Update Failed")}
+            <div
+              className="modal-title"
+              style={{ color: isSuccess ? "#166534" : "#991b1b" }}
+            >
+              {state.title ||
+                (isSuccess ? "Update Successful" : "Update Failed")}
             </div>
-            <div className="modal-sub" style={{fontSize:".88rem",marginTop:6,color:"#475569"}}>
-              {state.message || (isSuccess ? "Your changes were saved." : "Something went wrong while saving your changes.")}
+            <div
+              className="modal-sub"
+              style={{ fontSize: ".88rem", marginTop: 6, color: "#475569" }}
+            >
+              {state.message ||
+                (isSuccess
+                  ? "Your changes were saved."
+                  : "Something went wrong while saving your changes.")}
             </div>
           </div>
         </div>
-        <div className="modal-actions" style={{marginTop:10}}>
-          <button className={`btn ${isSuccess ? "btn-blue" : "btn-red"}`} onClick={onClose}>Close</button>
+        <div className="modal-actions" style={{ marginTop: 10 }}>
+          <button
+            className={`btn ${isSuccess ? "btn-blue" : "btn-red"}`}
+            onClick={onClose}
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -2107,8 +2409,18 @@ function ActionStatusModal({ state, onClose }) {
 const buildStudentDraft = (student = null) => ({
   full_name: student?.full_name || student?.name || "",
   index: student?.index || student?.index_number || student?.index_no || "",
-  class: student?.class || student?.class_name || "JHS 3A",
+  class: student?.class || student?.class_name || "",
   region: student?.region || "Ashanti",
+  parent_contact:
+    student?.parent_contact ||
+    student?.parent_phone ||
+    student?.guardian_phone ||
+    student?.guardian_contact ||
+    "",
+  registered_school_id:
+    student?.registered_school_id != null
+      ? String(student.registered_school_id)
+      : "",
   // aggregate removed
   status: student?.status || "pending",
   photo_url: student?.photo_url || "",
@@ -2117,22 +2429,47 @@ const buildStudentDraft = (student = null) => ({
 const normalizeStudentRecord = (student = {}, fallbackIndex = 0) => ({
   id: student.id ?? fallbackIndex + 1,
   full_name: student.full_name || student.name || "Unnamed Student",
-  index: student.index || student.index_number || student.index_no || `AUTO${fallbackIndex + 1}`,
-  class: student.class || student.class_name || "JHS 3A",
+  index:
+    student.index ||
+    student.index_number ||
+    student.index_no ||
+    `AUTO${fallbackIndex + 1}`,
+  class: student.class || student.class_name || "",
   region: student.region || "Unknown",
   // aggregate removed
   status: student.status || "pending",
   email: student.email || null,
-  parent_contact: student.parent_contact || student.parent_phone || student.guardian_phone || student.guardian_contact || "",
+  parent_contact:
+    student.parent_contact ||
+    student.parent_phone ||
+    student.guardian_phone ||
+    student.guardian_contact ||
+    "",
   photo_url: resolveStudentPhotoUrl(student),
+  registered_school_id: student.registered_school_id ?? null,
   created_at: student.created_at || null,
   updated_at: student.updated_at || null,
 });
 
+const normalizeParentContactValue = (value) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const digits = raw.replace(/\D+/g, "");
+  if (!digits) return raw;
+  if (digits.length === 9) return `0${digits}`;
+  if (digits.length === 10 && digits.startsWith("0")) return digits;
+  if (digits.length === 12 && digits.startsWith("233")) {
+    return `0${digits.slice(3)}`;
+  }
+  return digits;
+};
+
 const buildTeacherDraft = (teacher = null) => ({
   name: teacher?.name || teacher?.full_name || "",
   employee_id: teacher?.employee_id || "",
-  role: normalizeRoleKey(teacher?.role || teacher?.user_role || "teacher") || "teacher",
+  role:
+    normalizeRoleKey(teacher?.role || teacher?.user_role || "teacher") ||
+    "teacher",
   gender: teacher?.gender || "",
   subject: teacher?.subject || "",
   class: teacher?.class || teacher?.class_name || "",
@@ -2144,18 +2481,39 @@ const buildTeacherDraft = (teacher = null) => ({
   address: teacher?.address || "",
 });
 
-const TEACHER_PROFILE_FIELD_KEYS = ["employee_id", "gender", "qualification", "date_of_birth", "hire_date", "address"];
+const TEACHER_PROFILE_FIELD_KEYS = [
+  "employee_id",
+  "gender",
+  "qualification",
+  "date_of_birth",
+  "hire_date",
+  "address",
+];
 const TEACHER_FORM_SCHEMA_VERSION = "teacher-form-v2";
-const DEFAULT_CLASS_OPTIONS = ["JHS 3A", "JHS 3B", "JHS 3C"];
 const resolveClassOptions = (cfg) => {
   const rows = Array.isArray(cfg?.classOptions) ? cfg.classOptions : [];
   const cleaned = rows.map((row) => String(row || "").trim()).filter(Boolean);
-  return cleaned.length ? cleaned : DEFAULT_CLASS_OPTIONS;
+  return cleaned;
 };
 
-function StudentEditorModal({ open, title, draft, saving, onChange, onClose, onSave }) {
+function StudentEditorModal({
+  open,
+  title,
+  draft,
+  saving,
+  onChange,
+  onClose,
+  onSave,
+  registeredSchools = [],
+  canAssignRegisteredSchool = false,
+}) {
   const { cfg } = useContext(SettingsContext);
   const classOptions = resolveClassOptions(cfg);
+  const classOptionsWithCurrent =
+    draft.class && !classOptions.includes(draft.class)
+      ? [draft.class, ...classOptions]
+      : classOptions;
+
   if (!open) return null;
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -2163,60 +2521,306 @@ function StudentEditorModal({ open, title, draft, saving, onChange, onClose, onS
         <div className="modal-head">
           <div>
             <div className="modal-title">{title}</div>
-            <div className="modal-sub">Update the core student record used across admissions, attendance, fees, and school reporting.</div>
+            <div className="modal-sub">
+              Update the core student record used across admissions, attendance,
+              fees, and school reporting.
+            </div>
           </div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>
+            ✕
+          </button>
         </div>
         <div className="form-grid">
-          <div className="form-group"><label className="form-label">Full Name</label><input className="form-control" value={draft.full_name} onChange={(e) => onChange("full_name", e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Student ID</label><input className="form-control" value={draft.index} onChange={(e) => onChange("index", e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Class</label><select className="form-control" value={draft.class} onChange={(e) => onChange("class", e.target.value)}>{classOptions.map((value) => <option key={value}>{value}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Region</label><select className="form-control" value={draft.region} onChange={(e) => onChange("region", e.target.value)}>{GHANA_REGIONS.map((value) => <option key={value}>{value}</option>)}</select></div>
+          <div className="form-group">
+            <label className="form-label">Full Name</label>
+            <input
+              className="form-control"
+              value={draft.full_name}
+              onChange={(e) => onChange("full_name", e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Student ID</label>
+            <input
+              className="form-control"
+              value={draft.index}
+              onChange={(e) => onChange("index", e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Class</label>
+            <select
+              className="form-control"
+              value={draft.class}
+              onChange={(e) => onChange("class", e.target.value)}
+            >
+              {!classOptions.length && (
+                <option value="">No classes configured in Settings</option>
+              )}
+              {classOptionsWithCurrent.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Region</label>
+            <select
+              className="form-control"
+              value={draft.region}
+              onChange={(e) => onChange("region", e.target.value)}
+            >
+              {GHANA_REGIONS.map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+          </div>
+          {canAssignRegisteredSchool && (
+            <div className="form-group">
+              <label className="form-label">Registered School</label>
+              <select
+                className="form-control"
+                value={draft.registered_school_id || ""}
+                onChange={(e) =>
+                  onChange("registered_school_id", e.target.value)
+                }
+              >
+                <option value="">Not assigned</option>
+                {registeredSchools.map((school) => (
+                  <option key={school.id} value={String(school.id)}>
+                    {school.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {/* Aggregate input removed */}
-          <div className="form-group"><label className="form-label">Status</label><select className="form-control" value={draft.status} onChange={(e) => onChange("status", e.target.value)}><option value="pending">pending</option><option value="confirmed">confirmed</option><option value="active">active</option></select></div>
-          <div className="form-group" style={{ gridColumn: "1 / -1" }}><label className="form-label">Photo URL</label><input className="form-control" value={draft.photo_url} onChange={(e) => onChange("photo_url", e.target.value)} placeholder="Optional photo URL" /></div>
+          <div className="form-group">
+            <label className="form-label">Status</label>
+            <select
+              className="form-control"
+              value={draft.status}
+              onChange={(e) => onChange("status", e.target.value)}
+            >
+              <option value="pending">pending</option>
+              <option value="confirmed">confirmed</option>
+              <option value="active">active</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Parent Contact</label>
+            <input
+              className="form-control"
+              value={draft.parent_contact || ""}
+              onChange={(e) => onChange("parent_contact", e.target.value)}
+              placeholder="e.g. 0241234567"
+            />
+          </div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+            <label className="form-label">Photo URL</label>
+            <input
+              className="form-control"
+              value={draft.photo_url}
+              onChange={(e) => onChange("photo_url", e.target.value)}
+              placeholder="Optional photo URL"
+            />
+          </div>
         </div>
         <div className="modal-actions">
-          <button className="btn btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn btn-blue" onClick={onSave} disabled={saving}>{saving ? "Saving..." : "Save Student"}</button>
+          <button
+            className="btn btn-outline"
+            onClick={onClose}
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button className="btn btn-blue" onClick={onSave} disabled={saving}>
+            {saving ? "Saving..." : "Save Student"}
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function TeacherEditorModal({ open, title, draft, roleOptions, saving, onChange, onClose, onSave }) {
+function TeacherEditorModal({
+  open,
+  title,
+  draft,
+  roleOptions,
+  saving,
+  onChange,
+  onClose,
+  onSave,
+}) {
+  const { cfg } = useContext(SettingsContext);
+  const classOptions = resolveClassOptions(cfg);
+  const classOptionsWithCurrent =
+    draft.class && !classOptions.includes(draft.class)
+      ? [draft.class, ...classOptions]
+      : classOptions;
+
   if (!open) return null;
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" style={{ maxWidth: 760 }} onClick={(event) => event.stopPropagation()}>
+      <div
+        className="modal-card"
+        style={{ maxWidth: 760 }}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="modal-head">
           <div>
             <div className="modal-title">{title}</div>
-            <div className="modal-sub">Create or update the teacher profile used in academic and school operations.</div>
+            <div className="modal-sub">
+              Create or update the teacher profile used in academic and school
+              operations.
+            </div>
           </div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>
+            ✕
+          </button>
         </div>
         <div className="alert alert-info" style={{ marginBottom: 14 }}>
-          Fill in the staff profile fields below. Scroll inside this dialog if you do not see the full form.
+          Fill in the staff profile fields below. Scroll inside this dialog if
+          you do not see the full form.
         </div>
         <div className="form-grid">
-          <div className="form-group"><label className="form-label">Teacher Name</label><input className="form-control" value={draft.name} onChange={(e) => onChange("name", e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Employee ID</label><input className="form-control" value={draft.employee_id} onChange={(e) => onChange("employee_id", e.target.value)} placeholder="Optional staff ID" /></div>
-          <div className="form-group"><label className="form-label">Role</label><select className="form-control" value={draft.role} onChange={(e) => onChange("role", e.target.value)}>{roleOptions.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Gender</label><select className="form-control" value={draft.gender} onChange={(e) => onChange("gender", e.target.value)}><option value="">Select gender</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></div>
-          <div className="form-group"><label className="form-label">Subject</label><input className="form-control" value={draft.subject} onChange={(e) => onChange("subject", e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Class</label><input className="form-control" value={draft.class} onChange={(e) => onChange("class", e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Phone</label><input className="form-control" value={draft.phone} onChange={(e) => onChange("phone", e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Email</label><input className="form-control" type="email" value={draft.email} onChange={(e) => onChange("email", e.target.value)} placeholder="teacher@school.edu" /></div>
-          <div className="form-group"><label className="form-label">Qualification</label><input className="form-control" value={draft.qualification} onChange={(e) => onChange("qualification", e.target.value)} placeholder="e.g. B.Ed Mathematics" /></div>
-          <div className="form-group"><label className="form-label">Date of Birth</label><input className="form-control" type="date" value={draft.date_of_birth} onChange={(e) => onChange("date_of_birth", e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Hire Date</label><input className="form-control" type="date" value={draft.hire_date} onChange={(e) => onChange("hire_date", e.target.value)} /></div>
-          <div className="form-group" style={{ gridColumn: "1 / -1" }}><label className="form-label">Address</label><input className="form-control" value={draft.address} onChange={(e) => onChange("address", e.target.value)} placeholder="Residential address" /></div>
+          <div className="form-group">
+            <label className="form-label">Teacher Name</label>
+            <input
+              className="form-control"
+              value={draft.name}
+              onChange={(e) => onChange("name", e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Employee ID</label>
+            <input
+              className="form-control"
+              value={draft.employee_id}
+              onChange={(e) => onChange("employee_id", e.target.value)}
+              placeholder="Optional staff ID"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Role</label>
+            <select
+              className="form-control"
+              value={draft.role}
+              onChange={(e) => onChange("role", e.target.value)}
+            >
+              {roleOptions.map((role) => (
+                <option key={role.key} value={role.key}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Gender</label>
+            <select
+              className="form-control"
+              value={draft.gender}
+              onChange={(e) => onChange("gender", e.target.value)}
+            >
+              <option value="">Select gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Subject</label>
+            <input
+              className="form-control"
+              value={draft.subject}
+              onChange={(e) => onChange("subject", e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Class</label>
+            <select
+              className="form-control"
+              value={draft.class}
+              onChange={(e) => onChange("class", e.target.value)}
+            >
+              {!classOptions.length && (
+                <option value="">No classes configured in Settings</option>
+              )}
+              {classOptionsWithCurrent.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Phone</label>
+            <input
+              className="form-control"
+              value={draft.phone}
+              onChange={(e) => onChange("phone", e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input
+              className="form-control"
+              type="email"
+              value={draft.email}
+              onChange={(e) => onChange("email", e.target.value)}
+              placeholder="teacher@school.edu"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Qualification</label>
+            <input
+              className="form-control"
+              value={draft.qualification}
+              onChange={(e) => onChange("qualification", e.target.value)}
+              placeholder="e.g. B.Ed Mathematics"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Date of Birth</label>
+            <input
+              className="form-control"
+              type="date"
+              value={draft.date_of_birth}
+              onChange={(e) => onChange("date_of_birth", e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Hire Date</label>
+            <input
+              className="form-control"
+              type="date"
+              value={draft.hire_date}
+              onChange={(e) => onChange("hire_date", e.target.value)}
+            />
+          </div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+            <label className="form-label">Address</label>
+            <input
+              className="form-control"
+              value={draft.address}
+              onChange={(e) => onChange("address", e.target.value)}
+              placeholder="Residential address"
+            />
+          </div>
         </div>
         <div className="modal-actions">
-          <button className="btn btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn btn-blue" onClick={onSave} disabled={saving}>{saving ? "Saving..." : "Save Teacher"}</button>
+          <button
+            className="btn btn-outline"
+            onClick={onClose}
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button className="btn btn-blue" onClick={onSave} disabled={saving}>
+            {saving ? "Saving..." : "Save Teacher"}
+          </button>
         </div>
       </div>
     </div>
@@ -2224,22 +2828,54 @@ function TeacherEditorModal({ open, title, draft, roleOptions, saving, onChange,
 }
 
 // STUDENTS LIST
-function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnrollAction = true, heroKicker = "Admissions Registry", heroTitle = "Student records, cleaned up and ready for action", heroSub = "Review the current intake pipeline, search across enrolled learners quickly, and move straight into adding a new student without leaving the admissions workspace.", heroNote = "Live list view for JHS 3 records across class grouping and region origin.", directoryTitle = "Student directory", directorySub = "Search by name or student ID, then review class placement at a glance.", emptyRemoteMessage = "No student rows are currently available from Supabase.", onReloadStudents }) {
+function StudentsPage({
+  onEnroll,
+  onEditStudent = null,
+  studentsData,
+  showEnrollAction = true,
+  heroKicker = "Admissions Registry",
+  heroTitle = "Student records, cleaned up and ready for action",
+  heroSub = "Review the current intake pipeline, search across enrolled learners quickly, and move straight into adding a new student without leaving the admissions workspace.",
+  heroNote = "Live list view across configured classes and region origin.",
+  directoryTitle = "Student directory",
+  directorySub = "Search by name or student ID, then review class placement at a glance.",
+  emptyRemoteMessage = "No student rows are currently available from Supabase.",
+  onReloadStudents,
+  registeredSchools = [],
+  canAssignRegisteredSchool = false,
+}) {
+  const { cfg } = useContext(SettingsContext);
+  const classOptions = resolveClassOptions(cfg);
   const [search, setSearch] = useState("");
   const [editingStudent, setEditingStudent] = useState(null);
   const [studentDraft, setStudentDraft] = useState(() => buildStudentDraft());
   const [savingStudent, setSavingStudent] = useState(false);
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [bulkClass, setBulkClass] = useState("");
+  const [bulkSchoolId, setBulkSchoolId] = useState("");
+  const [applyingBulk, setApplyingBulk] = useState(false);
+  const [statusModal, setStatusModal] = useState({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
   const isMobile = useIsMobileLayout();
   const [deletingId, setDeletingId] = useState(null);
   const { notify } = useContext(NotificationContext) || {};
 
   const handleDelete = async (student) => {
-    if (!window.confirm(`Delete student '${student.full_name}' (ID: ${student.index})? This cannot be undone.`)) return;
+    if (
+      !window.confirm(
+        `Delete student '${student.full_name}' (ID: ${student.index})? This cannot be undone.`,
+      )
+    )
+      return;
     setDeletingId(student.id);
     try {
       if (supabase) {
-        const hasRealId = student.id != null && !String(student.id).startsWith("local-");
+        const hasRealId =
+          student.id != null && !String(student.id).startsWith("local-");
         const hasIndex = !!String(student.index || "").trim();
 
         let deleteRequest = supabase.from("students").delete();
@@ -2248,7 +2884,9 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
         } else if (hasIndex) {
           deleteRequest = deleteRequest.eq("index", student.index);
         } else {
-          throw new Error("Student record is missing a database id/index key, so it cannot be deleted reliably.");
+          throw new Error(
+            "Student record is missing a database id/index key, so it cannot be deleted reliably.",
+          );
         }
 
         const { error } = await deleteRequest;
@@ -2257,11 +2895,17 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
         // Verify persistence: with strict RLS/policies, delete can no-op without throwing.
         const verifyQuery = hasRealId
           ? supabase.from("students").select("id").eq("id", student.id).limit(1)
-          : supabase.from("students").select("id").eq("index", student.index).limit(1);
+          : supabase
+              .from("students")
+              .select("id")
+              .eq("index", student.index)
+              .limit(1);
         const { data: stillThere, error: verifyError } = await verifyQuery;
         if (verifyError) throw verifyError;
         if (Array.isArray(stillThere) && stillThere.length > 0) {
-          throw new Error("Delete request was sent, but the record is still present. Check Supabase Row Level Security/policies for students delete.");
+          throw new Error(
+            "Delete request was sent, but the record is still present. Check Supabase Row Level Security/policies for students delete.",
+          );
         }
 
         notify && notify("Student deleted successfully.", "success");
@@ -2270,19 +2914,139 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
         }
       }
     } catch (err) {
-      notify && notify("Failed to delete student: " + (err?.message || "Unknown error"), "error");
+      notify &&
+        notify(
+          "Failed to delete student: " + (err?.message || "Unknown error"),
+          "error",
+        );
     } finally {
       setDeletingId(null);
     }
   };
-  const students = studentsData?.length ? sortStudentsByIndex(studentsData) : [];
-  const filtered = students.filter(s => s.full_name.toLowerCase().includes(search.toLowerCase()) || String(s.index).includes(search));
-  const parentContactOf = (student) => student?.parent_contact || student?.parent_phone || student?.guardian_phone || student?.guardian_contact || "-";
-  const initialsFor = (name) => String(name || "ST").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const students = studentsData?.length
+    ? sortStudentsByIndex(studentsData)
+    : [];
+  const filtered = students.filter(
+    (s) =>
+      s.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      String(s.index).includes(search),
+  );
+  const parentContactOf = (student) =>
+    student?.parent_contact ||
+    student?.parent_phone ||
+    student?.guardian_phone ||
+    student?.guardian_contact ||
+    "-";
+  const schoolNameById = new Map(
+    (registeredSchools || []).map((school) => [String(school.id), school.name]),
+  );
+  const schoolOf = (student) => {
+    const id = student?.registered_school_id;
+    if (id == null || String(id).trim() === "") return "Not assigned";
+    return schoolNameById.get(String(id)) || `School #${id}`;
+  };
+  const initialsFor = (name) =>
+    String(name || "ST")
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase();
   // Aggregate logic removed
-  const pendingCount = students.filter((student) => student.status === "pending").length;
-  const regionsCovered = new Set(students.map((student) => student.region).filter(Boolean)).size;
+  const pendingCount = students.filter(
+    (student) => student.status === "pending",
+  ).length;
   const canEditStudents = typeof onEditStudent === "function";
+  const filteredStudentIds = filtered.map((student) => String(student.id));
+  const selectedInFilteredCount = filteredStudentIds.filter((id) =>
+    selectedStudentIds.includes(id),
+  ).length;
+  const allFilteredSelected =
+    filteredStudentIds.length > 0 &&
+    selectedInFilteredCount === filteredStudentIds.length;
+
+  const toggleStudentSelection = (student) => {
+    const id = String(student.id);
+    setSelectedStudentIds((current) =>
+      current.includes(id) ? current.filter((row) => row !== id) : [...current, id],
+    );
+  };
+
+  const toggleSelectAllFiltered = () => {
+    if (!filteredStudentIds.length) return;
+    setSelectedStudentIds((current) => {
+      if (
+        filteredStudentIds.every((id) => current.includes(id)) &&
+        filteredStudentIds.length
+      ) {
+        return current.filter((id) => !filteredStudentIds.includes(id));
+      }
+      return [
+        ...current.filter((id) => !filteredStudentIds.includes(id)),
+        ...filteredStudentIds,
+      ];
+    });
+  };
+
+  const applyBulkAssignments = async () => {
+    if (!canEditStudents || typeof onEditStudent !== "function") return;
+    if (!selectedStudentIds.length) {
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Bulk Update Failed",
+        message: "Select at least one student first.",
+      });
+      return;
+    }
+    if (!bulkClass && !(canAssignRegisteredSchool && bulkSchoolId !== "")) {
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Bulk Update Failed",
+        message: "Choose a class and/or school assignment to apply.",
+      });
+      return;
+    }
+
+    setApplyingBulk(true);
+    let updatedCount = 0;
+    try {
+      const studentsById = new Map(students.map((student) => [String(student.id), student]));
+      for (const id of selectedStudentIds) {
+        const student = studentsById.get(id);
+        if (!student) continue;
+        const nextDraft = buildStudentDraft(student);
+        if (bulkClass) nextDraft.class = bulkClass;
+        if (canAssignRegisteredSchool && bulkSchoolId !== "") {
+          nextDraft.registered_school_id =
+            bulkSchoolId === "__UNASSIGN__" ? "" : bulkSchoolId;
+        }
+        await onEditStudent(student, nextDraft);
+        updatedCount += 1;
+      }
+      if (typeof onReloadStudents === "function") {
+        await onReloadStudents();
+      }
+      setSelectedStudentIds([]);
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "Bulk Update Complete",
+        message: `Updated ${updatedCount} student${updatedCount === 1 ? "" : "s"}.`,
+      });
+    } catch (error) {
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Bulk Update Failed",
+        message: error?.message || "Could not apply bulk assignment.",
+      });
+    } finally {
+      setApplyingBulk(false);
+    }
+  };
 
   const openStudentEditor = (student) => {
     setEditingStudent(student);
@@ -2290,8 +3054,17 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
   };
 
   const saveStudentEdit = async () => {
-    if (!editingStudent || !studentDraft.full_name.trim() || !studentDraft.index.trim()) {
-      setStatusModal({ open: true, type: "failure", title: "Student Update Failed", message: "Student name and ID are required." });
+    if (
+      !editingStudent ||
+      !studentDraft.full_name.trim() ||
+      !studentDraft.index.trim()
+    ) {
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Student Update Failed",
+        message: "Student name and ID are required.",
+      });
       return;
     }
 
@@ -2299,16 +3072,31 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
     try {
       await onEditStudent?.(editingStudent, studentDraft);
       setEditingStudent(null);
-      setStatusModal({ open: true, type: "success", title: "Student Saved", message: "Student record updated successfully." });
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "Student Saved",
+        message: "Student record updated successfully.",
+      });
     } catch (error) {
-      setStatusModal({ open: true, type: "failure", title: "Student Update Failed", message: error?.message || "Could not save the student record." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Student Update Failed",
+        message: error?.message || "Could not save the student record.",
+      });
     } finally {
       setSavingStudent(false);
     }
   };
   return (
     <div className="fade-in">
-      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((current) => ({ ...current, open: false }))} />
+      <ActionStatusModal
+        state={statusModal}
+        onClose={() =>
+          setStatusModal((current) => ({ ...current, open: false }))
+        }
+      />
       <div className="students-shell">
         <div className="students-hero">
           <div className="students-hero-copy">
@@ -2317,7 +3105,11 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
             <div className="students-hero-sub">{heroSub}</div>
           </div>
           <div className="students-hero-actions">
-            {showEnrollAction && <button className="btn btn-blue" onClick={onEnroll}><Ico name="enroll" size={16} color="#fff"/> Enroll Student</button>}
+            {showEnrollAction && (
+              <button className="btn btn-blue" onClick={onEnroll}>
+                <Ico name="enroll" size={16} color="#fff" /> Enroll Student
+              </button>
+            )}
             <div className="students-hero-note">{heroNote}</div>
           </div>
         </div>
@@ -2326,22 +3118,30 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
           <div className="students-summary-card">
             <div className="students-summary-label">Total Students</div>
             <div className="students-summary-value">{students.length}</div>
-            <div className="students-summary-sub">All records currently available</div>
+            <div className="students-summary-sub">
+              All records currently available
+            </div>
           </div>
           <div className="students-summary-card">
             <div className="students-summary-label">Search Results</div>
             <div className="students-summary-value">{filtered.length}</div>
-            <div className="students-summary-sub">Matching the current filter</div>
+            <div className="students-summary-sub">
+              Matching the current filter
+            </div>
           </div>
           {/* Aggregate summary card removed */}
           <div className="students-summary-card">
-            <div className="students-summary-label">Regions Covered</div>
-            <div className="students-summary-value">{regionsCovered}</div>
-            <div className="students-summary-sub">Origin regions represented</div>
+            <div className="students-summary-label">Pending Review</div>
+            <div className="students-summary-value">{pendingCount}</div>
+            <div className="students-summary-sub">
+              Students awaiting confirmation
+            </div>
           </div>
         </div>
 
-        {!students.length && <div className="alert alert-warning">{emptyRemoteMessage}</div>}
+        {!students.length && (
+          <div className="alert alert-warning">{emptyRemoteMessage}</div>
+        )}
 
         <div className="students-toolbar">
           <div className="students-toolbar-copy">
@@ -2349,121 +3149,328 @@ function StudentsPage({ onEnroll, onEditStudent = null, studentsData, showEnroll
             <div className="students-toolbar-sub">{directorySub}</div>
           </div>
           <div className="students-toolbar-actions">
-            <input className="form-control students-search" placeholder="Search students..." value={search} onChange={e=>setSearch(e.target.value)}/>
-            {showEnrollAction && <button className="btn btn-blue" onClick={onEnroll}><Ico name="enroll" size={16} color="#fff"/> Enroll Student</button>}
+            <input
+              className="form-control students-search"
+              placeholder="Search students..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {showEnrollAction && (
+              <button className="btn btn-blue" onClick={onEnroll}>
+                <Ico name="enroll" size={16} color="#fff" /> Enroll Student
+              </button>
+            )}
           </div>
         </div>
-
-      {isMobile ? (
-        <div className="mobile-record-list">
-          {filtered.map((s, i) => (
-            <div key={s.id} className="mobile-record-card">
-              <div className="mobile-record-head">
-                <div className="mobile-record-identity">
-                  <div className="mobile-record-avatar">
-                    {s.photo_url ? <img src={s.photo_url} alt={s.full_name}/> : initialsFor(s.full_name)}
-                  </div>
-                  <div>
-                    <div className="mobile-record-title">{i + 1}. {s.full_name}</div>
-                    <div className="mobile-record-sub">Student ID: {s.index}</div>
-                  </div>
-                </div>
-                {/* Aggregate chip removed from mobile view */}
+        {canEditStudents && (
+          <div
+            className="card card-padded"
+            style={{ marginBottom: 12, border: "1px solid #dbeafe" }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>
+              Bulk School/Class Assignment
+            </div>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Assign Class</label>
+                <select
+                  className="form-control"
+                  value={bulkClass}
+                  onChange={(e) => setBulkClass(e.target.value)}
+                >
+                  <option value="">No class change</option>
+                  {classOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="mobile-record-grid">
-                <div className="mobile-record-item"><label>Class</label><span>{s.class}</span></div>
-                <div className="mobile-record-item"><label>Region</label><span>{s.region}</span></div>
-                <div className="mobile-record-item"><label>Parent Contact</label><span>{parentContactOf(s)}</span></div>
-              </div>
-              {canEditStudents && (
-                <div className="mobile-record-actions">
-                  <button className="btn btn-outline" onClick={() => openStudentEditor(s)}>Edit</button>
-                  <button className="btn btn-danger" style={{marginLeft:8}} disabled={deletingId===s.id} onClick={() => handleDelete(s)}>{deletingId===s.id?"Deleting...":"Delete"}</button>
+              {canAssignRegisteredSchool && (
+                <div className="form-group">
+                  <label className="form-label">Assign School</label>
+                  <select
+                    className="form-control"
+                    value={bulkSchoolId}
+                    onChange={(e) => setBulkSchoolId(e.target.value)}
+                  >
+                    <option value="">No school change</option>
+                    <option value="__UNASSIGN__">Unassign school</option>
+                    {registeredSchools.map((school) => (
+                      <option key={school.id} value={String(school.id)}>
+                        {school.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>
-          ))}
-          {!filtered.length && <div className="students-empty-state">No students match the current search. Try a different name or student ID.</div>}
-        </div>
-      ) : (
-      <div className="card students-table-card">
-        <div className="students-table-head">
-          <div>
-            <div className="students-table-title">Admissions ledger</div>
-            <div className="students-table-sub">{filtered.length} visible record{filtered.length === 1 ? "" : "s"} with class and region tracking.</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={toggleSelectAllFiltered}
+              >
+                {allFilteredSelected ? "Clear Visible Selection" : "Select All Visible"}
+              </button>
+              <button
+                className="btn btn-blue"
+                type="button"
+                disabled={applyingBulk}
+                onClick={applyBulkAssignments}
+              >
+                {applyingBulk
+                  ? "Applying..."
+                  : `Apply to ${selectedStudentIds.length} selected`}
+              </button>
+            </div>
           </div>
-          <div className="students-table-status">{pendingCount} pending review</div>
-        </div>
-        <div className="table-wrap">
-        <table className="students-table">
-          <thead><tr><th>#</th><th data-col="photo"><span className="students-th-label">Photo</span></th><th data-col="name"><span className="students-th-label">Name</span></th><th data-col="student-id"><span className="students-th-label">Student ID</span></th><th data-col="class"><span className="students-th-label">Class</span></th><th data-col="region"><span className="students-th-label">Region</span></th><th data-col="parent-contact"><span className="students-th-label">Parent Contact</span></th>{canEditStudents && <th><span className="students-th-label">Actions</span></th>}</tr></thead>
-          <tbody>
-            {filtered.map((s,i)=>(
-              <tr key={s.id}>
-                <td>{i+1}</td>
-                <td>
-                  {s.photo_url ? (
-                    <img
-                      src={s.photo_url}
-                      alt={s.full_name}
-                      className="students-avatar"
-                    />
-                  ) : (
-                    <div className="students-avatar-placeholder">
-                      {initialsFor(s.full_name)}
+        )}
+
+        {isMobile ? (
+          <div className="mobile-record-list">
+            {filtered.map((s, i) => (
+              <div key={s.id} className="mobile-record-card">
+                <div className="mobile-record-head">
+                  <div className="mobile-record-identity">
+                    <div className="mobile-record-avatar">
+                      {s.photo_url ? (
+                        <img src={s.photo_url} alt={s.full_name} />
+                      ) : (
+                        initialsFor(s.full_name)
+                      )}
                     </div>
-                  )}
-                </td>
-                <td className="students-name-cell"><strong>{s.full_name}</strong><span>Status: {s.status || "pending"}</span></td>
-                <td className="students-id-cell">{s.index}</td>
-                <td>{s.class}</td>
-                <td>{s.region}</td>
-                <td>{parentContactOf(s)}</td>
-                {/* Aggregate column removed */}
+                    <div>
+                      <div className="mobile-record-title">
+                        {i + 1}. {s.full_name}
+                      </div>
+                      <div className="mobile-record-sub">
+                        Student ID: {s.index}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Aggregate chip removed from mobile view */}
+                </div>
+                <div className="mobile-record-grid">
+                  <div className="mobile-record-item">
+                    <label>Class</label>
+                    <span>{s.class}</span>
+                  </div>
+                  <div className="mobile-record-item">
+                    <label>School</label>
+                    <span>{schoolOf(s)}</span>
+                  </div>
+                  <div className="mobile-record-item">
+                    <label>Parent Contact</label>
+                    <span>{parentContactOf(s)}</span>
+                  </div>
+                </div>
                 {canEditStudents && (
-                  <td>
-                    <button className="btn btn-outline btn-sm" onClick={() => openStudentEditor(s)}>Edit</button>
-                    <button className="btn btn-danger btn-sm" style={{marginLeft:8}} disabled={deletingId===s.id} onClick={() => handleDelete(s)}>{deletingId===s.id?"Deleting...":"Delete"}</button>
-                  </td>
+                  <div className="mobile-record-actions">
+                    <button
+                      className="btn btn-outline"
+                      onClick={() => toggleStudentSelection(s)}
+                    >
+                      {selectedStudentIds.includes(String(s.id)) ? "Deselect" : "Select"}
+                    </button>
+                    <button
+                      className="btn btn-outline btn-sm record-action-btn action-edit"
+                      onClick={() => openStudentEditor(s)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="btn btn-sm record-action-btn action-delete"
+                      disabled={deletingId === s.id}
+                      onClick={() => handleDelete(s)}
+                    >
+                      {deletingId === s.id ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
                 )}
-              </tr>
+              </div>
             ))}
-          </tbody>
-        </table>
-        {!filtered.length && <div className="students-empty-state" style={{margin:16}}>No students match the current search. Try a different name or student ID.</div>}
-        </div>
-      </div>
-      )}
+            {!filtered.length && (
+              <div className="students-empty-state">
+                No students match the current search. Try a different name or
+                student ID.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="card students-table-card">
+            <div className="students-table-head">
+              <div>
+                <div className="students-table-title">Admissions ledger</div>
+                <div className="students-table-sub">
+                  {filtered.length} visible record
+                  {filtered.length === 1 ? "" : "s"} with class and school
+                  tracking.
+                </div>
+              </div>
+              <div className="students-table-status">
+                {pendingCount} pending review
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table className="students-table">
+                <thead>
+                  <tr>
+                    {canEditStudents && (
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={allFilteredSelected}
+                          onChange={toggleSelectAllFiltered}
+                        />
+                      </th>
+                    )}
+                    <th>#</th>
+                    <th data-col="photo">
+                      <span className="students-th-label">Photo</span>
+                    </th>
+                    <th data-col="name">
+                      <span className="students-th-label">Name</span>
+                    </th>
+                    <th data-col="student-id">
+                      <span className="students-th-label">Student ID</span>
+                    </th>
+                    <th data-col="class">
+                      <span className="students-th-label">Class</span>
+                    </th>
+                    <th data-col="school">
+                      <span className="students-th-label">School</span>
+                    </th>
+                    <th data-col="parent-contact">
+                      <span className="students-th-label">Parent Contact</span>
+                    </th>
+                    {canEditStudents && (
+                      <th>
+                        <span className="students-th-label">Actions</span>
+                      </th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((s, i) => (
+                    <tr key={s.id}>
+                      {canEditStudents && (
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedStudentIds.includes(String(s.id))}
+                            onChange={() => toggleStudentSelection(s)}
+                          />
+                        </td>
+                      )}
+                      <td>{i + 1}</td>
+                      <td>
+                        {s.photo_url ? (
+                          <img
+                            src={s.photo_url}
+                            alt={s.full_name}
+                            className="students-avatar"
+                          />
+                        ) : (
+                          <div className="students-avatar-placeholder">
+                            {initialsFor(s.full_name)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="students-name-cell">
+                        <strong>{s.full_name}</strong>
+                        <span>Status: {s.status || "pending"}</span>
+                      </td>
+                      <td className="students-id-cell">{s.index}</td>
+                      <td>{s.class}</td>
+                      <td>{schoolOf(s)}</td>
+                      <td>{parentContactOf(s)}</td>
+                      {/* Aggregate column removed */}
+                      {canEditStudents && (
+                        <td>
+                          <div className="record-action-group">
+                            <button
+                              className="btn btn-sm record-action-btn action-edit"
+                              onClick={() => openStudentEditor(s)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-sm record-action-btn action-delete"
+                              disabled={deletingId === s.id}
+                              onClick={() => handleDelete(s)}
+                            >
+                              {deletingId === s.id ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!filtered.length && (
+                <div className="students-empty-state" style={{ margin: 16 }}>
+                  No students match the current search. Try a different name or
+                  student ID.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       <StudentEditorModal
         open={!!editingStudent}
         title="Edit Student"
         draft={studentDraft}
         saving={savingStudent}
-        onChange={(key, value) => setStudentDraft((current) => ({ ...current, [key]: value }))}
+        onChange={(key, value) =>
+          setStudentDraft((current) => ({ ...current, [key]: value }))
+        }
         onClose={() => !savingStudent && setEditingStudent(null)}
         onSave={saveStudentEdit}
+        registeredSchools={registeredSchools}
+        canAssignRegisteredSchool={canAssignRegisteredSchool}
       />
     </div>
   );
 }
 
 // ENROLL
-function EnrollPage({ onBack, registeredSchoolId = null }) {
+function EnrollPage({ onBack, registeredSchoolId = null, onEnrolled = null }) {
   const { cfg } = useContext(SettingsContext);
   const classOptions = resolveClassOptions(cfg);
-  const [form, setForm] = useState({name:"",index:"",dob:"",class:classOptions[0] || "JHS 3A",region:"Ashanti",guardian:"",phone:"",photoUrl:""});
+  const classOptionsKey = classOptions.join("||");
+  const [form, setForm] = useState({
+    name: "",
+    index: "",
+    dob: "",
+    class: classOptions[0] || "",
+    region: "Ashanti",
+    guardian: "",
+    phone: "",
+    photoUrl: "",
+  });
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoFileName, setPhotoFileName] = useState("");
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
-  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   useEffect(() => {
-    if (!classOptions.includes(form.class)) {
-      setForm((current) => ({ ...current, class: classOptions[0] || "JHS 3A" }));
+    const nextClass = classOptions[0] || "";
+    if (!classOptions.includes(form.class) && form.class !== nextClass) {
+      setForm((current) => ({ ...current, class: nextClass }));
     }
-  }, [classOptions, form.class]);
-  const completionCount = [form.name, form.index, form.dob, form.class, form.region, form.guardian, form.phone].filter((value) => String(value || "").trim()).length;
+  }, [classOptionsKey, form.class]);
+  const completionCount = [
+    form.name,
+    form.index,
+    form.dob,
+    form.class,
+    form.region,
+    form.guardian,
+    form.phone,
+  ].filter((value) => String(value || "").trim()).length;
 
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
@@ -2482,6 +3489,10 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
       alert("Name and student ID are required.");
       return;
     }
+    if (!form.class.trim()) {
+      alert("No class is configured. Create classes in Settings first.");
+      return;
+    }
 
     setSaving(true);
     const student = {
@@ -2498,28 +3509,90 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
     if (supabase) {
       const payload = {
         full_name: student.full_name,
+        index_number: student.index,
         index: student.index,
         class: student.class,
         region: student.region,
         // aggregate removed
         status: student.status,
-        ...(registeredSchoolId != null ? { registered_school_id: registeredSchoolId } : {}),
-        dob: form.dob || null,
-        guardian: form.guardian || null,
-        phone: form.phone || null,
+        ...(registeredSchoolId != null
+          ? { registered_school_id: registeredSchoolId }
+          : {}),
+        date_of_birth: form.dob || null,
+        parent_contact: form.guardian || form.phone || null,
+        personal_contact: form.phone || null,
         photo_url: student.photo_url || null,
       };
 
-      const { error } = await supabase.from("students").insert(payload);
-      if (error && isMissingColumnError(error)) {
-        if (registeredSchoolId != null) {
-          alert("School-scoped student enrollment requires backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.");
+      let insertPayload = { ...payload };
+      let missingScopeColumn = false;
+      let lastError = null;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const { error } = await supabase.from("students").insert(insertPayload);
+        if (!error) {
+          lastError = null;
+          break;
+        }
+        lastError = error;
+        if (!isMissingColumnError(error)) break;
+
+        const msg = String(error.message || "");
+        const quotedMatch = msg.match(/'([^']+)'/);
+        const doubleQuotedMatch = msg.match(/"([^"]+)"/);
+        const missingColumn = (
+          quotedMatch?.[1] ||
+          doubleQuotedMatch?.[1] ||
+          ""
+        ).trim();
+
+        if (!missingColumn) break;
+        if (
+          missingColumn === "registered_school_id" &&
+          registeredSchoolId != null
+        ) {
+          // Allow enrollment to continue on older schemas, but mark it as unscoped.
+          missingScopeColumn = true;
+        }
+
+        if (!(missingColumn in insertPayload)) break;
+        delete insertPayload[missingColumn];
+      }
+
+      if (lastError) {
+        const errMsg = String(lastError.message || "");
+        const normalizedErr = errMsg.toLowerCase();
+        if (
+          normalizedErr.includes("row-level security") ||
+          normalizedErr.includes("violates row-level security policy") ||
+          normalizedErr.includes("unauthorized")
+        ) {
+          alert(
+            "Enrollment failed: Supabase access is blocked by auth/RLS. Sign in again, then run backend/supabase/migrations/001_public_portal_tables.sql and backend/supabase/migrations/009_ensure_student_profile_fields.sql in Supabase SQL editor.",
+          );
           setSaving(false);
           return;
         }
-        // Fallback for schemas without photo_url column.
-        const { photo_url, ...fallbackPayload } = payload;
-        await supabase.from("students").insert(fallbackPayload);
+        alert(
+          "Enrollment failed: " +
+            (lastError.message ||
+              "Unknown error. Check Supabase RLS policies for the students table."),
+        );
+        setSaving(false);
+        return;
+      }
+
+      if (missingScopeColumn) {
+        alert(
+          "Student enrolled, but this database is missing registered_school_id on students. Run backend/supabase/migrations/004_add_registered_school_scope.sql so future records are school-scoped.",
+        );
+      }
+    }
+
+    if (typeof onEnrolled === "function") {
+      try {
+        await onEnrolled();
+      } catch {
+        // Keep enrollment successful even if post-save refresh fails.
       }
     }
 
@@ -2527,31 +3600,52 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
     setDone(true);
   };
 
-  if (done) return (
-    <div className="fade-in">
-      <div className="enroll-success-card">
-        <div className="alert alert-success" style={{marginBottom:0}}>Student enrolled successfully!</div>
-        <div className="enroll-success-title">Admissions record created</div>
-        <div className="enroll-success-sub">The student profile has been added and is ready for scores, placement updates, and guardian communication workflows.</div>
-        <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-          <button className="btn btn-outline" onClick={onBack}>{"<- Back to Students"}</button>
+  if (done)
+    return (
+      <div className="fade-in">
+        <div className="enroll-success-card">
+          <div className="alert alert-success" style={{ marginBottom: 0 }}>
+            Student enrolled successfully!
+          </div>
+          <div className="enroll-success-title">Admissions record created</div>
+          <div className="enroll-success-sub">
+            The student profile has been added and is ready for scores,
+            placement updates, and guardian communication workflows.
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <button className="btn btn-outline" onClick={onBack}>
+              {"<- Back to Students"}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
   return (
     <div className="fade-in">
       <div className="enroll-shell">
         <div className="enroll-hero">
           <div className="enroll-hero-copy">
             <div className="enroll-hero-eyebrow">Admissions Desk</div>
-            <div className="enroll-hero-title">Enroll a student with a cleaner intake workflow</div>
-            <div className="enroll-hero-sub">Capture the core identity, placement, and guardian details in one professional screen that feels consistent with an admissions office, not a demo form.</div>
+            <div className="enroll-hero-title">
+              Enroll a student with a cleaner intake workflow
+            </div>
+            <div className="enroll-hero-sub">
+              Capture the core identity, placement, and guardian details in one
+              professional screen that feels consistent with an admissions
+              office, not a demo form.
+            </div>
           </div>
           <div className="enroll-hero-pills">
-            <span className="enroll-hero-pill"><Ico name="students" size={14} color="#bfdbfe"/> Student record</span>
-            <span className="enroll-hero-pill"><Ico name="confirmed" size={14} color="#bfdbfe"/> Ready for placement</span>
-            <span className="enroll-hero-pill"><Ico name="profile" size={14} color="#bfdbfe"/> Guardian linked</span>
+            <span className="enroll-hero-pill">
+              <Ico name="students" size={14} color="#bfdbfe" /> Student record
+            </span>
+            <span className="enroll-hero-pill">
+              <Ico name="confirmed" size={14} color="#bfdbfe" /> Ready for
+              placement
+            </span>
+            <span className="enroll-hero-pill">
+              <Ico name="profile" size={14} color="#bfdbfe" /> Guardian linked
+            </span>
           </div>
         </div>
 
@@ -2561,30 +3655,68 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
               <div className="enroll-photo-head">
                 <div>
                   <div className="enroll-photo-title">Profile Preview</div>
-                  <div className="enroll-photo-meta">Admissions card snapshot</div>
+                  <div className="enroll-photo-meta">
+                    Admissions card snapshot
+                  </div>
                 </div>
-                <span className="enroll-section-badge">{completionCount}/7 fields</span>
+                <span className="enroll-section-badge">
+                  {completionCount}/7 fields
+                </span>
               </div>
               <div className="enroll-photo-col">
                 <div className="enroll-photo-frame">
                   {photoPreview ? (
-                    <img src={photoPreview} alt="Preview" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                    <img
+                      src={photoPreview}
+                      alt="Preview"
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
                   ) : (
                     <div className="enroll-photo-empty">
-                      <div className="enroll-photo-empty-badge"><Ico name="profile" size={20} color="#1d4ed8"/></div>
+                      <div className="enroll-photo-empty-badge">
+                        <Ico name="profile" size={20} color="#1d4ed8" />
+                      </div>
                       <div className="enroll-photo-empty-copy">
-                        <div className="enroll-photo-empty-title">Photo not uploaded</div>
-                        <div className="enroll-photo-empty-sub">Add a clear passport-style image for the student record.</div>
+                        <div className="enroll-photo-empty-title">
+                          Photo not uploaded
+                        </div>
+                        <div className="enroll-photo-empty-sub">
+                          Add a clear passport-style image for the student
+                          record.
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
                 <div className="enroll-upload-stack">
-                  <input id="student-photo-upload" type="file" accept="image/*" className="enroll-photo-input" onChange={handlePhotoChange}/>
-                  <label htmlFor="student-photo-upload" className="enroll-upload-trigger"><Ico name="upload" size={14} color="#fff"/> {photoPreview ? "Replace photo" : "Upload photo"}</label>
+                  <input
+                    id="student-photo-upload"
+                    type="file"
+                    accept="image/*"
+                    className="enroll-photo-input"
+                    onChange={handlePhotoChange}
+                  />
+                  <label
+                    htmlFor="student-photo-upload"
+                    className="enroll-upload-trigger"
+                  >
+                    <Ico name="upload" size={14} color="#fff" />{" "}
+                    {photoPreview ? "Replace photo" : "Upload photo"}
+                  </label>
                   <div className="enroll-upload-meta">
-                    <div className="enroll-upload-file">{photoFileName || "No file selected"}</div>
-                    <div className="enroll-upload-caption">PNG or JPG. Centered portrait preferred.</div>
+                    <div className="enroll-upload-file">
+                      {photoFileName || "No file selected"}
+                    </div>
+                    <div className="enroll-upload-caption">
+                      PNG or JPG. Centered portrait preferred.
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2604,9 +3736,27 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
             <div className="enroll-guidance">
               <div className="enroll-guidance-title">Before you save</div>
               <div className="enroll-guidance-list">
-                <div className="enroll-guidance-item"><span className="enroll-guidance-dot">1</span><span>Use the official student ID format so later score imports and attendance records match cleanly.</span></div>
-                <div className="enroll-guidance-item"><span className="enroll-guidance-dot">2</span><span>Confirm the guardian phone number now to reduce corrections during fees and announcement workflows.</span></div>
-                <div className="enroll-guidance-item"><span className="enroll-guidance-dot">3</span><span>Choose the correct class and region up front so placement dashboards stay accurate.</span></div>
+                <div className="enroll-guidance-item">
+                  <span className="enroll-guidance-dot">1</span>
+                  <span>
+                    Use the official student ID format so later score imports
+                    and attendance records match cleanly.
+                  </span>
+                </div>
+                <div className="enroll-guidance-item">
+                  <span className="enroll-guidance-dot">2</span>
+                  <span>
+                    Confirm the guardian phone number now to reduce corrections
+                    during fees and announcement workflows.
+                  </span>
+                </div>
+                <div className="enroll-guidance-item">
+                  <span className="enroll-guidance-dot">3</span>
+                  <span>
+                    Choose the correct class and region up front so placement
+                    dashboards stay accurate.
+                  </span>
+                </div>
               </div>
             </div>
           </aside>
@@ -2616,7 +3766,11 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
               <div>
                 <div className="enroll-form-kicker">Student Intake Form</div>
                 <div className="enroll-form-title">Core admission details</div>
-                <div className="enroll-form-sub">Enter the student profile once, then let the rest of the portal reuse it across academics, communication, and reporting.</div>
+                <div className="enroll-form-sub">
+                  Enter the student profile once, then let the rest of the
+                  portal reuse it across academics, communication, and
+                  reporting.
+                </div>
               </div>
               <div className="enroll-form-status">Draft ready</div>
             </div>
@@ -2626,35 +3780,92 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
                 <div className="enroll-section-head">
                   <div>
                     <div className="enroll-section-title">Identity</div>
-                    <div className="enroll-section-sub">Basic student information used everywhere else in the portal.</div>
+                    <div className="enroll-section-sub">
+                      Basic student information used everywhere else in the
+                      portal.
+                    </div>
                   </div>
                   <span className="enroll-section-badge">Required</span>
                 </div>
                 <div className="enroll-fields">
-                  <div className="form-group"><label className="form-label">Full Name</label><input className="form-control" placeholder="e.g. Ama Owusu Mensah" value={form.name} onChange={e=>set("name",e.target.value)}/></div>
-                  <div className="form-group"><label className="form-label">Student ID</label><input className="form-control" placeholder="e.g. CG-2026-014" value={form.index} onChange={e=>set("index",e.target.value)}/></div>
-                  <div className="form-group"><label className="form-label">Date of Birth</label><input type="date" className="form-control" value={form.dob} onChange={e=>set("dob",e.target.value)}/></div>
-                  <div className="form-group"><label className="form-label">Parent/Guardian Name</label><input className="form-control" placeholder="Parent or guardian full name" value={form.guardian} onChange={e=>set("guardian",e.target.value)}/></div>
+                  <div className="form-group">
+                    <label className="form-label">Full Name</label>
+                    <input
+                      className="form-control"
+                      placeholder="e.g. Ama Owusu Mensah"
+                      value={form.name}
+                      onChange={(e) => set("name", e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Student ID</label>
+                    <input
+                      className="form-control"
+                      placeholder="e.g. CG-2026-014"
+                      value={form.index}
+                      onChange={(e) => set("index", e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Date of Birth</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={form.dob}
+                      onChange={(e) => set("dob", e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Parent/Guardian Name</label>
+                    <input
+                      className="form-control"
+                      placeholder="Parent or guardian full name"
+                      value={form.guardian}
+                      onChange={(e) => set("guardian", e.target.value)}
+                    />
+                  </div>
                 </div>
               </section>
 
               <section className="enroll-section">
                 <div className="enroll-section-head">
                   <div>
-                    <div className="enroll-section-title">Academic Class Placement</div>
-                    <div className="enroll-section-sub">Assign the student to the right learning group and origin region for reporting.</div>
+                    <div className="enroll-section-title">
+                      Academic Class Placement
+                    </div>
+                    <div className="enroll-section-sub">
+                      Assign the student to the right learning group and origin
+                      region for reporting.
+                    </div>
                   </div>
                   <span className="enroll-section-badge">Placement</span>
                 </div>
                 <div className="enroll-fields">
-                  <div className="form-group"><label className="form-label">Class</label>
-                    <select className="form-control" value={form.class} onChange={e=>set("class",e.target.value)}>
-                      {classOptions.map(c=><option key={c}>{c}</option>)}
+                  <div className="form-group">
+                    <label className="form-label">Class</label>
+                    <select
+                      className="form-control"
+                      value={form.class}
+                      onChange={(e) => set("class", e.target.value)}
+                    >
+                      {!classOptions.length && (
+                        <option value="">No classes configured in Settings</option>
+                      )}
+                      {classOptions.map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
                     </select>
                   </div>
-                  <div className="form-group"><label className="form-label">Region</label>
-                    <select className="form-control" value={form.region} onChange={e=>set("region",e.target.value)}>
-                      {GHANA_REGIONS.map(r=><option key={r}>{r}</option>)}
+                  <div className="form-group">
+                    <label className="form-label">Region</label>
+                    <select
+                      className="form-control"
+                      value={form.region}
+                      onChange={(e) => set("region", e.target.value)}
+                    >
+                      {GHANA_REGIONS.map((r) => (
+                        <option key={r}>{r}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -2664,21 +3875,44 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
                 <div className="enroll-section-head">
                   <div>
                     <div className="enroll-section-title">Family contact</div>
-                    <div className="enroll-section-sub">Keep one reliable guardian contact on file for fees, notices, and attendance follow-up.</div>
+                    <div className="enroll-section-sub">
+                      Keep one reliable guardian contact on file for fees,
+                      notices, and attendance follow-up.
+                    </div>
                   </div>
                   <span className="enroll-section-badge">Contact</span>
                 </div>
                 <div className="enroll-fields">
-                  <div className="form-group full"><label className="form-label">Phone</label><input className="form-control" placeholder="Guardian or student phone" value={form.phone} onChange={e=>set("phone",e.target.value)}/></div>
+                  <div className="form-group full">
+                    <label className="form-label">Phone</label>
+                    <input
+                      className="form-control"
+                      placeholder="Guardian or student phone"
+                      value={form.phone}
+                      onChange={(e) => set("phone", e.target.value)}
+                    />
+                  </div>
                 </div>
               </section>
             </div>
 
             <div className="enroll-actions">
-              <div className="enroll-actions-note">Required fields are validated before save. Once enrolled, the record can be used for scores, attendance, announcements, and placement updates.</div>
+              <div className="enroll-actions-note">
+                Required fields are validated before save. Once enrolled, the
+                record can be used for scores, attendance, announcements, and
+                placement updates.
+              </div>
               <div className="enroll-actions-row">
-                <button className="btn btn-outline" onClick={onBack}>Cancel</button>
-                <button className="btn btn-blue" onClick={enrollStudent} disabled={saving}>{saving ? "Saving..." : "Enroll Student"}</button>
+                <button className="btn btn-outline" onClick={onBack}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-blue"
+                  onClick={enrollStudent}
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Enroll Student"}
+                </button>
               </div>
             </div>
           </div>
@@ -2692,17 +3926,31 @@ function EnrollPage({ onBack, registeredSchoolId = null }) {
 function ScoresPage({ studentsData, tableInfo }) {
   const hasScoresError = hasRealTableError(tableInfo);
   const isMobile = useIsMobileLayout();
-  const students = studentsData?.length ? sortStudentsByIndex(studentsData) : [];
+  const students = studentsData?.length
+    ? sortStudentsByIndex(studentsData)
+    : [];
   const studentsMap = new Map();
   students.forEach((student) => {
     studentsMap.set(String(student.id), student);
     studentsMap.set(String(student.index), student);
   });
-  const scoreRows = Array.isArray(tableInfo?.rows) ? sortRecordsByStudentIndex(tableInfo.rows.map((row, index) => normalizeScoreRow(row, studentsMap, index))) : [];
+  const scoreRows = Array.isArray(tableInfo?.rows)
+    ? sortRecordsByStudentIndex(
+        tableInfo.rows.map((row, index) =>
+          normalizeScoreRow(row, studentsMap, index),
+        ),
+      )
+    : [];
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Test Scores</div></div>
-      {hasScoresError && <div className="alert alert-warning">Supabase scores table is unavailable.</div>}
+      <div className="page-header">
+        <div className="page-title">Test Scores</div>
+      </div>
+      {hasScoresError && (
+        <div className="alert alert-warning">
+          Supabase scores table is unavailable.
+        </div>
+      )}
       {isMobile ? (
         <div className="mobile-record-list">
           {(scoreRows.length ? scoreRows : students).map((student) => {
@@ -2712,14 +3960,31 @@ function ScoresPage({ studentsData, tableInfo }) {
                 <div key={`score-${student.id}`} className="mobile-record-card">
                   <div className="mobile-record-head">
                     <div>
-                      <div className="mobile-record-title">{student.studentName}</div>
-                      <div className="mobile-record-sub">Student ID: {student.index}</div>
+                      <div className="mobile-record-title">
+                        {student.studentName}
+                      </div>
+                      <div className="mobile-record-sub">
+                        Student ID: {student.index}
+                      </div>
                     </div>
-                    <span className="grade-chip" style={{background:grade.bg,color:grade.color}}>{student.score}</span>
+                    <span
+                      className="grade-chip"
+                      style={{ background: grade.bg, color: grade.color }}
+                    >
+                      {student.score}
+                    </span>
                   </div>
                   <div className="mobile-record-grid">
-                    <div className="mobile-record-item"><label>Subject</label><span>{student.subject}</span></div>
-                    <div className="mobile-record-item"><label>Exam</label><span className="badge badge-blue">{student.examType}</span></div>
+                    <div className="mobile-record-item">
+                      <label>Subject</label>
+                      <span>{student.subject}</span>
+                    </div>
+                    <div className="mobile-record-item">
+                      <label>Exam</label>
+                      <span className="badge badge-blue">
+                        {student.examType}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );
@@ -2729,117 +3994,271 @@ function ScoresPage({ studentsData, tableInfo }) {
               <div key={student.id} className="mobile-record-card">
                 <div className="mobile-record-head">
                   <div>
-                    <div className="mobile-record-title">{student.full_name}</div>
-                    <div className="mobile-record-sub">Student ID: {student.index}</div>
+                    <div className="mobile-record-title">
+                      {student.full_name}
+                    </div>
+                    <div className="mobile-record-sub">
+                      Student ID: {student.index}
+                    </div>
                   </div>
                   {/* No aggregate/grade shown */}
-                  <span className={`badge ${student.status === "confirmed" ? "badge-success" : "badge-warning"}`}>{student.status}</span>
+                  <span
+                    className={`badge ${student.status === "confirmed" ? "badge-success" : "badge-warning"}`}
+                  >
+                    {student.status}
+                  </span>
                 </div>
                 <div className="mobile-record-grid">
-                  <div className="mobile-record-item"><label>Class</label><span>{student.class}</span></div>
-                  <div className="mobile-record-item"><label>Aggregate</label><span className="grade-chip" style={{background:grade.bg,color:grade.color}}>{aggregate}</span></div>
+                  <div className="mobile-record-item">
+                    <label>Class</label>
+                    <span>{student.class}</span>
+                  </div>
+                  <div className="mobile-record-item">
+                    <label>Aggregate</label>
+                    <span
+                      className="grade-chip"
+                      style={{ background: grade.bg, color: grade.color }}
+                    >
+                      {aggregate}
+                    </span>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       ) : (
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Student</th><th>Student ID</th><th>{scoreRows.length ? "Subject" : "Class"}</th><th>{scoreRows.length ? "Score" : "Aggregate"}</th><th>{scoreRows.length ? "Exam" : "Status"}</th></tr></thead>
-          <tbody>
-            {(scoreRows.length ? scoreRows : students).map((student) => {
-              if (scoreRows.length) {
-                const grade = getGrade(student.score);
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Student ID</th>
+                <th>{scoreRows.length ? "Subject" : "Class"}</th>
+                <th>{scoreRows.length ? "Score" : "Aggregate"}</th>
+                <th>{scoreRows.length ? "Exam" : "Status"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(scoreRows.length ? scoreRows : students).map((student) => {
+                if (scoreRows.length) {
+                  const grade = getGrade(student.score);
+                  return (
+                    <tr key={`score-${student.id}`}>
+                      <td>
+                        <strong>{student.studentName}</strong>
+                      </td>
+                      <td style={{ fontFamily: "monospace" }}>
+                        {student.index}
+                      </td>
+                      <td>{student.subject}</td>
+                      <td>
+                        <span
+                          className="grade-chip"
+                          style={{ background: grade.bg, color: grade.color }}
+                        >
+                          {student.score}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge badge-blue">
+                          {student.examType}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                }
+                const aggregate = Number(student.aggregate ?? 0);
+                const grade = getGrade(100 - Math.min(aggregate * 5, 95));
                 return (
-                  <tr key={`score-${student.id}`}>
-                    <td><strong>{student.studentName}</strong></td>
-                    <td style={{fontFamily:"monospace"}}>{student.index}</td>
-                    <td>{student.subject}</td>
-                    <td><span className="grade-chip" style={{background:grade.bg,color:grade.color}}>{student.score}</span></td>
-                    <td><span className="badge badge-blue">{student.examType}</span></td>
+                  <tr key={student.id}>
+                    <td>
+                      <strong>{student.full_name}</strong>
+                    </td>
+                    <td style={{ fontFamily: "monospace" }}>{student.index}</td>
+                    <td>{student.class}</td>
+                    <td>
+                      <span
+                        className="grade-chip"
+                        style={{ background: grade.bg, color: grade.color }}
+                      >
+                        {aggregate}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${student.status === "confirmed" ? "badge-success" : "badge-warning"}`}
+                      >
+                        {student.status}
+                      </span>
+                    </td>
                   </tr>
                 );
-              }
-              const aggregate = Number(student.aggregate ?? 0);
-              const grade = getGrade(100 - Math.min(aggregate * 5, 95));
-              return (
-                <tr key={student.id}>
-                  <td><strong>{student.full_name}</strong></td>
-                  <td style={{fontFamily:"monospace"}}>{student.index}</td>
-                  <td>{student.class}</td>
-                  <td><span className="grade-chip" style={{background:grade.bg,color:grade.color}}>{aggregate}</span></td>
-                  <td><span className={`badge ${student.status === "confirmed" ? "badge-success" : "badge-warning"}`}>{student.status}</span></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
 
 // â”€â”€â”€ ANALYTICS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function AnalyticsPage({ studentsData, schoolsData, selectionsData, scoreTableInfo }) {
+function AnalyticsPage({
+  studentsData,
+  schoolsData,
+  selectionsData,
+  scoreTableInfo,
+}) {
   const hasScoreAnalyticsError = hasRealTableError(scoreTableInfo);
   const students = studentsData?.length ? studentsData : [];
   const schools = schoolsData?.length ? schoolsData : [];
   const selections = selectionsData?.length ? selectionsData : [];
-  const averageAggregate = students.length ? (students.reduce((sum, student) => sum + Number(student.aggregate || 0), 0) / students.length).toFixed(1) : "-";
+  const averageAggregate = students.length
+    ? (
+        students.reduce(
+          (sum, student) => sum + Number(student.aggregate || 0),
+          0,
+        ) / students.length
+      ).toFixed(1)
+    : "-";
   const byRegion = students.reduce((acc, student) => {
     const region = student.region || "Unknown";
     acc[region] = (acc[region] || 0) + 1;
     return acc;
   }, {});
-  const regionStats = Object.entries(byRegion).sort((left, right) => right[1] - left[1]).slice(0, 6);
+  const regionStats = Object.entries(byRegion)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 6);
   const maxRegionCount = Math.max(1, ...regionStats.map(([, count]) => count));
-  const categoryCounts = schools.reduce((acc, school) => {
-    const key = String(school.category || "C").toUpperCase();
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, { A: 0, B: 0, C: 0 });
+  const categoryCounts = schools.reduce(
+    (acc, school) => {
+      const key = String(school.category || "C").toUpperCase();
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    },
+    { A: 0, B: 0, C: 0 },
+  );
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Analytics</div><div className="page-sub">Live overview from accessible Supabase tables</div></div>
-      {hasScoreAnalyticsError && <div className="alert alert-warning">Detailed score analytics are unavailable because the Supabase scores table is not accessible.</div>}
-      <div className="stats-grid" style={{marginBottom:20}}>
+      <div className="page-header">
+        <div className="page-title">Analytics</div>
+        <div className="page-sub">
+          Live overview from accessible Supabase tables
+        </div>
+      </div>
+      {hasScoreAnalyticsError && (
+        <div className="alert alert-warning">
+          Detailed score analytics are unavailable because the Supabase scores
+          table is not accessible.
+        </div>
+      )}
+      <div className="stats-grid" style={{ marginBottom: 20 }}>
         {[
-          { label: "Students", value: students.length, bg: "#dbeafe", c: "#1d4ed8" },
-          { label: "Submitted Selections", value: selections.length, bg: "#dcfce7", c: "#15803d" },
-          { label: "Average Aggregate", value: averageAggregate, bg: "#fef3c7", c: "#b45309" },
-          { label: "Schools", value: schools.length, bg: "#ede9fe", c: "#6d28d9" },
+          {
+            label: "Students",
+            value: students.length,
+            bg: "#dbeafe",
+            c: "#1d4ed8",
+          },
+          {
+            label: "Submitted Selections",
+            value: selections.length,
+            bg: "#dcfce7",
+            c: "#15803d",
+          },
+          {
+            label: "Average Aggregate",
+            value: averageAggregate,
+            bg: "#fef3c7",
+            c: "#b45309",
+          },
+          {
+            label: "Schools",
+            value: schools.length,
+            bg: "#ede9fe",
+            c: "#6d28d9",
+          },
         ].map((item) => (
-          <div key={item.label} className="stat-card" style={{background:item.bg}}>
-            <div className="stat-label" style={{color:item.c}}>{item.label}</div>
-            <div className="stat-value" style={{color:item.c}}>{item.value}</div>
+          <div
+            key={item.label}
+            className="stat-card"
+            style={{ background: item.bg }}
+          >
+            <div className="stat-label" style={{ color: item.c }}>
+              {item.label}
+            </div>
+            <div className="stat-value" style={{ color: item.c }}>
+              {item.value}
+            </div>
           </div>
         ))}
       </div>
       <div className="grid2">
         <div className="card card-padded">
-          <h3 style={{fontWeight:700,marginBottom:16,fontSize:"1rem"}}>Students By Region</h3>
-          {regionStats.map(([region, count])=>(
-            <div key={region} style={{marginBottom:10}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,fontSize:".8rem"}}>
-                <span style={{fontWeight:600}}>{region}</span>
-                <span style={{fontWeight:700,color:"#1d4ed8"}}>{count}</span>
+          <h3 style={{ fontWeight: 700, marginBottom: 16, fontSize: "1rem" }}>
+            Students By Region
+          </h3>
+          {regionStats.map(([region, count]) => (
+            <div key={region} style={{ marginBottom: 10 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 4,
+                  fontSize: ".8rem",
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>{region}</span>
+                <span style={{ fontWeight: 700, color: "#1d4ed8" }}>
+                  {count}
+                </span>
               </div>
-              <div className="progress"><div className="progress-bar" style={{width:`${(count/maxRegionCount)*100}%`,background:"#1d4ed8"}}/></div>
+              <div className="progress">
+                <div
+                  className="progress-bar"
+                  style={{
+                    width: `${(count / maxRegionCount) * 100}%`,
+                    background: "#1d4ed8",
+                  }}
+                />
+              </div>
             </div>
           ))}
         </div>
         <div className="card card-padded">
-          <h3 style={{fontWeight:700,marginBottom:16,fontSize:"1rem"}}>School Category Coverage</h3>
-          {[["Category A",categoryCounts.A,"#fef3c7","#d97706"],
-            ["Category B",categoryCounts.B,"#dbeafe","#1e40af"],
-            ["Category C",categoryCounts.C,"#dcfce7","#16a34a"],
-            ["Confirmed",selections.filter((row) => String(row.status || "").toLowerCase() === "confirmed").length,"#fee2e2","#dc2626"],
-          ].map(([label,count,bg,color])=>(
+          <h3 style={{ fontWeight: 700, marginBottom: 16, fontSize: "1rem" }}>
+            School Category Coverage
+          </h3>
+          {[
+            ["Category A", categoryCounts.A, "#fef3c7", "#d97706"],
+            ["Category B", categoryCounts.B, "#dbeafe", "#1e40af"],
+            ["Category C", categoryCounts.C, "#dcfce7", "#16a34a"],
+            [
+              "Confirmed",
+              selections.filter(
+                (row) => String(row.status || "").toLowerCase() === "confirmed",
+              ).length,
+              "#fee2e2",
+              "#dc2626",
+            ],
+          ].map(([label, count, bg, color]) => (
             <div key={label} className="metric-row">
-              <span className="metric-row-badge" style={{background:bg,color}}>{label}</span>
-              <div className="progress" style={{flex:1}}><div className="progress-bar" style={{width:`${(count/Math.max(students.length || schools.length || 1, 1))*100}%`,background:color}}/></div>
+              <span
+                className="metric-row-badge"
+                style={{ background: bg, color }}
+              >
+                {label}
+              </span>
+              <div className="progress" style={{ flex: 1 }}>
+                <div
+                  className="progress-bar"
+                  style={{
+                    width: `${(count / Math.max(students.length || schools.length || 1, 1)) * 100}%`,
+                    background: color,
+                  }}
+                />
+              </div>
               <span className="metric-row-count">{count}</span>
             </div>
           ))}
@@ -2850,17 +4269,26 @@ function AnalyticsPage({ studentsData, schoolsData, selectionsData, scoreTableIn
 }
 
 // â”€â”€â”€ ATTENDANCE (Admin) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function AttendancePage({ studentsData, tableInfo, registeredSchoolId = null }) {
+function AttendancePage({
+  studentsData,
+  tableInfo,
+  registeredSchoolId = null,
+}) {
   const hasAttendanceError = hasRealTableError(tableInfo);
   const isMobile = useIsMobileLayout();
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const rows = studentsData?.length ? studentsData : [];
   const [marks, setMarks] = useState({});
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const [statusModal, setStatusModal] = useState({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
   const [loadingMarks, setLoadingMarks] = useState(false);
 
   useEffect(() => {
-    setMarks(Object.fromEntries(rows.map(s=>[s.id,"Present"])));
+    setMarks(Object.fromEntries(rows.map((s) => [s.id, "Present"])));
   }, [studentsData]);
 
   useEffect(() => {
@@ -2872,12 +4300,17 @@ function AttendancePage({ studentsData, tableInfo, registeredSchoolId = null }) 
       }
       setLoadingMarks(true);
       let query = supabase.from("attendance").select("*").eq("date", date);
-      if (registeredSchoolId != null) query = query.eq("registered_school_id", registeredSchoolId);
+      if (registeredSchoolId != null)
+        query = query.eq("registered_school_id", registeredSchoolId);
       const { data, error } = await query;
       if (!error && Array.isArray(data) && data.length) {
-        const next = Object.fromEntries(rows.map(s => [s.id, "Present"]));
+        const next = Object.fromEntries(rows.map((s) => [s.id, "Present"]));
         data.forEach((record) => {
-          const match = rows.find((student) => String(student.id) === String(record.student_id) || String(student.index) === String(record.index_number));
+          const match = rows.find(
+            (student) =>
+              String(student.id) === String(record.student_id) ||
+              String(student.index) === String(record.index_number),
+          );
           if (match) next[match.id] = record.status || "Present";
         });
         setMarks(next);
@@ -2893,7 +4326,8 @@ function AttendancePage({ studentsData, tableInfo, registeredSchoolId = null }) 
         open: true,
         type: "failure",
         title: "Attendance Update Failed",
-        message: "Attendance table is not accessible, so updates cannot be synced right now.",
+        message:
+          "Attendance table is not accessible, so updates cannot be synced right now.",
       });
       return;
     }
@@ -2902,14 +4336,18 @@ function AttendancePage({ studentsData, tableInfo, registeredSchoolId = null }) 
         const payload = rows.map((student) => ({
           student_id: student.id,
           index_number: student.index || student.index_number || null,
-          ...(registeredSchoolId != null ? { registered_school_id: registeredSchoolId } : {}),
+          ...(registeredSchoolId != null
+            ? { registered_school_id: registeredSchoolId }
+            : {}),
           date,
           status: marks[student.id] || "Present",
         }));
         for (const item of payload) {
           const { error } = await supabase.from("attendance").insert(item);
           if (error && !isMissingColumnError(error)) {
-            const { error: upsertError } = await supabase.from("attendance").upsert(item);
+            const { error: upsertError } = await supabase
+              .from("attendance")
+              .upsert(item);
             if (upsertError) throw upsertError;
           }
         }
@@ -2925,68 +4363,160 @@ function AttendancePage({ studentsData, tableInfo, registeredSchoolId = null }) 
         open: true,
         type: "failure",
         title: "Attendance Update Failed",
-        message: error?.message || "Could not save attendance. Please try again.",
+        message:
+          error?.message || "Could not save attendance. Please try again.",
       });
     }
   };
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Attendance</div></div>
-      {hasAttendanceError && <div className="alert alert-warning">Attendance table is not accessible in Supabase yet. This page can display students, but attendance cannot sync online.</div>}
-      <div className="page-actions-row" style={{alignItems:"center"}}>
-        <input type="date" className="form-control" value={date} onChange={e=>setDate(e.target.value)}/>
-        <button className="btn btn-blue" onClick={saveAttendance} disabled={hasAttendanceError}>Save Attendance</button>
+      <div className="page-header">
+        <div className="page-title">Attendance</div>
       </div>
-      {loadingMarks && <div className="alert alert-info">Loading attendance...</div>}
-      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((s) => ({ ...s, open: false }))} />
+      {hasAttendanceError && (
+        <div className="alert alert-warning">
+          Attendance table is not accessible in Supabase yet. This page can
+          display students, but attendance cannot sync online.
+        </div>
+      )}
+      <div className="page-actions-row" style={{ alignItems: "center" }}>
+        <input
+          type="date"
+          className="form-control"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+        <button
+          className="btn btn-blue"
+          onClick={saveAttendance}
+          disabled={hasAttendanceError}
+        >
+          Save Attendance
+        </button>
+      </div>
+      {loadingMarks && (
+        <div className="alert alert-info">Loading attendance...</div>
+      )}
+      <ActionStatusModal
+        state={statusModal}
+        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
+      />
       {isMobile ? (
         <div className="mobile-record-list">
-          {rows.map((s)=>(
+          {rows.map((s) => (
             <div key={s.id} className="mobile-record-card">
               <div className="mobile-record-head">
                 <div>
                   <div className="mobile-record-title">{s.full_name}</div>
                   <div className="mobile-record-sub">{s.class}</div>
                 </div>
-                <span className={`badge ${marks[s.id]==="Present"?"badge-success":marks[s.id]==="Absent"?"badge-danger":"badge-warning"}`}>{marks[s.id] || "Present"}</span>
+                <span
+                  className={`badge ${marks[s.id] === "Present" ? "badge-success" : marks[s.id] === "Absent" ? "badge-danger" : "badge-warning"}`}
+                >
+                  {marks[s.id] || "Present"}
+                </span>
               </div>
               <div className="mobile-record-actions">
-                {["Present","Absent","Late"].map(st=>(
-                  <button key={st} className="btn btn-sm" style={{
-                    background:marks[s.id]===st?(st==="Present"?"#dcfce7":st==="Absent"?"#fee2e2":"#fef9c3"):"#f1f5f9",
-                    color:marks[s.id]===st?(st==="Present"?"#16a34a":st==="Absent"?"#dc2626":"#d97706"):"#64748b",
-                    border:"none",borderRadius:8,cursor:"pointer",fontFamily:"var(--font)",fontWeight:600,fontSize:".75rem",padding:"8px 10px"
-                  }} onClick={()=>setMarks(m=>({...m,[s.id]:st}))}>{st}</button>
+                {["Present", "Absent", "Late"].map((st) => (
+                  <button
+                    key={st}
+                    className="btn btn-sm"
+                    style={{
+                      background:
+                        marks[s.id] === st
+                          ? st === "Present"
+                            ? "#dcfce7"
+                            : st === "Absent"
+                              ? "#fee2e2"
+                              : "#fef9c3"
+                          : "#f1f5f9",
+                      color:
+                        marks[s.id] === st
+                          ? st === "Present"
+                            ? "#16a34a"
+                            : st === "Absent"
+                              ? "#dc2626"
+                              : "#d97706"
+                          : "#64748b",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontFamily: "var(--font)",
+                      fontWeight: 600,
+                      fontSize: ".75rem",
+                      padding: "8px 10px",
+                    }}
+                    onClick={() => setMarks((m) => ({ ...m, [s.id]: st }))}
+                  >
+                    {st}
+                  </button>
                 ))}
               </div>
             </div>
           ))}
         </div>
       ) : (
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Student</th><th>Class</th><th>Status</th></tr></thead>
-          <tbody>
-            {rows.map(s=>(
-              <tr key={s.id}>
-                <td><strong>{s.full_name}</strong></td>
-                <td>{s.class}</td>
-                <td>
-                  <div style={{display:"flex",gap:8}}>
-                    {["Present","Absent","Late"].map(st=>(
-                      <button key={st} className="btn btn-sm" style={{
-                        background:marks[s.id]===st?(st==="Present"?"#dcfce7":st==="Absent"?"#fee2e2":"#fef9c3"):"#f1f5f9",
-                        color:marks[s.id]===st?(st==="Present"?"#16a34a":st==="Absent"?"#dc2626":"#d97706"):"#64748b",
-                        border:"none",borderRadius:8,cursor:"pointer",fontFamily:"var(--font)",fontWeight:600,fontSize:".75rem",padding:"5px 10px"
-                      }} onClick={()=>setMarks(m=>({...m,[s.id]:st}))}>{st}</button>
-                    ))}
-                  </div>
-                </td>
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((s) => (
+                <tr key={s.id}>
+                  <td>
+                    <strong>{s.full_name}</strong>
+                  </td>
+                  <td>{s.class}</td>
+                  <td>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {["Present", "Absent", "Late"].map((st) => (
+                        <button
+                          key={st}
+                          className="btn btn-sm"
+                          style={{
+                            background:
+                              marks[s.id] === st
+                                ? st === "Present"
+                                  ? "#dcfce7"
+                                  : st === "Absent"
+                                    ? "#fee2e2"
+                                    : "#fef9c3"
+                                : "#f1f5f9",
+                            color:
+                              marks[s.id] === st
+                                ? st === "Present"
+                                  ? "#16a34a"
+                                  : st === "Absent"
+                                    ? "#dc2626"
+                                    : "#d97706"
+                                : "#64748b",
+                            border: "none",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            fontFamily: "var(--font)",
+                            fontWeight: 600,
+                            fontSize: ".75rem",
+                            padding: "5px 10px",
+                          }}
+                          onClick={() =>
+                            setMarks((m) => ({ ...m, [s.id]: st }))
+                          }
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -2998,25 +4528,76 @@ function FeesAdmin({ studentsData, feesData, tableInfo }) {
   const isMobile = useIsMobileLayout();
   const students = studentsData?.length ? studentsData : [];
   const fees = feesData?.length ? feesData : [];
-  const totalCollected = fees.reduce((sum, fee) => sum + Number(fee.paid || 0), 0);
-  const totalOutstanding = fees.reduce((sum, fee) => sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0), 0);
-  const studentsPaid = fees.filter((fee) => String(fee.status) === "paid").length;
+  const totalCollected = fees.reduce(
+    (sum, fee) => sum + Number(fee.paid || 0),
+    0,
+  );
+  const totalOutstanding = fees.reduce(
+    (sum, fee) =>
+      sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0),
+    0,
+  );
+  const studentsPaid = fees.filter(
+    (fee) => String(fee.status) === "paid",
+  ).length;
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Fees Management</div></div>
-      {hasFeesError && <div className="alert alert-warning">Fees table is not accessible in Supabase yet. Totals below reflect only live rows currently available to the frontend.</div>}
-      <div className="stats-grid stats-grid-3" style={{marginBottom:20}}>
-        {[{label:"Total Collected",value:`GHS ${totalCollected.toLocaleString()}`,color:"#dcfce7",c:"#16a34a"},{label:"Outstanding",value:`GHS ${totalOutstanding.toLocaleString()}`,color:"#fee2e2",c:"#dc2626"},{label:"Students Paid",value:String(studentsPaid),color:"#dbeafe",c:"#1e40af"}].map(s=>(
-          <div key={s.label} className="stat-card" style={{background:s.color}}>
-            <div className="stat-label" style={{color:s.c}}>{s.label}</div>
-            <div className="stat-value" style={{color:s.c,fontSize:"1.4rem"}}>{s.value}</div>
+      <div className="page-header">
+        <div className="page-title">Fees Management</div>
+      </div>
+      {hasFeesError && (
+        <div className="alert alert-warning">
+          Fees table is not accessible in Supabase yet. Totals below reflect
+          only live rows currently available to the frontend.
+        </div>
+      )}
+      <div className="stats-grid stats-grid-3" style={{ marginBottom: 20 }}>
+        {[
+          {
+            label: "Total Collected",
+            value: `GHS ${totalCollected.toLocaleString()}`,
+            color: "#dcfce7",
+            c: "#16a34a",
+          },
+          {
+            label: "Outstanding",
+            value: `GHS ${totalOutstanding.toLocaleString()}`,
+            color: "#fee2e2",
+            c: "#dc2626",
+          },
+          {
+            label: "Students Paid",
+            value: String(studentsPaid),
+            color: "#dbeafe",
+            c: "#1e40af",
+          },
+        ].map((s) => (
+          <div
+            key={s.label}
+            className="stat-card"
+            style={{ background: s.color }}
+          >
+            <div className="stat-label" style={{ color: s.c }}>
+              {s.label}
+            </div>
+            <div
+              className="stat-value"
+              style={{ color: s.c, fontSize: "1.4rem" }}
+            >
+              {s.value}
+            </div>
           </div>
         ))}
       </div>
       {isMobile ? (
         <div className="mobile-record-list">
-          {students.map((s,i)=>{
-            const fee = fees.find((item) => String(item.student_id) === String(s.id) || String(item.index_number) === String(s.index)) || normalizeFeeRow({}, i);
+          {students.map((s, i) => {
+            const fee =
+              fees.find(
+                (item) =>
+                  String(item.student_id) === String(s.id) ||
+                  String(item.index_number) === String(s.index),
+              ) || normalizeFeeRow({}, i);
             const bal = fee.amount - fee.paid;
             return (
               <div key={s.id} className="mobile-record-card">
@@ -3025,42 +4606,109 @@ function FeesAdmin({ studentsData, feesData, tableInfo }) {
                     <div className="mobile-record-title">{s.full_name}</div>
                     <div className="mobile-record-sub">{fee.term}</div>
                   </div>
-                  <span className={`badge ${fee.status==="paid"?"badge-success":fee.status==="partial"?"badge-warning":"badge-danger"}`}>{fee.status}</span>
+                  <span
+                    className={`badge ${fee.status === "paid" ? "badge-success" : fee.status === "partial" ? "badge-warning" : "badge-danger"}`}
+                  >
+                    {fee.status}
+                  </span>
                 </div>
                 <div className="mobile-record-grid">
-                  <div className="mobile-record-item"><label>Amount</label><strong>GHS {fee.amount}</strong></div>
-                  <div className="mobile-record-item"><label>Paid</label><strong>GHS {fee.paid}</strong></div>
-                  <div className="mobile-record-item"><label>Balance</label><strong style={{color:bal>0?"#dc2626":"#16a34a"}}>GHS {bal}</strong></div>
-                  <div className="mobile-record-item"><label>Student ID</label><span>{s.index}</span></div>
+                  <div className="mobile-record-item">
+                    <label>Amount</label>
+                    <strong>GHS {fee.amount}</strong>
+                  </div>
+                  <div className="mobile-record-item">
+                    <label>Paid</label>
+                    <strong>GHS {fee.paid}</strong>
+                  </div>
+                  <div className="mobile-record-item">
+                    <label>Balance</label>
+                    <strong style={{ color: bal > 0 ? "#dc2626" : "#16a34a" }}>
+                      GHS {bal}
+                    </strong>
+                  </div>
+                  <div className="mobile-record-item">
+                    <label>Student ID</label>
+                    <span>{s.index}</span>
+                  </div>
                 </div>
               </div>
             );
           })}
-          {!students.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No fee-linked student rows available.</div>}
+          {!students.length && (
+            <div
+              className="mobile-record-card"
+              style={{ textAlign: "center", color: "#64748b" }}
+            >
+              No fee-linked student rows available.
+            </div>
+          )}
         </div>
       ) : (
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Student</th><th>Term</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
-          <tbody>
-            {students.map((s,i)=>{
-              const fee = fees.find((item) => String(item.student_id) === String(s.id) || String(item.index_number) === String(s.index)) || normalizeFeeRow({}, i);
-              const bal = fee.amount - fee.paid;
-              return (
-                <tr key={s.id}>
-                  <td><strong>{s.full_name}</strong></td>
-                  <td>{fee.term}</td>
-                  <td>GHS {fee.amount}</td>
-                  <td>GHS {fee.paid}</td>
-                  <td style={{color:bal>0?"#dc2626":"#16a34a",fontWeight:700}}>GHS {bal}</td>
-                  <td><span className={`badge ${fee.status==="paid"?"badge-success":fee.status==="partial"?"badge-warning":"badge-danger"}`}>{fee.status}</span></td>
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Term</th>
+                <th>Amount</th>
+                <th>Paid</th>
+                <th>Balance</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((s, i) => {
+                const fee =
+                  fees.find(
+                    (item) =>
+                      String(item.student_id) === String(s.id) ||
+                      String(item.index_number) === String(s.index),
+                  ) || normalizeFeeRow({}, i);
+                const bal = fee.amount - fee.paid;
+                return (
+                  <tr key={s.id}>
+                    <td>
+                      <strong>{s.full_name}</strong>
+                    </td>
+                    <td>{fee.term}</td>
+                    <td>GHS {fee.amount}</td>
+                    <td>GHS {fee.paid}</td>
+                    <td
+                      style={{
+                        color: bal > 0 ? "#dc2626" : "#16a34a",
+                        fontWeight: 700,
+                      }}
+                    >
+                      GHS {bal}
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${fee.status === "paid" ? "badge-success" : fee.status === "partial" ? "badge-warning" : "badge-danger"}`}
+                      >
+                        {fee.status}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!students.length && (
+                <tr>
+                  <td
+                    colSpan="6"
+                    style={{
+                      textAlign: "center",
+                      padding: 24,
+                      color: "#64748b",
+                    }}
+                  >
+                    No fee-linked student rows available.
+                  </td>
                 </tr>
-              );
-            })}
-            {!students.length && <tr><td colSpan="6" style={{textAlign:"center",padding:24,color:"#64748b"}}>No fee-linked student rows available.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -3069,56 +4717,97 @@ function FeesAdmin({ studentsData, feesData, tableInfo }) {
 // â”€â”€â”€ SCHOOLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function SchoolsPage({ schoolsData }) {
   const isMobile = useIsMobileLayout();
-  const schools = sortSchoolsByCategory(schoolsData?.length ? schoolsData : SCHOOLS_DATA);
-  const counts = schools.reduce((acc, school) => {
-    const key = String(school.category || "").toUpperCase();
-    if (key === "A" || key === "B" || key === "C") acc[key] += 1;
-    return acc;
-  }, { A: 0, B: 0, C: 0 });
+  const schools = sortSchoolsByCategory(
+    schoolsData?.length ? schoolsData : SCHOOLS_DATA,
+  );
+  const counts = schools.reduce(
+    (acc, school) => {
+      const key = String(school.category || "").toUpperCase();
+      if (key === "A" || key === "B" || key === "C") acc[key] += 1;
+      return acc;
+    },
+    { A: 0, B: 0, C: 0 },
+  );
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Schools</div><div className="page-sub">{`Secondary school database (${schools.length} schools: A ${counts.A}, B ${counts.B}, C ${counts.C})`}</div></div>
+      <div className="page-header">
+        <div className="page-title">Schools</div>
+        <div className="page-sub">{`Secondary school database (${schools.length} schools: A ${counts.A}, B ${counts.B}, C ${counts.C})`}</div>
+      </div>
       {isMobile ? (
         <div className="mobile-record-list">
-          {schools.map(s=>(
+          {schools.map((s) => (
             <div key={s.id} className="mobile-record-card">
               <div className="mobile-record-head">
                 <div>
                   <div className="mobile-record-title">{s.name}</div>
                   <div className="mobile-record-sub">{s.region}</div>
                 </div>
-                <span className={`badge ${s.category==="A"?"badge-warning":s.category==="B"?"badge-blue":"badge-success"}`}>Cat {s.category}</span>
+                <span
+                  className={`badge ${s.category === "A" ? "badge-warning" : s.category === "B" ? "badge-blue" : "badge-success"}`}
+                >
+                  Cat {s.category}
+                </span>
               </div>
               <div className="mobile-record-grid">
-                <div className="mobile-record-item"><label>Cutoff</label><strong>{s.cutoff}</strong></div>
-                <div className="mobile-record-item"><label>Slots</label><strong>{s.slots}</strong></div>
+                <div className="mobile-record-item">
+                  <label>Cutoff</label>
+                  <strong>{s.cutoff}</strong>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Slots</label>
+                  <strong>{s.slots}</strong>
+                </div>
               </div>
             </div>
           ))}
         </div>
       ) : (
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>School</th><th>Region</th><th>Category</th><th>Cutoff</th><th>Slots</th></tr></thead>
-          <tbody>
-            {schools.map(s=>(
-              <tr key={s.id}>
-                <td><strong>{s.name}</strong></td>
-                <td>{s.region}</td>
-                <td><span className={`badge ${s.category==="A"?"badge-warning":s.category==="B"?"badge-blue":"badge-success"}`}>Cat {s.category}</span></td>
-                <td style={{fontWeight:700}}>{s.cutoff}</td>
-                <td>{s.slots}</td>
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>School</th>
+                <th>Region</th>
+                <th>Category</th>
+                <th>Cutoff</th>
+                <th>Slots</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {schools.map((s) => (
+                <tr key={s.id}>
+                  <td>
+                    <strong>{s.name}</strong>
+                  </td>
+                  <td>{s.region}</td>
+                  <td>
+                    <span
+                      className={`badge ${s.category === "A" ? "badge-warning" : s.category === "B" ? "badge-blue" : "badge-success"}`}
+                    >
+                      Cat {s.category}
+                    </span>
+                  </td>
+                  <td style={{ fontWeight: 700 }}>{s.cutoff}</td>
+                  <td>{s.slots}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
 
-function RegisteredSchoolsPage({ schools, admins, onRegisterNew, onCreateSchoolAdmin, setupError = "", currentUser = null }) {
+function RegisteredSchoolsPage({
+  schools,
+  admins,
+  onRegisterNew,
+  onCreateSchoolAdmin,
+  setupError = "",
+  currentUser = null,
+}) {
   const { cfg: globalCfg } = useContext(SettingsContext);
   const isMobile = useIsMobileLayout();
   const [expandedSchoolId, setExpandedSchoolId] = useState(null);
@@ -3127,8 +4816,15 @@ function RegisteredSchoolsPage({ schools, admins, onRegisterNew, onCreateSchoolA
   const [pageError, setPageError] = useState("");
   const activeCount = schools.filter((school) => school.active).length;
   const totalAdmins = admins.length;
-  const schoolAdminRoleOptions = getAssignableRoles(globalCfg, currentUser?.role || "admin", "school-admin");
-  const defaultSchoolAdminRole = schoolAdminRoleOptions.find((role) => role.key === "school_admin")?.key || schoolAdminRoleOptions[0]?.key || "school_admin";
+  const schoolAdminRoleOptions = getAssignableRoles(
+    globalCfg,
+    currentUser?.role || "admin",
+    "school-admin",
+  );
+  const defaultSchoolAdminRole =
+    schoolAdminRoleOptions.find((role) => role.key === "school_admin")?.key ||
+    schoolAdminRoleOptions[0]?.key ||
+    "school_admin";
 
   const setForm = (schoolId, key, value) => {
     setForms((current) => ({
@@ -3146,9 +4842,17 @@ function RegisteredSchoolsPage({ schools, admins, onRegisterNew, onCreateSchoolA
   };
 
   const createAdmin = async (school) => {
-    const form = forms[school.id] || { full_name: "", email: "", phone: "", password: "", role: defaultSchoolAdminRole };
+    const form = forms[school.id] || {
+      full_name: "",
+      email: "",
+      phone: "",
+      password: "",
+      role: defaultSchoolAdminRole,
+    };
     if (!form.full_name.trim() || !form.email.trim() || !form.password.trim()) {
-      setPageError("Full name, email, and password are required to create a school admin.");
+      setPageError(
+        "Full name, email, and password are required to create a school admin.",
+      );
       return;
     }
 
@@ -3156,10 +4860,21 @@ function RegisteredSchoolsPage({ schools, admins, onRegisterNew, onCreateSchoolA
     setPageError("");
     try {
       await onCreateSchoolAdmin(school, form);
-      setForms((current) => ({ ...current, [school.id]: { full_name: "", email: "", phone: "", password: "", role: defaultSchoolAdminRole } }));
+      setForms((current) => ({
+        ...current,
+        [school.id]: {
+          full_name: "",
+          email: "",
+          phone: "",
+          password: "",
+          role: defaultSchoolAdminRole,
+        },
+      }));
       setExpandedSchoolId(null);
     } catch (err) {
-      setPageError(String(err?.message || "Unable to create the school admin right now."));
+      setPageError(
+        String(err?.message || "Unable to create the school admin right now."),
+      );
     } finally {
       setSavingSchoolId(null);
     }
@@ -3171,73 +4886,144 @@ function RegisteredSchoolsPage({ schools, admins, onRegisterNew, onCreateSchoolA
         <div className="school-reg-hero">
           <div className="school-reg-hero-copy">
             <div className="school-reg-kicker">Super Admin Registry</div>
-            <div className="school-reg-title">Registered schools and school admins</div>
-            <div className="school-reg-sub">Manage registered schools separately from the admissions placement list, and assign a dedicated admin account to each school.</div>
+            <div className="school-reg-title">
+              Registered schools and school admins
+            </div>
+            <div className="school-reg-sub">
+              Manage registered schools separately from the admissions placement
+              list, and assign a dedicated admin account to each school.
+            </div>
           </div>
-          <div className="school-reg-chip"><Ico name="schools" size={14} color="#99f6e4"/> {schools.length} registered schools</div>
+          <div className="school-reg-chip">
+            <Ico name="schools" size={14} color="#99f6e4" /> {schools.length}{" "}
+            registered schools
+          </div>
         </div>
 
         <div className="school-reg-summary-grid">
           <div className="school-reg-summary-card">
             <div className="school-reg-summary-label">Registered Schools</div>
             <div className="school-reg-summary-value">{schools.length}</div>
-            <div className="school-reg-summary-sub">Every school tenant currently onboarded to the platform.</div>
+            <div className="school-reg-summary-sub">
+              Every school tenant currently onboarded to the platform.
+            </div>
           </div>
           <div className="school-reg-summary-card">
             <div className="school-reg-summary-label">Active Schools</div>
             <div className="school-reg-summary-value">{activeCount}</div>
-            <div className="school-reg-summary-sub">Schools available for active use and school-admin access.</div>
+            <div className="school-reg-summary-sub">
+              Schools available for active use and school-admin access.
+            </div>
           </div>
           <div className="school-reg-summary-card">
             <div className="school-reg-summary-label">School Admins</div>
             <div className="school-reg-summary-value">{totalAdmins}</div>
-            <div className="school-reg-summary-sub">Admin accounts assigned across all registered schools.</div>
+            <div className="school-reg-summary-sub">
+              Admin accounts assigned across all registered schools.
+            </div>
           </div>
         </div>
 
         <div className="school-reg-toolbar">
           <div className="school-reg-toolbar-copy">
             <div className="school-reg-toolbar-title">Registry operations</div>
-            <div className="school-reg-toolbar-sub">Review school onboarding status, assign school admins, and keep each school record organized from one place.</div>
+            <div className="school-reg-toolbar-sub">
+              Review school onboarding status, assign school admins, and keep
+              each school record organized from one place.
+            </div>
           </div>
-          <button className="btn btn-blue" onClick={onRegisterNew}><Ico name="enroll" size={16} color="#fff"/> Register School</button>
+          <button className="btn btn-blue" onClick={onRegisterNew}>
+            <Ico name="enroll" size={16} color="#fff" /> Register School
+          </button>
         </div>
 
-        {(setupError || pageError) && <div className="alert alert-warning">{setupError || pageError}</div>}
+        {(setupError || pageError) && (
+          <div className="alert alert-warning">{setupError || pageError}</div>
+        )}
 
         {!schools.length ? (
-          <div className="students-empty-state">No registered schools yet. Use Register School to create the first school tenant and assign its admin.</div>
+          <div className="students-empty-state">
+            No registered schools yet. Use Register School to create the first
+            school tenant and assign its admin.
+          </div>
         ) : (
           <div className="registered-school-list">
             {schools.map((school) => {
-              const schoolAdmins = admins.filter((admin) => String(admin.registered_school_id) === String(school.id));
-              const form = forms[school.id] || { full_name: "", email: "", phone: "", password: "", role: defaultSchoolAdminRole };
+              const schoolAdmins = admins.filter(
+                (admin) =>
+                  String(admin.registered_school_id) === String(school.id),
+              );
+              const form = forms[school.id] || {
+                full_name: "",
+                email: "",
+                phone: "",
+                password: "",
+                role: defaultSchoolAdminRole,
+              };
               const open = expandedSchoolId === school.id;
               return (
                 <div key={school.id} className="card registered-school-card">
                   <div className="registered-school-head">
                     <div className="registered-school-meta">
-                      <div className="registered-school-title">{school.name}</div>
-                      <div className="registered-school-sub">{school.location ? `${school.location}, ` : ""}{school.region} • {school.type || "Mixed"}</div>
+                      <div className="registered-school-title">
+                        {school.name}
+                      </div>
+                      <div className="registered-school-sub">
+                        {school.location ? `${school.location}, ` : ""}
+                        {school.region} • {school.type || "Mixed"}
+                      </div>
                     </div>
-                    <div className="registered-school-badges" style={isMobile ? { justifyContent: "flex-start" } : undefined}>
-                      <span className={`badge ${school.category === "A" ? "badge-warning" : school.category === "B" ? "badge-blue" : "badge-success"}`}>Grade {school.category}</span>
-                      <span className={`badge ${school.active ? "badge-success" : "badge-gray"}`}>{school.active ? "Active" : "Inactive"}</span>
+                    <div
+                      className="registered-school-badges"
+                      style={
+                        isMobile ? { justifyContent: "flex-start" } : undefined
+                      }
+                    >
+                      <span
+                        className={`badge ${school.category === "A" ? "badge-warning" : school.category === "B" ? "badge-blue" : "badge-success"}`}
+                      >
+                        Grade {school.category}
+                      </span>
+                      <span
+                        className={`badge ${school.active ? "badge-success" : "badge-gray"}`}
+                      >
+                        {school.active ? "Active" : "Inactive"}
+                      </span>
                     </div>
                   </div>
                   <div className="registered-school-body">
                     <div className="registered-school-grid">
-                      <div className="registered-school-stat"><label>Grade</label><strong>{school.category || "-"}</strong></div>
-                      <div className="registered-school-stat"><label>School Type</label><strong>{school.type || "-"}</strong></div>
-                      <div className="registered-school-stat"><label>Admins</label><strong>{schoolAdmins.length}</strong></div>
-                      <div className="registered-school-stat"><label>Region</label><strong>{school.region || "-"}</strong></div>
+                      <div className="registered-school-stat">
+                        <label>Grade</label>
+                        <strong>{school.category || "-"}</strong>
+                      </div>
+                      <div className="registered-school-stat">
+                        <label>School Type</label>
+                        <strong>{school.type || "-"}</strong>
+                      </div>
+                      <div className="registered-school-stat">
+                        <label>Admins</label>
+                        <strong>{schoolAdmins.length}</strong>
+                      </div>
+                      <div className="registered-school-stat">
+                        <label>Region</label>
+                        <strong>{school.region || "-"}</strong>
+                      </div>
                     </div>
 
                     <div className="school-admin-block">
                       <div className="school-admin-block-head">
                         <div>
-                          <div className="school-reg-section-title" style={{ marginBottom: 0 }}>School Admins</div>
-                          <div className="school-admin-block-sub">Access management for this school tenant and its operational workspace.</div>
+                          <div
+                            className="school-reg-section-title"
+                            style={{ marginBottom: 0 }}
+                          >
+                            School Admins
+                          </div>
+                          <div className="school-admin-block-sub">
+                            Access management for this school tenant and its
+                            operational workspace.
+                          </div>
                         </div>
                       </div>
                       <div className="school-admin-list">
@@ -3247,36 +5033,134 @@ function RegisteredSchoolsPage({ schools, admins, onRegisterNew, onCreateSchoolA
                               <strong>{admin.full_name}</strong>
                               <span>{admin.email}</span>
                               <span>{admin.phone || "No phone added"}</span>
-                              <span>{getRoleMeta(globalCfg, admin.role || defaultSchoolAdminRole).label}</span>
+                              <span>
+                                {
+                                  getRoleMeta(
+                                    globalCfg,
+                                    admin.role || defaultSchoolAdminRole,
+                                  ).label
+                                }
+                              </span>
                             </div>
-                            <span className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}>{admin.status || "active"}</span>
+                            <span
+                              className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}
+                            >
+                              {admin.status || "active"}
+                            </span>
                           </div>
                         ))}
-                        {!schoolAdmins.length && <div className="students-empty-state" style={{ padding: 16 }}>No admin assigned yet for this school.</div>}
+                        {!schoolAdmins.length && (
+                          <div
+                            className="students-empty-state"
+                            style={{ padding: 16 }}
+                          >
+                            No admin assigned yet for this school.
+                          </div>
+                        )}
                       </div>
 
                       {open ? (
                         <div className="school-admin-form">
                           <div className="school-admin-form-head">
                             <div>
-                              <div className="school-admin-form-title">Create school admin</div>
-                              <div className="school-admin-form-sub">This admin can sign in with the credentials created here.</div>
+                              <div className="school-admin-form-title">
+                                Create school admin
+                              </div>
+                              <div className="school-admin-form-sub">
+                                This admin can sign in with the credentials
+                                created here.
+                              </div>
                             </div>
-                            <button className="btn btn-outline btn-sm" onClick={() => setExpandedSchoolId(null)}>Close</button>
+                            <button
+                              className="btn btn-outline btn-sm"
+                              onClick={() => setExpandedSchoolId(null)}
+                            >
+                              Close
+                            </button>
                           </div>
                           <div className="form-grid">
-                            <div className="form-group"><label className="form-label">Full Name</label><input className="form-control" value={form.full_name} onChange={(e) => setForm(school.id, "full_name", e.target.value)} /></div>
-                            <div className="form-group"><label className="form-label">Email</label><input className="form-control" type="email" value={form.email} onChange={(e) => setForm(school.id, "email", e.target.value)} /></div>
-                            <div className="form-group"><label className="form-label">Role</label><select className="form-control" value={form.role} onChange={(e) => setForm(school.id, "role", e.target.value)}>{schoolAdminRoleOptions.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}</select></div>
-                            <div className="form-group"><label className="form-label">Phone</label><input className="form-control" value={form.phone} onChange={(e) => setForm(school.id, "phone", e.target.value)} /></div>
-                            <div className="form-group"><label className="form-label">Password</label><input className="form-control" type="password" value={form.password} onChange={(e) => setForm(school.id, "password", e.target.value)} /></div>
+                            <div className="form-group">
+                              <label className="form-label">Full Name</label>
+                              <input
+                                className="form-control"
+                                value={form.full_name}
+                                onChange={(e) =>
+                                  setForm(
+                                    school.id,
+                                    "full_name",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Email</label>
+                              <input
+                                className="form-control"
+                                type="email"
+                                value={form.email}
+                                onChange={(e) =>
+                                  setForm(school.id, "email", e.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Role</label>
+                              <select
+                                className="form-control"
+                                value={form.role}
+                                onChange={(e) =>
+                                  setForm(school.id, "role", e.target.value)
+                                }
+                              >
+                                {schoolAdminRoleOptions.map((role) => (
+                                  <option key={role.key} value={role.key}>
+                                    {role.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Phone</label>
+                              <input
+                                className="form-control"
+                                value={form.phone}
+                                onChange={(e) =>
+                                  setForm(school.id, "phone", e.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Password</label>
+                              <input
+                                className="form-control"
+                                type="password"
+                                value={form.password}
+                                onChange={(e) =>
+                                  setForm(school.id, "password", e.target.value)
+                                }
+                              />
+                            </div>
                           </div>
                           <div className="school-reg-actions-row">
-                            <button className="btn btn-blue" onClick={() => createAdmin(school)} disabled={savingSchoolId === school.id}>{savingSchoolId === school.id ? "Creating..." : "Create Admin"}</button>
+                            <button
+                              className="btn btn-blue"
+                              onClick={() => createAdmin(school)}
+                              disabled={savingSchoolId === school.id}
+                            >
+                              {savingSchoolId === school.id
+                                ? "Creating..."
+                                : "Create Admin"}
+                            </button>
                           </div>
                         </div>
                       ) : (
-                        <button className="btn btn-outline" onClick={() => setExpandedSchoolId(school.id)}>Create School Admin</button>
+                        <button
+                          className="btn btn-outline"
+                          onClick={() => setExpandedSchoolId(school.id)}
+                        >
+                          Create School Admin
+                        </button>
                       )}
                     </div>
                   </div>
@@ -3303,7 +5187,8 @@ function SchoolRegistrationPage({ onBack, onRegisterSchool, setupError = "" }) {
   const [error, setError] = useState("");
   const [savedSchool, setSavedSchool] = useState(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const set = (key, value) =>
+    setForm((current) => ({ ...current, [key]: value }));
 
   const openReviewModal = () => {
     if (setupError) {
@@ -3339,7 +5224,9 @@ function SchoolRegistrationPage({ onBack, onRegisterSchool, setupError = "" }) {
       setShowReviewModal(false);
       setSavedSchool(school);
     } catch (err) {
-      setError(String(err?.message || "Unable to register the school right now."));
+      setError(
+        String(err?.message || "Unable to register the school right now."),
+      );
     } finally {
       setSaving(false);
     }
@@ -3349,11 +5236,20 @@ function SchoolRegistrationPage({ onBack, onRegisterSchool, setupError = "" }) {
     return (
       <div className="fade-in">
         <div className="school-reg-success">
-          <div className="alert alert-success" style={{marginBottom:0}}>School registered successfully!</div>
-          <div className="enroll-success-title">{savedSchool.name} has been added</div>
-          <div className="enroll-success-sub">The school has been added to the platform registry and is ready for admin setup and school management workflows.</div>
-          <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-            <button className="btn btn-outline" onClick={onBack}>Back To Schools</button>
+          <div className="alert alert-success" style={{ marginBottom: 0 }}>
+            School registered successfully!
+          </div>
+          <div className="enroll-success-title">
+            {savedSchool.name} has been added
+          </div>
+          <div className="enroll-success-sub">
+            The school has been added to the platform registry and is ready for
+            admin setup and school management workflows.
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <button className="btn btn-outline" onClick={onBack}>
+              Back To Schools
+            </button>
           </div>
         </div>
       </div>
@@ -3367,26 +5263,40 @@ function SchoolRegistrationPage({ onBack, onRegisterSchool, setupError = "" }) {
           <div className="school-reg-hero-copy">
             <div className="school-reg-kicker">School Directory</div>
             <div className="school-reg-title">Register a new school</div>
-            <div className="school-reg-sub">Register a school on the platform so its admins can be created and the school can manage its operations in its own workspace.</div>
+            <div className="school-reg-sub">
+              Register a school on the platform so its admins can be created and
+              the school can manage its operations in its own workspace.
+            </div>
           </div>
-          <div className="school-reg-chip"><Ico name="schools" size={14} color="#99f6e4"/> Platform onboarding</div>
+          <div className="school-reg-chip">
+            <Ico name="schools" size={14} color="#99f6e4" /> Platform onboarding
+          </div>
         </div>
 
         <div className="school-reg-summary-grid">
           <div className="school-reg-summary-card">
             <div className="school-reg-summary-label">Onboarding Goal</div>
             <div className="school-reg-summary-value">Profile</div>
-            <div className="school-reg-summary-sub">Capture the school identity and its operating region clearly before access is provisioned.</div>
+            <div className="school-reg-summary-sub">
+              Capture the school identity and its operating region clearly
+              before access is provisioned.
+            </div>
           </div>
           <div className="school-reg-summary-card">
             <div className="school-reg-summary-label">Access Setup</div>
             <div className="school-reg-summary-value">Admin Ready</div>
-            <div className="school-reg-summary-sub">The registered school can immediately receive school-admin accounts after registration.</div>
+            <div className="school-reg-summary-sub">
+              The registered school can immediately receive school-admin
+              accounts after registration.
+            </div>
           </div>
           <div className="school-reg-summary-card">
             <div className="school-reg-summary-label">Visibility</div>
             <div className="school-reg-summary-value">Controlled</div>
-            <div className="school-reg-summary-sub">Use the active toggle to decide whether the school is currently allowed into live platform operations.</div>
+            <div className="school-reg-summary-sub">
+              Use the active toggle to decide whether the school is currently
+              allowed into live platform operations.
+            </div>
           </div>
         </div>
 
@@ -3394,89 +5304,223 @@ function SchoolRegistrationPage({ onBack, onRegisterSchool, setupError = "" }) {
           <aside className="school-reg-side">
             <div className="school-reg-stat">
               <div className="school-reg-stat-label">Grade</div>
-              <div className="school-reg-stat-value">{form.category || "-"}</div>
+              <div className="school-reg-stat-value">
+                {form.category || "-"}
+              </div>
             </div>
             <div className="school-reg-stat">
               <div className="school-reg-stat-label">School Type</div>
               <div className="school-reg-stat-value">{form.type || "-"}</div>
             </div>
             <div className="school-reg-note">
-              Add the official school name, location, grade, and school type carefully. These details feed directly into the registered-school directory and admin setup flow.
+              Add the official school name, location, grade, and school type
+              carefully. These details feed directly into the registered-school
+              directory and admin setup flow.
             </div>
           </aside>
 
           <div className="card school-reg-form-card">
             <div className="school-reg-head">
               <div>
-                <div className="school-reg-head-title">School registration form</div>
-                <div className="school-reg-head-sub">Capture the core school details needed to onboard the school and assign platform access.</div>
+                <div className="school-reg-head-title">
+                  School registration form
+                </div>
+                <div className="school-reg-head-sub">
+                  Capture the core school details needed to onboard the school
+                  and assign platform access.
+                </div>
               </div>
               <div className="enroll-form-status">Draft</div>
             </div>
 
             <div className="school-reg-section">
               <div className="school-reg-section-title">Identity</div>
-              <div className="school-reg-section-sub">The core public-facing information for the school profile.</div>
+              <div className="school-reg-section-sub">
+                The core public-facing information for the school profile.
+              </div>
               <div className="form-grid">
-                <div className="form-group"><label className="form-label">School Name</label><input className="form-control" placeholder="Campus Ghana" value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">Location</label><input className="form-control" placeholder="Obuasi" value={form.location} onChange={(e) => set("location", e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">Region</label><select className="form-control" value={form.region} onChange={(e) => set("region", e.target.value)}>{GHANA_REGIONS.map((region) => <option key={region}>{region}</option>)}</select></div>
-                <div className="form-group"><label className="form-label">School Type</label><select className="form-control" value={form.type} onChange={(e) => set("type", e.target.value)}><option value="">Select school type</option><option>Mixed</option><option>Boys</option><option>Girls</option></select></div>
+                <div className="form-group">
+                  <label className="form-label">School Name</label>
+                  <input
+                    className="form-control"
+                    placeholder="Campus Ghana"
+                    value={form.name}
+                    onChange={(e) => set("name", e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Location</label>
+                  <input
+                    className="form-control"
+                    placeholder="Obuasi"
+                    value={form.location}
+                    onChange={(e) => set("location", e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Region</label>
+                  <select
+                    className="form-control"
+                    value={form.region}
+                    onChange={(e) => set("region", e.target.value)}
+                  >
+                    {GHANA_REGIONS.map((region) => (
+                      <option key={region}>{region}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">School Type</label>
+                  <select
+                    className="form-control"
+                    value={form.type}
+                    onChange={(e) => set("type", e.target.value)}
+                  >
+                    <option value="">Select school type</option>
+                    <option>Mixed</option>
+                    <option>Boys</option>
+                    <option>Girls</option>
+                  </select>
+                </div>
               </div>
             </div>
 
             <div className="school-reg-section">
-              <div className="school-reg-section-title">School classification</div>
-              <div className="school-reg-section-sub">These values define how the school is labeled and organized inside the registered-school directory.</div>
-              <div className="form-grid">
-                <div className="form-group"><label className="form-label">Grade</label><select className="form-control" value={form.category} onChange={(e) => set("category", e.target.value)}><option value="">Select grade</option><option>A</option><option>B</option><option>C</option></select></div>
+              <div className="school-reg-section-title">
+                School classification
               </div>
-              <div className="school-reg-switch" style={{marginTop:14}}>
-                <div className="school-reg-switch-copy">
-                  <div className="school-reg-switch-title">Accept admissions</div>
-                  <div className="school-reg-switch-sub">Inactive schools remain in the registry but can be held back from active platform use.</div>
+              <div className="school-reg-section-sub">
+                These values define how the school is labeled and organized
+                inside the registered-school directory.
+              </div>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">Grade</label>
+                  <select
+                    className="form-control"
+                    value={form.category}
+                    onChange={(e) => set("category", e.target.value)}
+                  >
+                    <option value="">Select grade</option>
+                    <option>A</option>
+                    <option>B</option>
+                    <option>C</option>
+                  </select>
                 </div>
-                <input type="checkbox" checked={form.active} onChange={(e) => set("active", e.target.checked)} />
+              </div>
+              <div className="school-reg-switch" style={{ marginTop: 14 }}>
+                <div className="school-reg-switch-copy">
+                  <div className="school-reg-switch-title">
+                    Accept admissions
+                  </div>
+                  <div className="school-reg-switch-sub">
+                    Inactive schools remain in the registry but can be held back
+                    from active platform use.
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) => set("active", e.target.checked)}
+                />
               </div>
             </div>
 
-            {(setupError || error) && <div className="alert alert-warning" style={{margin:"0 22px"}}>{setupError || error}</div>}
+            {(setupError || error) && (
+              <div className="alert alert-warning" style={{ margin: "0 22px" }}>
+                {setupError || error}
+              </div>
+            )}
 
             <div className="school-reg-actions">
-              <div className="school-reg-actions-note">Required fields are validated before save. Registered schools are kept in their own registry for super-admin management.</div>
+              <div className="school-reg-actions-note">
+                Required fields are validated before save. Registered schools
+                are kept in their own registry for super-admin management.
+              </div>
               <div className="school-reg-actions-row">
-                <button className="btn btn-outline" onClick={onBack}>Cancel</button>
-                <button className="btn btn-blue" onClick={openReviewModal} disabled={saving || !!setupError}>{saving ? "Saving..." : "Review Summary"}</button>
+                <button className="btn btn-outline" onClick={onBack}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-blue"
+                  onClick={openReviewModal}
+                  disabled={saving || !!setupError}
+                >
+                  {saving ? "Saving..." : "Review Summary"}
+                </button>
               </div>
             </div>
           </div>
         </div>
 
         {showReviewModal && (
-          <div className="modal-backdrop" onClick={() => !saving && setShowReviewModal(false)}>
-            <div className="modal-card" style={{maxWidth:560}} onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal-backdrop"
+            onClick={() => !saving && setShowReviewModal(false)}
+          >
+            <div
+              className="modal-card"
+              style={{ maxWidth: 560 }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="modal-head">
                 <div>
                   <div className="modal-title">Review school registration</div>
-                  <div className="modal-sub">Confirm the school details before creating the platform registration.</div>
+                  <div className="modal-sub">
+                    Confirm the school details before creating the platform
+                    registration.
+                  </div>
                 </div>
-                <button className="modal-close" onClick={() => !saving && setShowReviewModal(false)}>
+                <button
+                  className="modal-close"
+                  onClick={() => !saving && setShowReviewModal(false)}
+                >
                   <Ico name="close" size={18} color="#1e3a8a" />
                 </button>
               </div>
 
               <div className="metric-list">
-                <div className="metric-row"><span>School Name</span><strong>{form.name || "-"}</strong></div>
-                <div className="metric-row"><span>Location</span><strong>{form.location || "-"}</strong></div>
-                <div className="metric-row"><span>Region</span><strong>{form.region || "-"}</strong></div>
-                <div className="metric-row"><span>School Type</span><strong>{form.type || "Not selected"}</strong></div>
-                <div className="metric-row"><span>Grade</span><strong>{form.category || "Not selected"}</strong></div>
-                <div className="metric-row"><span>Status</span><strong>{form.active ? "Active" : "Inactive"}</strong></div>
+                <div className="metric-row">
+                  <span>School Name</span>
+                  <strong>{form.name || "-"}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Location</span>
+                  <strong>{form.location || "-"}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Region</span>
+                  <strong>{form.region || "-"}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>School Type</span>
+                  <strong>{form.type || "Not selected"}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Grade</span>
+                  <strong>{form.category || "Not selected"}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Status</span>
+                  <strong>{form.active ? "Active" : "Inactive"}</strong>
+                </div>
               </div>
 
               <div className="modal-actions">
-                <button className="btn btn-outline" onClick={() => setShowReviewModal(false)} disabled={saving}>Edit</button>
-                <button className="btn btn-blue" onClick={registerSchool} disabled={saving}>{saving ? "Saving..." : "Save School Registration"}</button>
+                <button
+                  className="btn btn-outline"
+                  onClick={() => setShowReviewModal(false)}
+                  disabled={saving}
+                >
+                  Edit
+                </button>
+                <button
+                  className="btn btn-blue"
+                  onClick={registerSchool}
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Save School Registration"}
+                </button>
               </div>
             </div>
           </div>
@@ -3486,11 +5530,32 @@ function SchoolRegistrationPage({ onBack, onRegisterSchool, setupError = "" }) {
   );
 }
 
-function SchoolAdminDashboardPage({ user, school, admins, pendingRows, confirmedRows, studentsData, teachersData, feesData, loading }) {
-  const totalCollected = (feesData || []).reduce((sum, fee) => sum + Number(fee.paid || 0), 0);
-  const totalOutstanding = (feesData || []).reduce((sum, fee) => sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0), 0);
+function SchoolAdminDashboardPage({
+  user,
+  school,
+  admins,
+  pendingRows,
+  confirmedRows,
+  studentsData,
+  teachersData,
+  feesData,
+  loading,
+}) {
+  const totalCollected = (feesData || []).reduce(
+    (sum, fee) => sum + Number(fee.paid || 0),
+    0,
+  );
+  const totalOutstanding = (feesData || []).reduce(
+    (sum, fee) =>
+      sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0),
+    0,
+  );
   const latestRows = [...confirmedRows, ...pendingRows]
-    .sort((left, right) => new Date(right.reviewedAt || 0).getTime() - new Date(left.reviewedAt || 0).getTime())
+    .sort(
+      (left, right) =>
+        new Date(right.reviewedAt || 0).getTime() -
+        new Date(left.reviewedAt || 0).getTime(),
+    )
     .slice(0, 6);
 
   return (
@@ -3499,43 +5564,82 @@ function SchoolAdminDashboardPage({ user, school, admins, pendingRows, confirmed
         <div className="school-workspace-hero">
           <div className="school-workspace-copy">
             <div className="school-workspace-kicker">School Workspace</div>
-            <div className="school-workspace-title">{school?.name || user?.managed_school_name || "School Workspace"}</div>
-            <div className="school-workspace-sub">A refined operations view for the school account, covering student records, finance activity, admin access, and recent school-facing candidate activity.</div>
+            <div className="school-workspace-title">
+              {school?.name || user?.managed_school_name || "School Workspace"}
+            </div>
+            <div className="school-workspace-sub">
+              A refined operations view for the school account, covering student
+              records, finance activity, admin access, and recent school-facing
+              candidate activity.
+            </div>
           </div>
           <div className="school-workspace-meta">
-            <div className="school-workspace-chip"><Ico name="schools" size={14} color="#99f6e4"/> {school?.region || "Region pending"}</div>
-            <div className="school-workspace-note">Use this workspace to monitor school operations and confirm admin assignments. Registry school profile changes are done by platform administrators.</div>
+            <div className="school-workspace-chip">
+              <Ico name="schools" size={14} color="#99f6e4" />{" "}
+              {school?.region || "Region pending"}
+            </div>
+            <div className="school-workspace-note">
+              Use this workspace to monitor school operations and confirm admin
+              assignments. Registry school profile changes are done by platform
+              administrators.
+            </div>
           </div>
         </div>
 
-        {loading && <div className="alert alert-info">Loading school workspace...</div>}
-        {!school && !loading && <div className="alert alert-warning">This admin account is not yet linked to a registered school record.</div>}
+        {loading && (
+          <div className="alert alert-info">Loading school workspace...</div>
+        )}
+        {!school && !loading && (
+          <div className="alert alert-warning">
+            This admin account is not yet linked to a registered school record.
+          </div>
+        )}
 
         <div className="school-workspace-summary">
           <div className="school-workspace-summary-card">
             <div className="school-workspace-summary-label">Managed School</div>
-            <div className="school-workspace-summary-value">{school?.name || user?.managed_school_name || "Not linked"}</div>
-            <div className="school-workspace-summary-sub">Primary school record attached to this admin account.</div>
+            <div className="school-workspace-summary-value">
+              {school?.name || user?.managed_school_name || "Not linked"}
+            </div>
+            <div className="school-workspace-summary-sub">
+              Primary school record attached to this admin account.
+            </div>
           </div>
           <div className="school-workspace-summary-card">
             <div className="school-workspace-summary-label">Students</div>
-            <div className="school-workspace-summary-value">{studentsData.length}</div>
-            <div className="school-workspace-summary-sub">Student records currently linked to this school.</div>
+            <div className="school-workspace-summary-value">
+              {studentsData.length}
+            </div>
+            <div className="school-workspace-summary-sub">
+              Student records currently linked to this school.
+            </div>
           </div>
           <div className="school-workspace-summary-card">
             <div className="school-workspace-summary-label">Teachers</div>
-            <div className="school-workspace-summary-value">{teachersData.length}</div>
-            <div className="school-workspace-summary-sub">School staff records available inside this workspace.</div>
+            <div className="school-workspace-summary-value">
+              {teachersData.length}
+            </div>
+            <div className="school-workspace-summary-sub">
+              School staff records available inside this workspace.
+            </div>
           </div>
           <div className="school-workspace-summary-card">
             <div className="school-workspace-summary-label">Fees Collected</div>
-            <div className="school-workspace-summary-value">GHS {totalCollected.toLocaleString()}</div>
-            <div className="school-workspace-summary-sub">Outstanding: GHS {totalOutstanding.toLocaleString()}</div>
+            <div className="school-workspace-summary-value">
+              GHS {totalCollected.toLocaleString()}
+            </div>
+            <div className="school-workspace-summary-sub">
+              Outstanding: GHS {totalOutstanding.toLocaleString()}
+            </div>
           </div>
           <div className="school-workspace-summary-card">
             <div className="school-workspace-summary-label">School Admins</div>
-            <div className="school-workspace-summary-value">{admins.length}</div>
-            <div className="school-workspace-summary-sub">Admin accounts assigned to this school.</div>
+            <div className="school-workspace-summary-value">
+              {admins.length}
+            </div>
+            <div className="school-workspace-summary-sub">
+              Admin accounts assigned to this school.
+            </div>
           </div>
         </div>
 
@@ -3543,17 +5647,52 @@ function SchoolAdminDashboardPage({ user, school, admins, pendingRows, confirmed
           <div className="school-workspace-panel">
             <div className="school-workspace-panel-head">
               <div>
-                <div className="school-workspace-panel-title">School profile</div>
-                <div className="school-workspace-panel-sub">High-level identity details used across the school-admin workspace.</div>
+                <div className="school-workspace-panel-title">
+                  School profile
+                </div>
+                <div className="school-workspace-panel-sub">
+                  High-level identity details used across the school-admin
+                  workspace.
+                </div>
               </div>
             </div>
             <div className="school-profile-list">
-              <div className="school-profile-row"><span>Name</span><strong>{school?.name || user?.managed_school_name || "-"}</strong></div>
-              <div className="school-profile-row"><span>Region</span><strong>{school?.region || "-"}</strong></div>
-              <div className="school-profile-row"><span>Location</span><strong>{school?.location || "-"}</strong></div>
-              <div className="school-profile-row"><span>Grade</span><strong>{school?.category || "-"}</strong></div>
-              <div className="school-profile-row"><span>Type</span><strong>{school?.type || "-"}</strong></div>
-              <div className="school-profile-row"><span>Status</span><strong>{school?.active ? "Active" : "Inactive"}</strong></div>
+              <div className="school-profile-row">
+                <span className="school-profile-label">Name</span>
+                <span className="school-profile-value">
+                  {school?.name || user?.managed_school_name || "—"}
+                </span>
+              </div>
+              <div className="school-profile-row">
+                <span className="school-profile-label">Region</span>
+                <span className="school-profile-value">
+                  {school?.region || "—"}
+                </span>
+              </div>
+              <div className="school-profile-row">
+                <span className="school-profile-label">Location</span>
+                <span className="school-profile-value">
+                  {school?.location || "—"}
+                </span>
+              </div>
+              <div className="school-profile-row">
+                <span className="school-profile-label">Grade</span>
+                <span className="school-profile-value">
+                  {school?.category || "—"}
+                </span>
+              </div>
+              <div className="school-profile-row">
+                <span className="school-profile-label">Type</span>
+                <span className="school-profile-value">
+                  {school?.type || "—"}
+                </span>
+              </div>
+              <div className="school-profile-row">
+                <span className="school-profile-label">Status</span>
+                <span className="school-profile-value">
+                  {school?.active ? "Active" : "Inactive"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -3561,8 +5700,12 @@ function SchoolAdminDashboardPage({ user, school, admins, pendingRows, confirmed
             <div className="school-workspace-panel">
               <div className="school-workspace-panel-head">
                 <div>
-                  <div className="school-workspace-panel-title">Assigned admins</div>
-                  <div className="school-workspace-panel-sub">People who currently manage the school through the platform.</div>
+                  <div className="school-workspace-panel-title">
+                    Assigned admins
+                  </div>
+                  <div className="school-workspace-panel-sub">
+                    People who currently manage the school through the platform.
+                  </div>
                 </div>
               </div>
               <div className="school-admin-mini-list">
@@ -3572,39 +5715,74 @@ function SchoolAdminDashboardPage({ user, school, admins, pendingRows, confirmed
                       <strong>{admin.full_name}</strong>
                       <span>{admin.email}</span>
                     </div>
-                    <span className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}>{admin.status || "active"}</span>
+                    <span
+                      className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}
+                    >
+                      {admin.status || "active"}
+                    </span>
                   </div>
                 ))}
-                {!admins.length && <div className="school-activity-empty">No additional school admins have been assigned yet.</div>}
+                {!admins.length && (
+                  <div className="school-activity-empty">
+                    No additional school admins have been assigned yet.
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="school-workspace-panel">
               <div className="school-workspace-panel-head">
                 <div>
-                  <div className="school-workspace-panel-title">Recent candidate activity</div>
-                  <div className="school-workspace-panel-sub">Selections and placement activity where this school appears in scope.</div>
+                  <div className="school-workspace-panel-title">
+                    Recent candidate activity
+                  </div>
+                  <div className="school-workspace-panel-sub">
+                    Selections and placement activity where this school appears
+                    in scope.
+                  </div>
                 </div>
               </div>
               {latestRows.length ? (
                 <div className="table-wrap">
                   <table>
-                    <thead><tr><th>Student</th><th>1st Choice</th><th>2nd Choice</th><th>Status</th><th>Date</th></tr></thead>
+                    <thead>
+                      <tr>
+                        <th>Student</th>
+                        <th>1st Choice</th>
+                        <th>2nd Choice</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {latestRows.map((row) => (
                         <tr key={row.id}>
-                          <td><strong>{row.studentName}</strong></td>
+                          <td>
+                            <strong>{row.studentName}</strong>
+                          </td>
                           <td>{row.first}</td>
                           <td>{row.second}</td>
-                          <td><span className={`badge ${row.status === "confirmed" ? "badge-success" : "badge-blue"}`}>{row.status}</span></td>
-                          <td>{row.reviewedAt ? new Date(row.reviewedAt).toLocaleDateString() : "-"}</td>
+                          <td>
+                            <span
+                              className={`badge ${row.status === "confirmed" ? "badge-success" : "badge-blue"}`}
+                            >
+                              {row.status}
+                            </span>
+                          </td>
+                          <td>
+                            {row.reviewedAt
+                              ? new Date(row.reviewedAt).toLocaleDateString()
+                              : "-"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               ) : (
-                <div className="school-activity-empty">No selection activity mentioning this school yet.</div>
+                <div className="school-activity-empty">
+                  No selection activity mentioning this school yet.
+                </div>
               )}
             </div>
           </div>
@@ -3614,10 +5792,27 @@ function SchoolAdminDashboardPage({ user, school, admins, pendingRows, confirmed
   );
 }
 
-function ManagedSchoolPage({ school, admins, user, onSaveProfile, allowProfileEdit = true }) {
-  const [form, setForm] = useState({ name: "", location: "", region: "", type: "", category: "" });
+function ManagedSchoolPage({
+  school,
+  admins,
+  user,
+  onSaveProfile,
+  allowProfileEdit = true,
+}) {
+  const [form, setForm] = useState({
+    name: "",
+    location: "",
+    region: "",
+    type: "",
+    category: "",
+  });
   const [saving, setSaving] = useState(false);
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const [statusModal, setStatusModal] = useState({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
 
   useEffect(() => {
     setForm({
@@ -3629,15 +5824,27 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile, allowProfileEd
     });
   }, [school, user]);
 
-  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const set = (key, value) =>
+    setForm((current) => ({ ...current, [key]: value }));
 
   const saveProfile = async () => {
     if (!allowProfileEdit) {
-      setStatusModal({ open: true, type: "failure", title: "Not allowed", message: "School registry profile can only be changed by platform administrators." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Not allowed",
+        message:
+          "School registry profile can only be changed by platform administrators.",
+      });
       return;
     }
     if (!form.name.trim()) {
-      setStatusModal({ open: true, type: "failure", title: "Save Failed", message: "School name is required." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Save Failed",
+        message: "School name is required.",
+      });
       return;
     }
     setSaving(true);
@@ -3649,9 +5856,19 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile, allowProfileEd
         type: form.type,
         category: form.category,
       });
-      setStatusModal({ open: true, type: "success", title: "School Updated", message: "School profile settings were saved." });
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "School Updated",
+        message: "School profile settings were saved.",
+      });
     } catch (error) {
-      setStatusModal({ open: true, type: "failure", title: "Save Failed", message: error?.message || "Could not save school profile settings." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Save Failed",
+        message: error?.message || "Could not save school profile settings.",
+      });
     } finally {
       setSaving(false);
     }
@@ -3659,17 +5876,34 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile, allowProfileEd
 
   return (
     <div className="fade-in">
-      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((current) => ({ ...current, open: false }))} />
+      <ActionStatusModal
+        state={statusModal}
+        onClose={() =>
+          setStatusModal((current) => ({ ...current, open: false }))
+        }
+      />
       <div className="school-settings-shell">
         <div className="school-workspace-hero">
           <div className="school-workspace-copy">
             <div className="school-workspace-kicker">Managed School</div>
-            <div className="school-workspace-title">School profile and access</div>
-            <div className="school-workspace-sub">{allowProfileEdit ? "Review the official school record, update profile details, and confirm which administrators currently manage the school." : "Review the official school record and which administrators currently manage the school. Profile changes are managed by platform administrators."}</div>
+            <div className="school-workspace-title">
+              School profile and access
+            </div>
+            <div className="school-workspace-sub">
+              {allowProfileEdit
+                ? "Review the official school record, update profile details, and confirm which administrators currently manage the school."
+                : "Review the official school record and which administrators currently manage the school. Profile changes are managed by platform administrators."}
+            </div>
           </div>
           <div className="school-workspace-meta">
-            <div className="school-workspace-chip"><Ico name="profile" size={14} color="#99f6e4"/> Admin settings</div>
-            <div className="school-workspace-note">{allowProfileEdit ? "Changes made here affect how the school appears across its workspace and onboarding registry." : "Registry details are read-only in this portal. Contact a super admin to update the school record."}</div>
+            <div className="school-workspace-chip">
+              <Ico name="profile" size={14} color="#99f6e4" /> Admin settings
+            </div>
+            <div className="school-workspace-note">
+              {allowProfileEdit
+                ? "Changes made here affect how the school appears across its workspace and onboarding registry."
+                : "Registry details are read-only in this portal. Contact a super admin to update the school record."}
+            </div>
           </div>
         </div>
 
@@ -3678,63 +5912,165 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile, allowProfileEd
             <div className="school-settings-head">
               <div>
                 <div className="school-settings-title">Registry details</div>
-                <div className="school-settings-sub">The current school identity record as stored in the platform registry.</div>
+                <div className="school-settings-sub">
+                  The current school identity record as stored in the platform
+                  registry.
+                </div>
               </div>
             </div>
             <div className="school-settings-card-body">
               <div className="school-profile-list">
-                <div className="school-profile-row"><span>School Name</span><strong>{school?.name || user?.managed_school_name || "—"}</strong></div>
-                <div className="school-profile-row"><span>Region</span><strong>{school?.region || "—"}</strong></div>
-                <div className="school-profile-row"><span>Location</span><strong>{school?.location || "—"}</strong></div>
-                <div className="school-profile-row"><span>Grade</span><strong>{school?.category || "—"}</strong></div>
-                <div className="school-profile-row"><span>Type</span><strong>{school?.type || "—"}</strong></div>
-                <div className="school-profile-row"><span>Status</span><strong>{school?.active ? "Active" : "Inactive"}</strong></div>
+                <div className="school-profile-row">
+                  <span className="school-profile-label">School Name</span>
+                  <span className="school-profile-value">
+                    {school?.name || user?.managed_school_name || "—"}
+                  </span>
+                </div>
+                <div className="school-profile-row">
+                  <span className="school-profile-label">Region</span>
+                  <span className="school-profile-value">
+                    {school?.region || "—"}
+                  </span>
+                </div>
+                <div className="school-profile-row">
+                  <span className="school-profile-label">Location</span>
+                  <span className="school-profile-value">
+                    {school?.location || "—"}
+                  </span>
+                </div>
+                <div className="school-profile-row">
+                  <span className="school-profile-label">Grade</span>
+                  <span className="school-profile-value">
+                    {school?.category || "—"}
+                  </span>
+                </div>
+                <div className="school-profile-row">
+                  <span className="school-profile-label">Type</span>
+                  <span className="school-profile-value">
+                    {school?.type || "—"}
+                  </span>
+                </div>
+                <div className="school-profile-row">
+                  <span className="school-profile-label">Status</span>
+                  <span className="school-profile-value">
+                    {school?.active ? "Active" : "Inactive"}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
           {allowProfileEdit ? (
-          <div className="school-settings-card">
-            <div className="school-settings-head">
-              <div>
-                <div className="school-settings-title">Edit profile</div>
-                <div className="school-settings-sub">Update the school profile details used throughout the school-admin portal.</div>
-              </div>
-            </div>
-            <div className="school-settings-card-body">
-              <div className="school-settings-form-grid">
-                <div className="form-grid">
-                  <div className="form-group"><label className="form-label">School Name</label><input className="form-control" value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
-                  <div className="form-group"><label className="form-label">Location</label><input className="form-control" value={form.location} onChange={(e) => set("location", e.target.value)} /></div>
-                  <div className="form-group"><label className="form-label">Region</label><select className="form-control" value={form.region} onChange={(e) => set("region", e.target.value)}>{GHANA_REGIONS.map((region) => <option key={region}>{region}</option>)}</select></div>
-                  <div className="form-group"><label className="form-label">School Type</label><select className="form-control" value={form.type} onChange={(e) => set("type", e.target.value)}><option value="">Select school type</option><option>Mixed</option><option>Boys</option><option>Girls</option></select></div>
-                  <div className="form-group"><label className="form-label">Grade</label><select className="form-control" value={form.category} onChange={(e) => set("category", e.target.value)}><option value="">Select grade</option><option>A</option><option>B</option><option>C</option></select></div>
+            <div className="school-settings-card">
+              <div className="school-settings-head">
+                <div>
+                  <div className="school-settings-title">Edit profile</div>
+                  <div className="school-settings-sub">
+                    Update the school profile details used throughout the
+                    school-admin portal.
+                  </div>
                 </div>
               </div>
-              <div className="school-settings-card-actions">
-                <button type="button" className="btn btn-blue" onClick={saveProfile} disabled={saving}>{saving ? "Saving..." : "Save Profile"}</button>
+              <div className="school-settings-card-body">
+                <div className="school-settings-form-grid">
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label className="form-label">School Name</label>
+                      <input
+                        className="form-control"
+                        value={form.name}
+                        onChange={(e) => set("name", e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Location</label>
+                      <input
+                        className="form-control"
+                        value={form.location}
+                        onChange={(e) => set("location", e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Region</label>
+                      <select
+                        className="form-control"
+                        value={form.region}
+                        onChange={(e) => set("region", e.target.value)}
+                      >
+                        {GHANA_REGIONS.map((region) => (
+                          <option key={region}>{region}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">School Type</label>
+                      <select
+                        className="form-control"
+                        value={form.type}
+                        onChange={(e) => set("type", e.target.value)}
+                      >
+                        <option value="">Select school type</option>
+                        <option>Mixed</option>
+                        <option>Boys</option>
+                        <option>Girls</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Grade</label>
+                      <select
+                        className="form-control"
+                        value={form.category}
+                        onChange={(e) => set("category", e.target.value)}
+                      >
+                        <option value="">Select grade</option>
+                        <option>A</option>
+                        <option>B</option>
+                        <option>C</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="school-settings-card-actions">
+                  <button
+                    type="button"
+                    className="btn btn-blue"
+                    onClick={saveProfile}
+                    disabled={saving}
+                  >
+                    {saving ? "Saving..." : "Save Profile"}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
           ) : (
-          <div className="school-settings-card">
-            <div className="school-settings-head">
-              <div>
-                <div className="school-settings-title">School profile</div>
-                <div className="school-settings-sub">School name, location, and registry fields are maintained by platform administrators.</div>
+            <div className="school-settings-card">
+              <div className="school-settings-head">
+                <div>
+                  <div className="school-settings-title">School profile</div>
+                  <div className="school-settings-sub">
+                    School name, location, and registry fields are maintained by
+                    platform administrators.
+                  </div>
+                </div>
+              </div>
+              <div className="school-settings-card-body">
+                <div className="alert alert-info school-settings-readonly-note">
+                  You can review registry details in the first column. To
+                  request a correction, contact your super admin or support
+                  team.
+                </div>
               </div>
             </div>
-            <div className="school-settings-card-body">
-              <div className="alert alert-info school-settings-readonly-note">You can review registry details in the first column. To request a correction, contact your super admin or support team.</div>
-            </div>
-          </div>
           )}
 
           <div className="school-settings-card">
             <div className="school-settings-head">
               <div>
                 <div className="school-settings-title">Admin accounts</div>
-                <div className="school-settings-sub">People currently responsible for managing this school on the platform.</div>
+                <div className="school-settings-sub">
+                  People currently responsible for managing this school on the
+                  platform.
+                </div>
               </div>
             </div>
             <div className="school-settings-card-body">
@@ -3746,10 +6082,18 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile, allowProfileEd
                       <span>{admin.email}</span>
                       <span>{admin.phone || "No phone added"}</span>
                     </div>
-                    <span className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}>{admin.status || "active"}</span>
+                    <span
+                      className={`badge ${admin.status === "active" ? "badge-success" : "badge-gray"}`}
+                    >
+                      {admin.status || "active"}
+                    </span>
                   </div>
                 ))}
-                {!admins.length && <div className="school-activity-empty">No school-admin records found for this school yet.</div>}
+                {!admins.length && (
+                  <div className="school-activity-empty">
+                    No school-admin records found for this school yet.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -3760,89 +6104,192 @@ function ManagedSchoolPage({ school, admins, user, onSaveProfile, allowProfileEd
 }
 
 // â”€â”€â”€ PENDING SELECTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function PendingSelections({ rows, loading, onApprove, readOnly = false, pageTitle = "Pending Selections", pageSub = "Review and approve student school selections", emptyMessage = "There are currently no pending selections requiring review." }) {
+function PendingSelections({
+  rows,
+  loading,
+  onApprove,
+  readOnly = false,
+  pageTitle = "Pending Selections",
+  pageSub = "Review and approve student school selections",
+  emptyMessage = "There are currently no pending selections requiring review.",
+}) {
   const isMobile = useIsMobileLayout();
   const displayRows = sortRecordsByStudentIndex(rows || []);
 
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">{pageTitle}</div><div className="page-sub">{pageSub}</div></div>
-      {loading && <div className="alert alert-info">Loading pending selections...</div>}
+      <div className="page-header">
+        <div className="page-title">{pageTitle}</div>
+        <div className="page-sub">{pageSub}</div>
+      </div>
+      {loading && (
+        <div className="alert alert-info">Loading pending selections...</div>
+      )}
       {isMobile ? (
         <div className="mobile-record-list">
-          {displayRows.map(s => {
+          {displayRows.map((s) => {
             const picks = normalizeSelectionList(s.rawRow || s);
             return (
               <div key={s.id} className="mobile-record-card">
                 <div className="mobile-record-head">
                   <div>
-                    <div className="mobile-record-title">{String(s.user_email).split("@")[0].replace(/\./g, " ")}</div>
+                    <div className="mobile-record-title">
+                      {String(s.user_email).split("@")[0].replace(/\./g, " ")}
+                    </div>
                     <div className="mobile-record-sub">{s.user_email}</div>
-                    <div className="mobile-record-sub">Diag: {s.match_source || "unknown"} | picks: {Number(s.selection_count || 0)} | parse: {s.parse_status || "unknown"}</div>
+                    <div className="mobile-record-sub">
+                      Diag: {s.match_source || "unknown"} | picks:{" "}
+                      {Number(s.selection_count || 0)} | parse:{" "}
+                      {s.parse_status || "unknown"}
+                    </div>
                   </div>
-                  <strong style={{color:"#0f172a"}}>{s.aggregate}</strong>
+                  <strong style={{ color: "#0f172a" }}>{s.aggregate}</strong>
                 </div>
                 <div className="mobile-record-grid">
-                  {picks.length > 0 ? picks.map((pick, idx) => (
-                    <div className="mobile-record-item" key={pick.id || idx}><label>{pick.rank ? `${pick.rank}${pick.rank === 1 ? 'st' : pick.rank === 2 ? 'nd' : pick.rank === 3 ? 'rd' : 'th'} Choice` : `Choice`}</label><span>{pick.name}</span></div>
-                  )) : <div className="mobile-record-item"><span>No selections</span></div>}
+                  {picks.length > 0 ? (
+                    picks.map((pick, idx) => (
+                      <div className="mobile-record-item" key={pick.id || idx}>
+                        <label>
+                          {pick.rank
+                            ? `${pick.rank}${pick.rank === 1 ? "st" : pick.rank === 2 ? "nd" : pick.rank === 3 ? "rd" : "th"} Choice`
+                            : `Choice`}
+                        </label>
+                        <span>{pick.name}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="mobile-record-item">
+                      <span>No selections</span>
+                    </div>
+                  )}
                 </div>
                 <div className="mobile-record-actions">
-                  {s.approved ? <span className="badge badge-success">Approved</span> : readOnly ? <span className="badge badge-blue">Review only</span> : <button className="btn btn-sm btn-green" onClick={()=>onApprove?.(s.id)}>Approve</button>}
+                  {s.approved ? (
+                    <span className="badge badge-success">Approved</span>
+                  ) : readOnly ? (
+                    <span className="badge badge-blue">Review only</span>
+                  ) : (
+                    <button
+                      className="btn btn-sm btn-green"
+                      onClick={() => onApprove?.(s.id)}
+                    >
+                      Approve
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
-          {!displayRows.length && !loading && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>{emptyMessage}</div>}
+          {!displayRows.length && !loading && (
+            <div
+              className="mobile-record-card"
+              style={{ textAlign: "center", color: "#64748b" }}
+            >
+              {emptyMessage}
+            </div>
+          )}
         </div>
       ) : (
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Student</th><th>Selected Schools</th><th>Aggregate</th><th>Action</th></tr></thead>
-          <tbody>
-            {displayRows.map(s => {
-              const picks = normalizeSelectionList(s.rawRow || s);
-              return (
-                <tr key={s.id}>
-                  <td><strong>{String(s.user_email).split("@")[0].replace(/\./g, " ")}</strong><br/><span style={{fontSize:".75rem",color:"#94a3b8"}}>{s.user_email}</span><br/><span style={{fontSize:".72rem",color:"#64748b"}}>Diag: {s.match_source || "unknown"} | picks: {Number(s.selection_count || 0)} | parse: {s.parse_status || "unknown"}</span></td>
-                  <td>
-                    {picks.length > 0 ? (
-                      <div style={{display:'flex', flexWrap:'wrap', gap:'6px'}}>
-                        {picks.map((pick, idx) => (
-                          <span
-                            key={pick.id || idx}
-                            style={{
-                              display: 'inline-block',
-                              background: '#e0e7ff',
-                              color: '#3730a3',
-                              borderRadius: '8px',
-                              padding: '3px 10px',
-                              fontWeight: 600,
-                              fontSize: '.88em',
-                              border: '1px solid #c7d2fe',
-                              letterSpacing: '.01em',
-                            }}
-                          >
-                            {pick.rank ? `${pick.rank}${pick.rank === 1 ? 'st' : pick.rank === 2 ? 'nd' : pick.rank === 3 ? 'rd' : 'th'}: ` : ''}{pick.name}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span>No selections</span>
-                    )}
-                  </td>
-                  <td style={{fontWeight:700}}>{s.aggregate}</td>
-                  <td>
-                    {s.approved ? <span className="badge badge-success">Approved</span> : readOnly ? <span className="badge badge-blue">Review only</span> :
-                      <button className="btn btn-sm btn-green" onClick={()=>onApprove?.(s.id)}>Approve</button>}
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Selected Schools</th>
+                <th>Aggregate</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayRows.map((s) => {
+                const picks = normalizeSelectionList(s.rawRow || s);
+                return (
+                  <tr key={s.id}>
+                    <td>
+                      <strong>
+                        {String(s.user_email).split("@")[0].replace(/\./g, " ")}
+                      </strong>
+                      <br />
+                      <span style={{ fontSize: ".75rem", color: "#94a3b8" }}>
+                        {s.user_email}
+                      </span>
+                      <br />
+                      <span style={{ fontSize: ".72rem", color: "#64748b" }}>
+                        Diag: {s.match_source || "unknown"} | picks:{" "}
+                        {Number(s.selection_count || 0)} | parse:{" "}
+                        {s.parse_status || "unknown"}
+                      </span>
+                    </td>
+                    <td>
+                      {picks.length > 0 ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "6px",
+                          }}
+                        >
+                          {picks.map((pick, idx) => (
+                            <span
+                              key={pick.id || idx}
+                              style={{
+                                display: "inline-block",
+                                background: "#e0e7ff",
+                                color: "#3730a3",
+                                borderRadius: "8px",
+                                padding: "3px 10px",
+                                fontWeight: 600,
+                                fontSize: ".88em",
+                                border: "1px solid #c7d2fe",
+                                letterSpacing: ".01em",
+                              }}
+                            >
+                              {pick.rank
+                                ? `${pick.rank}${pick.rank === 1 ? "st" : pick.rank === 2 ? "nd" : pick.rank === 3 ? "rd" : "th"}: `
+                                : ""}
+                              {pick.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span>No selections</span>
+                      )}
+                    </td>
+                    <td style={{ fontWeight: 700 }}>{s.aggregate}</td>
+                    <td>
+                      {s.approved ? (
+                        <span className="badge badge-success">Approved</span>
+                      ) : readOnly ? (
+                        <span className="badge badge-blue">Review only</span>
+                      ) : (
+                        <button
+                          className="btn btn-sm btn-green"
+                          onClick={() => onApprove?.(s.id)}
+                        >
+                          Approve
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!displayRows.length && !loading && (
+                <tr>
+                  <td
+                    colSpan="4"
+                    style={{
+                      textAlign: "center",
+                      padding: 24,
+                      color: "#64748b",
+                    }}
+                  >
+                    {emptyMessage}
                   </td>
                 </tr>
-              );
-            })}
-            {!displayRows.length && !loading && <tr><td colSpan="4" style={{textAlign:"center",padding:24,color:"#64748b"}}>{emptyMessage}</td></tr>}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -3855,48 +6302,120 @@ function ConfirmedPlacements({ rows, loading }) {
   const displayRows = sortRecordsByStudentIndex(confirmedRows);
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Confirmed Mock Placements</div></div>
-      {loading && <div className="alert alert-info">Loading confirmed mock placements...</div>}
+      <div className="page-header">
+        <div className="page-title">Confirmed Mock Placements</div>
+      </div>
+      {loading && (
+        <div className="alert alert-info">
+          Loading confirmed mock placements...
+        </div>
+      )}
       {isMobile ? (
         <div className="mobile-record-list">
-          {displayRows.map(s=>(
+          {displayRows.map((s) => (
             <div key={s.id} className="mobile-record-card">
               <div className="mobile-record-head">
                 <div>
                   <div className="mobile-record-title">{s.studentName}</div>
-                  <div className="mobile-record-sub">Placed at {s.placedAt}</div>
-                  <div className="mobile-record-sub">Diag: {s.match_source || "unknown"} | picks: {Number(s.selection_count || 0)} | parse: {s.parse_status || "unknown"}</div>
+                  <div className="mobile-record-sub">
+                    Placed at {s.placedAt}
+                  </div>
+                  <div className="mobile-record-sub">
+                    Diag: {s.match_source || "unknown"} | picks:{" "}
+                    {Number(s.selection_count || 0)} | parse:{" "}
+                    {s.parse_status || "unknown"}
+                  </div>
                 </div>
-                <span className={`badge ${s.category==="A"?"badge-warning":s.category==="B"?"badge-blue":"badge-success"}`}>Cat {s.category}</span>
+                <span
+                  className={`badge ${s.category === "A" ? "badge-warning" : s.category === "B" ? "badge-blue" : "badge-success"}`}
+                >
+                  Cat {s.category}
+                </span>
               </div>
               <div className="mobile-record-grid">
-                <div className="mobile-record-item"><label>Aggregate</label><strong>{s.aggregate}</strong></div>
-                <div className="mobile-record-item"><label>Date</label><span>{s.reviewedAt ? new Date(s.reviewedAt).toLocaleDateString() : "-"}</span></div>
+                <div className="mobile-record-item">
+                  <label>Aggregate</label>
+                  <strong>{s.aggregate}</strong>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Date</label>
+                  <span>
+                    {s.reviewedAt
+                      ? new Date(s.reviewedAt).toLocaleDateString()
+                      : "-"}
+                  </span>
+                </div>
               </div>
             </div>
           ))}
-          {!displayRows.length && !loading && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No confirmed selections found in Supabase.</div>}
+          {!displayRows.length && !loading && (
+            <div
+              className="mobile-record-card"
+              style={{ textAlign: "center", color: "#64748b" }}
+            >
+              No confirmed selections found in Supabase.
+            </div>
+          )}
         </div>
       ) : (
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Student</th><th>Placed At</th><th>Category</th><th>Aggregate</th><th>Date</th></tr></thead>
-          <tbody>
-            {displayRows.map(s=>{
-              return (
-                <tr key={s.id}>
-                  <td><strong>{s.studentName}</strong><br/><span style={{fontSize:".72rem",color:"#64748b"}}>Diag: {s.match_source || "unknown"} | picks: {Number(s.selection_count || 0)} | parse: {s.parse_status || "unknown"}</span></td>
-                  <td>{s.placedAt}</td>
-                  <td><span className={`badge ${s.category==="A"?"badge-warning":s.category==="B"?"badge-blue":"badge-success"}`}>Cat {s.category}</span></td>
-                  <td style={{fontWeight:700}}>{s.aggregate}</td>
-                  <td>{s.reviewedAt ? new Date(s.reviewedAt).toLocaleDateString() : "-"}</td>
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Placed At</th>
+                <th>Category</th>
+                <th>Aggregate</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayRows.map((s) => {
+                return (
+                  <tr key={s.id}>
+                    <td>
+                      <strong>{s.studentName}</strong>
+                      <br />
+                      <span style={{ fontSize: ".72rem", color: "#64748b" }}>
+                        Diag: {s.match_source || "unknown"} | picks:{" "}
+                        {Number(s.selection_count || 0)} | parse:{" "}
+                        {s.parse_status || "unknown"}
+                      </span>
+                    </td>
+                    <td>{s.placedAt}</td>
+                    <td>
+                      <span
+                        className={`badge ${s.category === "A" ? "badge-warning" : s.category === "B" ? "badge-blue" : "badge-success"}`}
+                      >
+                        Cat {s.category}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 700 }}>{s.aggregate}</td>
+                    <td>
+                      {s.reviewedAt
+                        ? new Date(s.reviewedAt).toLocaleDateString()
+                        : "-"}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!displayRows.length && !loading && (
+                <tr>
+                  <td
+                    colSpan="5"
+                    style={{
+                      textAlign: "center",
+                      padding: 24,
+                      color: "#64748b",
+                    }}
+                  >
+                    No confirmed selections found in Supabase.
+                  </td>
                 </tr>
-              );
-            })}
-            {!displayRows.length && !loading && <tr><td colSpan="5" style={{textAlign:"center",padding:24,color:"#64748b"}}>No confirmed selections found in Supabase.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -3907,28 +6426,37 @@ function ResultsPage({ studentsData, tableInfo }) {
   const isMobile = useIsMobileLayout();
   const rankedStudents = [...(studentsData || [])]
     .filter((student) => student && student.full_name)
-    .sort((left, right) => Number(left.aggregate ?? 999) - Number(right.aggregate ?? 999));
+    .sort(
+      (left, right) =>
+        Number(left.aggregate ?? 999) - Number(right.aggregate ?? 999),
+    );
   const studentsMap = new Map();
   rankedStudents.forEach((student) => {
     studentsMap.set(String(student.id), student);
     studentsMap.set(String(student.index), student);
   });
-  const resultRows = Array.isArray(tableInfo?.rows) ? tableInfo.rows.map((row, index) => normalizeResultRow(row, studentsMap, index)).sort((left, right) => left.rank - right.rank) : [];
-  const displayRows = (resultRows.length ? resultRows : rankedStudents.map((student, i) => {
-    const aggregate = Number(student.aggregate ?? 0);
-    const averageScore = Math.max(0, 100 - (aggregate * 5));
-    const grade = getGrade(averageScore);
-    return {
-      id: student.id,
-      rank: i + 1,
-      studentName: student.full_name,
-      averageScore,
-      aggregate,
-      grade: grade.grade,
-      gradeColor: grade.color,
-      gradeBg: grade.bg,
-    };
-  }));
+  const resultRows = Array.isArray(tableInfo?.rows)
+    ? tableInfo.rows
+        .map((row, index) => normalizeResultRow(row, studentsMap, index))
+        .sort((left, right) => left.rank - right.rank)
+    : [];
+  const displayRows = resultRows.length
+    ? resultRows
+    : rankedStudents.map((student, i) => {
+        const aggregate = Number(student.aggregate ?? 0);
+        const averageScore = Math.max(0, 100 - aggregate * 5);
+        const grade = getGrade(averageScore);
+        return {
+          id: student.id,
+          rank: i + 1,
+          studentName: student.full_name,
+          averageScore,
+          aggregate,
+          grade: grade.grade,
+          gradeColor: grade.color,
+          gradeBg: grade.bg,
+        };
+      });
   const gradePalette = {
     A: "#16a34a",
     B: "#1d4ed8",
@@ -3936,50 +6464,128 @@ function ResultsPage({ studentsData, tableInfo }) {
     D: "#dc2626",
     F: "#7f1d1d",
   };
-  const gradeCounts = displayRows.reduce((acc, row) => {
-    const key = String(row.grade || "F").toUpperCase();
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, { A: 0, B: 0, C: 0, D: 0, F: 0 });
+  const gradeCounts = displayRows.reduce(
+    (acc, row) => {
+      const key = String(row.grade || "F").toUpperCase();
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    },
+    { A: 0, B: 0, C: 0, D: 0, F: 0 },
+  );
   const totalCount = Math.max(displayRows.length, 1);
-  const passCount = displayRows.filter((row) => Number(row.averageScore || 0) >= 50).length;
+  const passCount = displayRows.filter(
+    (row) => Number(row.averageScore || 0) >= 50,
+  ).length;
   const avgScore = displayRows.length
-    ? Math.round(displayRows.reduce((sum, row) => sum + Number(row.averageScore || 0), 0) / displayRows.length)
+    ? Math.round(
+        displayRows.reduce(
+          (sum, row) => sum + Number(row.averageScore || 0),
+          0,
+        ) / displayRows.length,
+      )
     : 0;
   const passRate = Math.round((passCount / totalCount) * 100);
   const topRows = [...displayRows].slice(0, 6);
-  const topScore = Math.max(...displayRows.map((row) => Number(row.averageScore || 0)), 1);
+  const topScore = Math.max(
+    ...displayRows.map((row) => Number(row.averageScore || 0)),
+    1,
+  );
   const trendRows = [...displayRows].slice(0, 8);
   const chartW = 380;
   const chartH = 170;
-  const points = trendRows.map((row, idx) => {
-    const x = trendRows.length > 1 ? (idx * (chartW - 30)) / (trendRows.length - 1) + 15 : chartW / 2;
-    const y = chartH - ((Math.max(0, Math.min(100, Number(row.averageScore || 0))) / 100) * 120 + 20);
-    return `${x},${y}`;
-  }).join(" ");
-  const areaPoints = points ? `${points} ${chartW - 15},${chartH - 10} 15,${chartH - 10}` : "";
+  const points = trendRows
+    .map((row, idx) => {
+      const x =
+        trendRows.length > 1
+          ? (idx * (chartW - 30)) / (trendRows.length - 1) + 15
+          : chartW / 2;
+      const y =
+        chartH -
+        ((Math.max(0, Math.min(100, Number(row.averageScore || 0))) / 100) *
+          120 +
+          20);
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const areaPoints = points
+    ? `${points} ${chartW - 15},${chartH - 10} 15,${chartH - 10}`
+    : "";
   const donutSegments = ["A", "B", "C", "D", "F"];
   let progress = 0;
-  const donutStops = donutSegments.map((grade) => {
-    const portion = (gradeCounts[grade] || 0) / totalCount;
-    const start = Math.round(progress * 360);
-    progress += portion;
-    const end = Math.round(progress * 360);
-    return `${gradePalette[grade]} ${start}deg ${end}deg`;
-  }).join(", ");
+  const donutStops = donutSegments
+    .map((grade) => {
+      const portion = (gradeCounts[grade] || 0) / totalCount;
+      const start = Math.round(progress * 360);
+      progress += portion;
+      const end = Math.round(progress * 360);
+      return `${gradePalette[grade]} ${start}deg ${end}deg`;
+    })
+    .join(", ");
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Results Summary</div></div>
+      <div className="page-header">
+        <div className="page-title">Results Summary</div>
+      </div>
       <div className="stats-grid stats-grid-4-compact">
-        <div className="stat-card" style={{background:"#eef2ff"}}><div className="stat-label" style={{color:"#1e3a8a"}}>Total Students</div><div className="stat-value" style={{color:"#1e3a8a"}}>{displayRows.length}</div><div className="stat-sub" style={{color:"#1e3a8a"}}>Result rows in current view</div></div>
-        <div className="stat-card" style={{background:"#dcfce7"}}><div className="stat-label" style={{color:"#166534"}}>Average Score</div><div className="stat-value" style={{color:"#166534"}}>{displayRows.length ? `${avgScore}%` : "N/A"}</div><div className="stat-sub" style={{color:"#166534"}}>Across ranked students</div></div>
-        <div className="stat-card" style={{background:"#fef3c7"}}><div className="stat-label" style={{color:"#92400e"}}>Pass Rate</div><div className="stat-value" style={{color:"#92400e"}}>{displayRows.length ? `${passRate}%` : "N/A"}</div><div className="stat-sub" style={{color:"#92400e"}}>{passCount}/{displayRows.length} at 50% and above</div></div>
-        <div className="stat-card" style={{background:"#dbeafe"}}><div className="stat-label" style={{color:"#1e40af"}}>Top Performer</div><div className="stat-value" style={{color:"#1e40af",fontSize:"1.15rem"}}>{displayRows[0]?.studentName || "N/A"}</div><div className="stat-sub" style={{color:"#1e40af"}}>{displayRows[0] ? `${displayRows[0].averageScore}%` : "No score data"}</div></div>
+        <div className="stat-card" style={{ background: "#eef2ff" }}>
+          <div className="stat-label" style={{ color: "#1e3a8a" }}>
+            Total Students
+          </div>
+          <div className="stat-value" style={{ color: "#1e3a8a" }}>
+            {displayRows.length}
+          </div>
+          <div className="stat-sub" style={{ color: "#1e3a8a" }}>
+            Result rows in current view
+          </div>
+        </div>
+        <div className="stat-card" style={{ background: "#dcfce7" }}>
+          <div className="stat-label" style={{ color: "#166534" }}>
+            Average Score
+          </div>
+          <div className="stat-value" style={{ color: "#166534" }}>
+            {displayRows.length ? `${avgScore}%` : "N/A"}
+          </div>
+          <div className="stat-sub" style={{ color: "#166534" }}>
+            Across ranked students
+          </div>
+        </div>
+        <div className="stat-card" style={{ background: "#fef3c7" }}>
+          <div className="stat-label" style={{ color: "#92400e" }}>
+            Pass Rate
+          </div>
+          <div className="stat-value" style={{ color: "#92400e" }}>
+            {displayRows.length ? `${passRate}%` : "N/A"}
+          </div>
+          <div className="stat-sub" style={{ color: "#92400e" }}>
+            {passCount}/{displayRows.length} at 50% and above
+          </div>
+        </div>
+        <div className="stat-card" style={{ background: "#dbeafe" }}>
+          <div className="stat-label" style={{ color: "#1e40af" }}>
+            Top Performer
+          </div>
+          <div
+            className="stat-value"
+            style={{ color: "#1e40af", fontSize: "1.15rem" }}
+          >
+            {displayRows[0]?.studentName || "N/A"}
+          </div>
+          <div className="stat-sub" style={{ color: "#1e40af" }}>
+            {displayRows[0]
+              ? `${displayRows[0].averageScore}%`
+              : "No score data"}
+          </div>
+        </div>
       </div>
       <div className="results-visual-grid">
         <div className="results-panel">
           <h3>Grade Distribution</h3>
-          <div className="results-donut" style={{background:`conic-gradient(${donutStops || "#e2e8f0 0deg 360deg"})`}}>
+          <div
+            className="results-donut"
+            style={{
+              background: `conic-gradient(${donutStops || "#e2e8f0 0deg 360deg"})`,
+            }}
+          >
             <div className="results-donut-center">
               <strong>{displayRows.length}</strong>
               <span>Students</span>
@@ -3988,7 +6594,13 @@ function ResultsPage({ studentsData, tableInfo }) {
           <div className="results-legend">
             {donutSegments.map((grade) => (
               <div key={grade} className="results-legend-item">
-                <span style={{display:"inline-flex",alignItems:"center"}}><span className="results-dot" style={{background:gradePalette[grade]}}/>Grade {grade}</span>
+                <span style={{ display: "inline-flex", alignItems: "center" }}>
+                  <span
+                    className="results-dot"
+                    style={{ background: gradePalette[grade] }}
+                  />
+                  Grade {grade}
+                </span>
                 <b>{gradeCounts[grade] || 0}</b>
               </div>
             ))}
@@ -3998,41 +6610,113 @@ function ResultsPage({ studentsData, tableInfo }) {
           <h3>Top Performers</h3>
           <div className="results-bars">
             {topRows.map((row) => (
-              <div key={`bar-${row.id}-${row.rank}`} className="results-bar-row">
+              <div
+                key={`bar-${row.id}-${row.rank}`}
+                className="results-bar-row"
+              >
                 <span>#{row.rank}</span>
                 <div className="results-bar-track">
-                  <div className="results-bar-fill" style={{width:`${Math.round((Number(row.averageScore || 0) / topScore) * 100)}%`,background:row.averageScore >= 75 ? "#16a34a" : row.averageScore >= 60 ? "#d97706" : "#dc2626"}}/>
+                  <div
+                    className="results-bar-fill"
+                    style={{
+                      width: `${Math.round((Number(row.averageScore || 0) / topScore) * 100)}%`,
+                      background:
+                        row.averageScore >= 75
+                          ? "#16a34a"
+                          : row.averageScore >= 60
+                            ? "#d97706"
+                            : "#dc2626",
+                    }}
+                  />
                 </div>
                 <strong>{row.averageScore}%</strong>
               </div>
             ))}
-            {!topRows.length && <div style={{color:"#64748b",fontSize:".82rem"}}>No ranked data to display.</div>}
+            {!topRows.length && (
+              <div style={{ color: "#64748b", fontSize: ".82rem" }}>
+                No ranked data to display.
+              </div>
+            )}
           </div>
         </div>
         <div className="results-panel">
           <h3>Performance Trend</h3>
           {trendRows.length ? (
             <>
-              <svg className="results-line-chart" viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="none">
+              <svg
+                className="results-line-chart"
+                viewBox={`0 0 ${chartW} ${chartH}`}
+                preserveAspectRatio="none"
+              >
                 <defs>
-                  <linearGradient id="resultsLineFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.45"/>
-                    <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.04"/>
+                  <linearGradient
+                    id="resultsLineFill"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.45" />
+                    <stop
+                      offset="100%"
+                      stopColor="#60a5fa"
+                      stopOpacity="0.04"
+                    />
                   </linearGradient>
                 </defs>
-                <line x1="15" y1={chartH - 10} x2={chartW - 15} y2={chartH - 10} stroke="#cbd5e1" strokeWidth="1"/>
-                <line x1="15" y1="20" x2="15" y2={chartH - 10} stroke="#cbd5e1" strokeWidth="1"/>
-                <polygon className="area" points={areaPoints}/>
-                <polyline points={points}/>
+                <line
+                  x1="15"
+                  y1={chartH - 10}
+                  x2={chartW - 15}
+                  y2={chartH - 10}
+                  stroke="#cbd5e1"
+                  strokeWidth="1"
+                />
+                <line
+                  x1="15"
+                  y1="20"
+                  x2="15"
+                  y2={chartH - 10}
+                  stroke="#cbd5e1"
+                  strokeWidth="1"
+                />
+                <polygon className="area" points={areaPoints} />
+                <polyline points={points} />
                 {trendRows.map((row, idx) => {
-                  const x = trendRows.length > 1 ? (idx * (chartW - 30)) / (trendRows.length - 1) + 15 : chartW / 2;
-                  const y = chartH - ((Math.max(0, Math.min(100, Number(row.averageScore || 0))) / 100) * 120 + 20);
-                  return <circle key={`point-${row.id}-${idx}`} className="point" cx={x} cy={y} r="4" />;
+                  const x =
+                    trendRows.length > 1
+                      ? (idx * (chartW - 30)) / (trendRows.length - 1) + 15
+                      : chartW / 2;
+                  const y =
+                    chartH -
+                    ((Math.max(
+                      0,
+                      Math.min(100, Number(row.averageScore || 0)),
+                    ) /
+                      100) *
+                      120 +
+                      20);
+                  return (
+                    <circle
+                      key={`point-${row.id}-${idx}`}
+                      className="point"
+                      cx={x}
+                      cy={y}
+                      r="4"
+                    />
+                  );
                 })}
               </svg>
-              <div className="results-axis-labels"><span>Highest Rank</span><span>Lower Rank</span></div>
+              <div className="results-axis-labels">
+                <span>Highest Rank</span>
+                <span>Lower Rank</span>
+              </div>
             </>
-          ) : <div style={{color:"#64748b",fontSize:".82rem"}}>No trend data available.</div>}
+          ) : (
+            <div style={{ color: "#64748b", fontSize: ".82rem" }}>
+              No trend data available.
+            </div>
+          )}
         </div>
       </div>
       {isMobile ? (
@@ -4041,39 +6725,102 @@ function ResultsPage({ studentsData, tableInfo }) {
             <div key={row.id} className="mobile-record-card">
               <div className="mobile-record-head">
                 <div>
-                  <div className="mobile-record-title">#{row.rank} {row.studentName}</div>
-                  <div className="mobile-record-sub">Average score {row.averageScore}%</div>
+                  <div className="mobile-record-title">
+                    #{row.rank} {row.studentName}
+                  </div>
+                  <div className="mobile-record-sub">
+                    Average score {row.averageScore}%
+                  </div>
                 </div>
-                <span className="grade-chip" style={{background:row.gradeBg,color:row.gradeColor}}>{row.grade}</span>
+                <span
+                  className="grade-chip"
+                  style={{ background: row.gradeBg, color: row.gradeColor }}
+                >
+                  {row.grade}
+                </span>
               </div>
               <div className="mobile-record-grid">
-                <div className="mobile-record-item"><label>Aggregate</label><strong>{row.aggregate}</strong></div>
-                <div className="mobile-record-item"><label>Score</label><strong>{row.averageScore}%</strong></div>
+                <div className="mobile-record-item">
+                  <label>Aggregate</label>
+                  <strong>{row.aggregate}</strong>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Score</label>
+                  <strong>{row.averageScore}%</strong>
+                </div>
               </div>
             </div>
           ))}
         </div>
       ) : (
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Rank</th><th>Student</th><th>Avg Score</th><th>Aggregate</th><th>Grade</th></tr></thead>
-          <tbody>
-            {displayRows.map((student,i)=>{
-              const grade = getGrade(student.averageScore);
-              return (
-                <tr key={`result-${student.id}`}>
-                  <td><strong style={{color:i===0?"#d97706":i===1?"#94a3b8":i===2?"#a37043":"#0f172a"}}>#{student.rank}</strong></td>
-                  <td><strong>{student.studentName}</strong></td>
-                  <td style={{fontWeight:700}}>{student.averageScore}%</td>
-                  <td>{student.aggregate}</td>
-                  <td><span className="grade-chip" style={{background:student.gradeBg || grade.bg,color:student.gradeColor || grade.color}}>{student.grade || grade.grade}</span></td>
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Student</th>
+                <th>Avg Score</th>
+                <th>Aggregate</th>
+                <th>Grade</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayRows.map((student, i) => {
+                const grade = getGrade(student.averageScore);
+                return (
+                  <tr key={`result-${student.id}`}>
+                    <td>
+                      <strong
+                        style={{
+                          color:
+                            i === 0
+                              ? "#d97706"
+                              : i === 1
+                                ? "#94a3b8"
+                                : i === 2
+                                  ? "#a37043"
+                                  : "#0f172a",
+                        }}
+                      >
+                        #{student.rank}
+                      </strong>
+                    </td>
+                    <td>
+                      <strong>{student.studentName}</strong>
+                    </td>
+                    <td style={{ fontWeight: 700 }}>{student.averageScore}%</td>
+                    <td>{student.aggregate}</td>
+                    <td>
+                      <span
+                        className="grade-chip"
+                        style={{
+                          background: student.gradeBg || grade.bg,
+                          color: student.gradeColor || grade.color,
+                        }}
+                      >
+                        {student.grade || grade.grade}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!rankedStudents.length && (
+                <tr>
+                  <td
+                    colSpan="5"
+                    style={{
+                      textAlign: "center",
+                      padding: 24,
+                      color: "#64748b",
+                    }}
+                  >
+                    No student aggregates available.
+                  </td>
                 </tr>
-              );
-            })}
-            {!rankedStudents.length && <tr><td colSpan="5" style={{textAlign:"center",padding:24,color:"#64748b"}}>No student aggregates available.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -4085,29 +6832,101 @@ function FinancePage({ financeSummary, tableInfo }) {
   const summary = financeSummary || FINANCE_DATA;
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Finance</div></div>
-      {hasFinanceError && <div className="alert alert-warning">Finance metrics are currently derived from accessible fee rows because the Supabase fees table is not available.</div>}
+      <div className="page-header">
+        <div className="page-title">Finance</div>
+      </div>
+      {hasFinanceError && (
+        <div className="alert alert-warning">
+          Finance metrics are currently derived from accessible fee rows because
+          the Supabase fees table is not available.
+        </div>
+      )}
       <div className="stats-grid">
         {[
-          {label:"Total Income",value:`GHS ${(summary.income/1000).toFixed(0)}k`,sub:"This year",bg:"#dcfce7",c:"#16a34a"},
-          {label:"Total Expenses",value:`GHS ${(summary.expenses/1000).toFixed(0)}k`,sub:"This year",bg:"#fee2e2",c:"#dc2626"},
-          {label:"Fees Collected",value:`GHS ${(summary.fees_collected/1000).toFixed(0)}k`,sub:"All terms",bg:"#dbeafe",c:"#1e40af"},
-          {label:"Outstanding",value:`GHS ${(summary.outstanding/1000).toFixed(0)}k`,sub:"Pending",bg:"#fef3c7",c:"#d97706"},
-        ].map(s=>(
-          <div key={s.label} className="stat-card" style={{background:s.bg}}>
-            <div className="stat-label" style={{color:s.c}}>{s.label}</div>
-            <div className="stat-value" style={{color:s.c,fontSize:"1.5rem"}}>{s.value}</div>
-            <div className="stat-sub" style={{color:s.c}}>{s.sub}</div>
+          {
+            label: "Total Income",
+            value: `GHS ${(summary.income / 1000).toFixed(0)}k`,
+            sub: "This year",
+            bg: "#dcfce7",
+            c: "#16a34a",
+          },
+          {
+            label: "Total Expenses",
+            value: `GHS ${(summary.expenses / 1000).toFixed(0)}k`,
+            sub: "This year",
+            bg: "#fee2e2",
+            c: "#dc2626",
+          },
+          {
+            label: "Fees Collected",
+            value: `GHS ${(summary.fees_collected / 1000).toFixed(0)}k`,
+            sub: "All terms",
+            bg: "#dbeafe",
+            c: "#1e40af",
+          },
+          {
+            label: "Outstanding",
+            value: `GHS ${(summary.outstanding / 1000).toFixed(0)}k`,
+            sub: "Pending",
+            bg: "#fef3c7",
+            c: "#d97706",
+          },
+        ].map((s) => (
+          <div key={s.label} className="stat-card" style={{ background: s.bg }}>
+            <div className="stat-label" style={{ color: s.c }}>
+              {s.label}
+            </div>
+            <div
+              className="stat-value"
+              style={{ color: s.c, fontSize: "1.5rem" }}
+            >
+              {s.value}
+            </div>
+            <div className="stat-sub" style={{ color: s.c }}>
+              {s.sub}
+            </div>
           </div>
         ))}
       </div>
       <div className="card card-padded">
-        <h3 style={{fontWeight:700,marginBottom:16}}>Expense Breakdown</h3>
-        {[ ["Staff Salaries","62,000","#1e40af"], ["Utilities","12,000","#d97706"], ["Maintenance","8,000","#7c3aed"], ["Supplies","7,000","#16a34a"] ].map(([cat,amt,c])=>(
-          <div key={cat} style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,flexWrap:"wrap"}}>
-            <span style={{fontWeight:600,fontSize:".875rem",flex:"1 1 140px"}}>{cat}</span>
-            <div className="progress" style={{flex:"999 1 160px"}}><div className="progress-bar" style={{width:`${parseInt(amt.replace(",",""))/890}%`,background:c}}/></div>
-            <span style={{fontWeight:700,color:c,marginLeft:"auto"}}>GHS {amt}</span>
+        <h3 style={{ fontWeight: 700, marginBottom: 16 }}>Expense Breakdown</h3>
+        {[
+          ["Staff Salaries", "62,000", "#1e40af"],
+          ["Utilities", "12,000", "#d97706"],
+          ["Maintenance", "8,000", "#7c3aed"],
+          ["Supplies", "7,000", "#16a34a"],
+        ].map(([cat, amt, c]) => (
+          <div
+            key={cat}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                fontWeight: 600,
+                fontSize: ".875rem",
+                flex: "1 1 140px",
+              }}
+            >
+              {cat}
+            </span>
+            <div className="progress" style={{ flex: "999 1 160px" }}>
+              <div
+                className="progress-bar"
+                style={{
+                  width: `${parseInt(amt.replace(",", "")) / 890}%`,
+                  background: c,
+                }}
+              />
+            </div>
+            <span style={{ fontWeight: 700, color: c, marginLeft: "auto" }}>
+              GHS {amt}
+            </span>
           </div>
         ))}
       </div>
@@ -4116,7 +6935,14 @@ function FinancePage({ financeSummary, tableInfo }) {
 }
 
 // â”€â”€â”€ TEACHERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdateTeacher = null, currentUser = null, emptyRemoteMessage = "No teacher rows available from Supabase." }) {
+function TeachersPage({
+  teachersData,
+  tableInfo,
+  onCreateTeacher = null,
+  onUpdateTeacher = null,
+  currentUser = null,
+  emptyRemoteMessage = "No teacher rows available from Supabase.",
+}) {
   const { cfg: globalCfg } = useContext(SettingsContext);
   const hasTeachersError = hasRealTableError(tableInfo);
   const isMobile = useIsMobileLayout();
@@ -4124,14 +6950,31 @@ function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdat
   const [editingTeacher, setEditingTeacher] = useState(undefined);
   const [teacherDraft, setTeacherDraft] = useState(() => buildTeacherDraft());
   const [savingTeacher, setSavingTeacher] = useState(false);
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const [statusModal, setStatusModal] = useState({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
   const canCreateTeacher = typeof onCreateTeacher === "function";
   const canEditTeacher = typeof onUpdateTeacher === "function";
   const actorRole = currentUser?.role || "admin";
-  const assignableRolesBase = getAssignableRoles(globalCfg, actorRole, "teacher");
-  const roleOptions = assignableRolesBase.some((role) => role.key === teacherDraft.role)
+  const assignableRolesBase = getAssignableRoles(
+    globalCfg,
+    actorRole,
+    "teacher",
+  );
+  const roleOptions = assignableRolesBase.some(
+    (role) => role.key === teacherDraft.role,
+  )
     ? assignableRolesBase
-    : [...assignableRolesBase, getRoleMeta(globalCfg, teacherDraft.role || "teacher")].filter((role, index, list) => list.findIndex((entry) => entry.key === role.key) === index);
+    : [
+        ...assignableRolesBase,
+        getRoleMeta(globalCfg, teacherDraft.role || "teacher"),
+      ].filter(
+        (role, index, list) =>
+          list.findIndex((entry) => entry.key === role.key) === index,
+      );
 
   useEffect(() => {
     if (editingTeacher === undefined) return;
@@ -4159,7 +7002,12 @@ function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdat
 
   const saveTeacher = async () => {
     if (!teacherDraft.name.trim() || !teacherDraft.subject.trim()) {
-      setStatusModal({ open: true, type: "failure", title: "Teacher Save Failed", message: "Teacher name and subject are required." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Teacher Save Failed",
+        message: "Teacher name and subject are required.",
+      });
       return;
     }
     setSavingTeacher(true);
@@ -4170,19 +7018,46 @@ function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdat
         await onCreateTeacher?.(teacherDraft);
       }
       closeTeacherEditor();
-      setStatusModal({ open: true, type: "success", title: "Teacher Saved", message: "Teacher record saved successfully." });
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "Teacher Saved",
+        message: "Teacher record saved successfully.",
+      });
     } catch (error) {
-      setStatusModal({ open: true, type: "failure", title: "Teacher Save Failed", message: error?.message || "Could not save the teacher record." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Teacher Save Failed",
+        message: error?.message || "Could not save the teacher record.",
+      });
     } finally {
       setSavingTeacher(false);
     }
   };
   return (
     <div className="fade-in">
-      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((current) => ({ ...current, open: false }))} />
-      <div className="page-header"><div className="page-title">Teachers</div></div>
-      {hasTeachersError && <div className="alert alert-warning">Teachers table is not accessible in Supabase yet.</div>}
-      {(canCreateTeacher || canEditTeacher) && <div className="page-actions-row"><button className="btn btn-blue" onClick={openCreateTeacher}><Ico name="teachers" size={16} color="#fff"/> Add Teacher</button></div>}
+      <ActionStatusModal
+        state={statusModal}
+        onClose={() =>
+          setStatusModal((current) => ({ ...current, open: false }))
+        }
+      />
+      <div className="page-header">
+        <div className="page-title">Teachers</div>
+      </div>
+      {hasTeachersError && (
+        <div className="alert alert-warning">
+          Teachers table is not accessible in Supabase yet.
+        </div>
+      )}
+      {(canCreateTeacher || canEditTeacher) && (
+        <div className="page-actions-row">
+          <button className="btn btn-blue" onClick={openCreateTeacher}>
+            <Ico name="teachers" size={16} color="#fff" /> Add Teacher
+          </button>
+        </div>
+      )}
       {isMobile ? (
         <div className="mobile-record-list">
           {rows.map((teacher) => (
@@ -4190,56 +7065,165 @@ function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdat
               <div className="mobile-record-head">
                 <div>
                   <div className="mobile-record-title">{teacher.name}</div>
-                  <div className="mobile-record-sub">{teacher.subject} • {getRoleMeta(globalCfg, teacher.role || "teacher").label}</div>
+                  <div className="mobile-record-sub">
+                    {teacher.subject} •{" "}
+                    {getRoleMeta(globalCfg, teacher.role || "teacher").label}
+                  </div>
                 </div>
-                <span className="badge badge-blue">{teacher.class || "Unassigned"}</span>
+                <span className="badge badge-blue">
+                  {teacher.class || "Unassigned"}
+                </span>
               </div>
               <div className="mobile-record-grid">
-                <div className="mobile-record-item"><label>Role</label><span>{getRoleMeta(globalCfg, teacher.role || "teacher").label}</span></div>
-                <div className="mobile-record-item"><label>Employee ID</label><span>{teacher.employee_id || "-"}</span></div>
-                <div className="mobile-record-item"><label>Class</label><span>{teacher.class || "-"}</span></div>
-                <div className="mobile-record-item"><label>Phone</label><span>{teacher.phone || "-"}</span></div>
-                <div className="mobile-record-item"><label>Email</label><span>{teacher.email || "-"}</span></div>
-                <div className="mobile-record-item"><label>Gender</label><span>{teacher.gender || "-"}</span></div>
-                <div className="mobile-record-item"><label>Qualification</label><span>{teacher.qualification || "-"}</span></div>
-                <div className="mobile-record-item"><label>Date of Birth</label><span>{teacher.date_of_birth || "-"}</span></div>
-                <div className="mobile-record-item"><label>Hire Date</label><span>{teacher.hire_date || "-"}</span></div>
-                <div className="mobile-record-item"><label>Address</label><span>{teacher.address || "-"}</span></div>
+                <div className="mobile-record-item">
+                  <label>Role</label>
+                  <span>
+                    {getRoleMeta(globalCfg, teacher.role || "teacher").label}
+                  </span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Employee ID</label>
+                  <span>{teacher.employee_id || "-"}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Class</label>
+                  <span>{teacher.class || "-"}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Phone</label>
+                  <span>{teacher.phone || "-"}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Email</label>
+                  <span>{teacher.email || "-"}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Gender</label>
+                  <span>{teacher.gender || "-"}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Qualification</label>
+                  <span>{teacher.qualification || "-"}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Date of Birth</label>
+                  <span>{teacher.date_of_birth || "-"}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Hire Date</label>
+                  <span>{teacher.hire_date || "-"}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Address</label>
+                  <span>{teacher.address || "-"}</span>
+                </div>
               </div>
-              {canEditTeacher && <div className="mobile-record-actions"><button className="btn btn-outline" onClick={() => openEditTeacher(teacher)}>Edit</button></div>}
+              {canEditTeacher && (
+                <div className="mobile-record-actions">
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => openEditTeacher(teacher)}
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
             </div>
           ))}
-          {!rows.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>{emptyRemoteMessage}</div>}
+          {!rows.length && (
+            <div
+              className="mobile-record-card"
+              style={{ textAlign: "center", color: "#64748b" }}
+            >
+              {emptyRemoteMessage}
+            </div>
+          )}
         </div>
       ) : (
         <div className="card table-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Employee ID</th><th>Role</th><th>Subject</th><th>Classes</th><th>Contact</th><th>Profile</th>{canEditTeacher && <th>Actions</th>}</tr></thead>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Employee ID</th>
+                <th>Role</th>
+                <th>Subject</th>
+                <th>Classes</th>
+                <th>Contact</th>
+                <th>Profile</th>
+                {canEditTeacher && <th>Actions</th>}
+              </tr>
+            </thead>
             <tbody>
-              {rows.map(t=>(
+              {rows.map((t) => (
                 <tr key={t.id}>
                   <td>
                     <strong>{t.name}</strong>
-                    <div style={{ fontSize: ".78rem", color: "#64748b", marginTop: 4 }}>{t.address || "No address added"}</div>
+                    <div
+                      style={{
+                        fontSize: ".78rem",
+                        color: "#64748b",
+                        marginTop: 4,
+                      }}
+                    >
+                      {t.address || "No address added"}
+                    </div>
                   </td>
                   <td>{t.employee_id || "-"}</td>
                   <td>{getRoleMeta(globalCfg, t.role || "teacher").label}</td>
                   <td>{t.subject}</td>
                   <td>{t.class}</td>
                   <td>
-                    <div style={{ fontFamily:"monospace" }}>{t.phone}</div>
-                    <div style={{ fontSize: ".78rem", color: "#64748b", marginTop: 4 }}>{t.email || "-"}</div>
+                    <div style={{ fontFamily: "monospace" }}>{t.phone}</div>
+                    <div
+                      style={{
+                        fontSize: ".78rem",
+                        color: "#64748b",
+                        marginTop: 4,
+                      }}
+                    >
+                      {t.email || "-"}
+                    </div>
                   </td>
                   <td>
                     <div>{t.qualification || "-"}</div>
-                    <div style={{ fontSize: ".78rem", color: "#64748b", marginTop: 4 }}>
-                      {t.gender || "-"} • DOB: {t.date_of_birth || "-"} • Hired: {t.hire_date || "-"}
+                    <div
+                      style={{
+                        fontSize: ".78rem",
+                        color: "#64748b",
+                        marginTop: 4,
+                      }}
+                    >
+                      {t.gender || "-"} • DOB: {t.date_of_birth || "-"} • Hired:{" "}
+                      {t.hire_date || "-"}
                     </div>
                   </td>
-                  {canEditTeacher && <td><button className="btn btn-outline btn-sm" onClick={() => openEditTeacher(t)}>Edit</button></td>}
+                  {canEditTeacher && (
+                    <td>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        onClick={() => openEditTeacher(t)}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan={canEditTeacher ? "8" : "7"} style={{textAlign:"center",padding:24,color:"#64748b"}}>{emptyRemoteMessage}</td></tr>}
+              {!rows.length && (
+                <tr>
+                  <td
+                    colSpan={canEditTeacher ? "8" : "7"}
+                    style={{
+                      textAlign: "center",
+                      padding: 24,
+                      color: "#64748b",
+                    }}
+                  >
+                    {emptyRemoteMessage}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -4251,7 +7235,9 @@ function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdat
         draft={teacherDraft}
         roleOptions={roleOptions}
         saving={savingTeacher}
-        onChange={(key, value) => setTeacherDraft((current) => ({ ...current, [key]: value }))}
+        onChange={(key, value) =>
+          setTeacherDraft((current) => ({ ...current, [key]: value }))
+        }
         onClose={closeTeacherEditor}
         onSave={saveTeacher}
       />
@@ -4262,17 +7248,29 @@ function TeachersPage({ teachersData, tableInfo, onCreateTeacher = null, onUpdat
 // â”€â”€â”€ EVENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function EventsPage({ eventsData, tableInfo, registeredSchoolId = null }) {
   const hasEventsError = hasRealTableError(tableInfo);
-  const [form, setForm] = useState({title:"",date:"",type:"event",desc:""});
-  const [events, setEvents] = useState(eventsData?.length ? eventsData.map(normalizeEventRow) : []);
+  const [form, setForm] = useState({
+    title: "",
+    date: "",
+    type: "event",
+    desc: "",
+  });
+  const [events, setEvents] = useState(
+    eventsData?.length ? eventsData.map(normalizeEventRow) : [],
+  );
   const [adding, setAdding] = useState(false);
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const [statusModal, setStatusModal] = useState({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
 
   useEffect(() => {
     setEvents(eventsData?.length ? eventsData.map(normalizeEventRow) : []);
   }, [eventsData]);
 
   const add = async () => {
-    if(!form.title) return;
+    if (!form.title) return;
     if (supabase) {
       const { data, error } = await supabase
         .from("events")
@@ -4280,7 +7278,9 @@ function EventsPage({ eventsData, tableInfo, registeredSchoolId = null }) {
           title: form.title,
           event_date: form.date || null,
           type: form.type,
-          ...(registeredSchoolId != null ? { registered_school_id: registeredSchoolId } : {}),
+          ...(registeredSchoolId != null
+            ? { registered_school_id: registeredSchoolId }
+            : {}),
           description: form.desc || null,
         })
         .select("id, title, event_date, type, description")
@@ -4291,7 +7291,8 @@ function EventsPage({ eventsData, tableInfo, registeredSchoolId = null }) {
           open: true,
           type: "failure",
           title: "Event Save Failed",
-          message: "School-scoped events require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.",
+          message:
+            "School-scoped events require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.",
         });
         return;
       }
@@ -4328,48 +7329,145 @@ function EventsPage({ eventsData, tableInfo, registeredSchoolId = null }) {
         open: true,
         type: "failure",
         title: "Saved Locally",
-        message: "Supabase is not configured, so the event was saved locally only.",
+        message:
+          "Supabase is not configured, so the event was saved locally only.",
       });
     }
-    setAdding(false); setForm({title:"",date:"",type:"event",desc:""});
+    setAdding(false);
+    setForm({ title: "", date: "", type: "event", desc: "" });
   };
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Events & Calendar</div></div>
-      {hasEventsError && <div className="alert alert-warning">Events table could not be queried fully. Existing live rows are shown below.</div>}
-      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((s) => ({ ...s, open: false }))} />
-      <div style={{marginBottom:16}}>
-        <button className="btn btn-blue" onClick={()=>setAdding(!adding)}>{adding?"Cancel":"+ Add Event"}</button>
+      <div className="page-header">
+        <div className="page-title">Events & Calendar</div>
       </div>
-      {adding && (
-        <div className="card card-padded" style={{marginBottom:16}}>
-          <div className="form-grid">
-            <div className="form-group"><label className="form-label">Title</label><input className="form-control" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))}/></div>
-            <div className="form-group"><label className="form-label">Date</label><input type="date" className="form-control" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-            <div className="form-group"><label className="form-label">Type</label>
-              <select className="form-control" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
-                <option value="event">Event</option><option value="exam">Exam</option><option value="meeting">Meeting</option>
-              </select>
-            </div>
-            <div className="form-group"><label className="form-label">Description</label><input className="form-control" value={form.desc} onChange={e=>setForm(f=>({...f,desc:e.target.value}))}/></div>
-          </div>
-          <button className="btn btn-blue" style={{marginTop:12}} onClick={add}>Save Event</button>
+      {hasEventsError && (
+        <div className="alert alert-warning">
+          Events table could not be queried fully. Existing live rows are shown
+          below.
         </div>
       )}
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {events.map(e=>(
-          <div key={e.id} className="card card-padded" style={{display:"flex",gap:16,alignItems:"center"}}>
-            <div style={{width:56,height:56,borderRadius:12,background:e.type==="exam"?"#fee2e2":e.type==="meeting"?"#dbeafe":"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.4rem",flexShrink:0}}>
-              {e.type==="exam" ? <Ico name="docs" size={22} color="#dc2626"/> : e.type==="meeting" ? <Ico name="students" size={22} color="#1e40af"/> : <Ico name="events" size={22} color="#16a34a"/>}
+      <ActionStatusModal
+        state={statusModal}
+        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
+      />
+      <div style={{ marginBottom: 16 }}>
+        <button className="btn btn-blue" onClick={() => setAdding(!adding)}>
+          {adding ? "Cancel" : "+ Add Event"}
+        </button>
+      </div>
+      {adding && (
+        <div className="card card-padded" style={{ marginBottom: 16 }}>
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Title</label>
+              <input
+                className="form-control"
+                value={form.title}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, title: e.target.value }))
+                }
+              />
             </div>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:700}}>{e.title}</div>
-              <div style={{fontSize:".85rem",color:"#64748b"}}>{e.date} - {e.desc}</div>
+            <div className="form-group">
+              <label className="form-label">Date</label>
+              <input
+                type="date"
+                className="form-control"
+                value={form.date}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, date: e.target.value }))
+                }
+              />
             </div>
-            <span className={`badge ${e.type==="exam"?"badge-danger":e.type==="meeting"?"badge-blue":"badge-success"}`}>{e.type}</span>
+            <div className="form-group">
+              <label className="form-label">Type</label>
+              <select
+                className="form-control"
+                value={form.type}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, type: e.target.value }))
+                }
+              >
+                <option value="event">Event</option>
+                <option value="exam">Exam</option>
+                <option value="meeting">Meeting</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Description</label>
+              <input
+                className="form-control"
+                value={form.desc}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, desc: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <button
+            className="btn btn-blue"
+            style={{ marginTop: 12 }}
+            onClick={add}
+          >
+            Save Event
+          </button>
+        </div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {events.map((e) => (
+          <div
+            key={e.id}
+            className="card card-padded"
+            style={{ display: "flex", gap: 16, alignItems: "center" }}
+          >
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 12,
+                background:
+                  e.type === "exam"
+                    ? "#fee2e2"
+                    : e.type === "meeting"
+                      ? "#dbeafe"
+                      : "#dcfce7",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.4rem",
+                flexShrink: 0,
+              }}
+            >
+              {e.type === "exam" ? (
+                <Ico name="docs" size={22} color="#dc2626" />
+              ) : e.type === "meeting" ? (
+                <Ico name="students" size={22} color="#1e40af" />
+              ) : (
+                <Ico name="events" size={22} color="#16a34a" />
+              )}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700 }}>{e.title}</div>
+              <div style={{ fontSize: ".85rem", color: "#64748b" }}>
+                {e.date} - {e.desc}
+              </div>
+            </div>
+            <span
+              className={`badge ${e.type === "exam" ? "badge-danger" : e.type === "meeting" ? "badge-blue" : "badge-success"}`}
+            >
+              {e.type}
+            </span>
           </div>
         ))}
-        {!events.length && <div className="card card-padded" style={{textAlign:"center",color:"#64748b"}}>No event rows are currently available from Supabase.</div>}
+        {!events.length && (
+          <div
+            className="card card-padded"
+            style={{ textAlign: "center", color: "#64748b" }}
+          >
+            No event rows are currently available from Supabase.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -4377,44 +7475,167 @@ function EventsPage({ eventsData, tableInfo, registeredSchoolId = null }) {
 
 // â”€â”€â”€ SETTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function SettingsPage() {
-  const { cfg: globalCfg, updateCfg } = useContext(SettingsContext);
+  const { cfg: globalCfg, updateCfg, session } = useContext(SettingsContext);
   const [cfg, setCfg] = useState(globalCfg);
   const [newClassOption, setNewClassOption] = useState("");
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const [selectedClassOption, setSelectedClassOption] = useState("");
+  const [statusModal, setStatusModal] = useState({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
 
   // Sync local form state when global settings change (e.g. on first load from Supabase)
-  useEffect(() => { setCfg(globalCfg); }, [globalCfg]);
+  useEffect(() => {
+    setCfg(globalCfg);
+  }, [globalCfg]);
 
-  const set = (k,v)=>setCfg(c=>({...c,[k]:v}));
+  const set = (k, v) => setCfg((c) => ({ ...c, [k]: v }));
   const classOptions = resolveClassOptions(cfg);
-  const addClassOption = () => {
+  useEffect(() => {
+    setSelectedClassOption((current) =>
+      classOptions.includes(current) ? current : classOptions[0] || "",
+    );
+  }, [classOptions.join("||")]);
+  const persistClassOptions = async (nextClassOptions) => {
+    const nextCfg = { ...cfg, classOptions: nextClassOptions };
+    setCfg(nextCfg);
+    updateCfg(nextCfg);
+
+    if (!supabase) return;
+
+    // Always mirror to app_settings so dropdowns can still load
+    // even if the dedicated classes table is temporarily unavailable.
+    const { error: mirroredSaveError } = await supabase
+      .from("app_settings")
+      .upsert({ id: 1, config: nextCfg });
+    if (mirroredSaveError) throw mirroredSaveError;
+
+    // Preferred persistence path: dedicated classes table.
+    const { error: clearError } = await supabase
+      .from("classes")
+      .delete()
+      .gt("id", 0);
+    if (clearError) {
+      if (isMissingTableError(clearError, "classes")) {
+        const { error: saveFallbackError } = await supabase
+          .from("app_settings")
+          .upsert({ id: 1, config: nextCfg });
+        if (saveFallbackError) throw saveFallbackError;
+        return;
+      }
+      throw clearError;
+    }
+
+    if (nextClassOptions.length) {
+      const rows = nextClassOptions.map((name) => ({ name, active: true }));
+      const { error: insertError } = await supabase.from("classes").insert(rows);
+      if (insertError) throw insertError;
+    }
+
+    const { data: classRows, error: fetchClassesError } = await supabase
+      .from("classes")
+      .select("name")
+      .eq("active", true)
+      .order("id", { ascending: true });
+    if (fetchClassesError) throw fetchClassesError;
+    if (Array.isArray(classRows)) {
+      const names = classRows
+        .map((row) => String(row?.name || "").trim())
+        .filter(Boolean);
+      const merged = { ...nextCfg, classOptions: names };
+      setCfg(merged);
+      updateCfg(merged);
+    }
+  };
+
+  const addClassOption = async () => {
     const candidate = String(newClassOption || "").trim();
     if (!candidate) return;
-    if (classOptions.some((existing) => existing.toLowerCase() === candidate.toLowerCase())) {
-      setStatusModal({ open: true, type: "failure", title: "Class Exists", message: "That class already exists in the list." });
+    if (
+      classOptions.some(
+        (existing) => existing.toLowerCase() === candidate.toLowerCase(),
+      )
+    ) {
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Class Exists",
+        message: "That class already exists in the list.",
+      });
       return;
     }
-    set("classOptions", [...classOptions, candidate]);
-    setNewClassOption("");
+    try {
+      await persistClassOptions([...classOptions, candidate]);
+      setNewClassOption("");
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "Class Saved",
+        message: "Class was saved to Supabase classes table.",
+      });
+    } catch (error) {
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Class Save Failed",
+        message: error?.message || "Could not save class to Supabase classes table.",
+      });
+    }
   };
-  const removeClassOption = (className) => {
+  const removeClassOption = async (className) => {
     const next = classOptions.filter((row) => row !== className);
-    if (!next.length) {
-      setStatusModal({ open: true, type: "failure", title: "At Least One Class Required", message: "Keep at least one class in the list." });
-      return;
+    try {
+      await persistClassOptions(next);
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "Class Removed",
+        message: "Class removal was saved to Supabase classes table.",
+      });
+    } catch (error) {
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Class Remove Failed",
+        message: error?.message || "Could not remove class from Supabase classes table.",
+      });
     }
-    set("classOptions", next);
   };
   const runConfigCheck = () => {
     const issues = [];
-    if (!String(cfg.systemName || "").trim()) issues.push("System Name is required.");
-    if (!String(cfg.academicYear || "").trim()) issues.push("Academic Year is required.");
-    if (Number(cfg.maxChoices || 0) < 1 || Number(cfg.maxChoices || 0) > 10) issues.push("Max School Choices must be between 1 and 10.");
-    if (Number(cfg.sessionTimeoutMins || 0) < 5 || Number(cfg.sessionTimeoutMins || 0) > 480) issues.push("Session Timeout must be between 5 and 480 minutes.");
-    if (Number(cfg.passwordMinLength || 0) < 6 || Number(cfg.passwordMinLength || 0) > 32) issues.push("Password Minimum Length must be between 6 and 32.");
-    if (Number(cfg.lockoutAttempts || 0) < 1 || Number(cfg.lockoutAttempts || 0) > 20) issues.push("Lockout Attempts must be between 1 and 20.");
-    if (Number(cfg.auditRetentionDays || 0) < 30 || Number(cfg.auditRetentionDays || 0) > 3650) issues.push("Audit Retention must be between 30 and 3650 days.");
-    if (Number(cfg.apiRateLimitPerMin || 0) < 10 || Number(cfg.apiRateLimitPerMin || 0) > 5000) issues.push("API Rate Limit must be between 10 and 5000 requests/min.");
+    if (!String(cfg.systemName || "").trim())
+      issues.push("System Name is required.");
+    if (!String(cfg.academicYear || "").trim())
+      issues.push("Academic Year is required.");
+    if (Number(cfg.maxChoices || 0) < 1 || Number(cfg.maxChoices || 0) > 10)
+      issues.push("Max School Choices must be between 1 and 10.");
+    if (
+      Number(cfg.sessionTimeoutMins || 0) < 5 ||
+      Number(cfg.sessionTimeoutMins || 0) > 480
+    )
+      issues.push("Session Timeout must be between 5 and 480 minutes.");
+    if (
+      Number(cfg.passwordMinLength || 0) < 6 ||
+      Number(cfg.passwordMinLength || 0) > 32
+    )
+      issues.push("Password Minimum Length must be between 6 and 32.");
+    if (
+      Number(cfg.lockoutAttempts || 0) < 1 ||
+      Number(cfg.lockoutAttempts || 0) > 20
+    )
+      issues.push("Lockout Attempts must be between 1 and 20.");
+    if (
+      Number(cfg.auditRetentionDays || 0) < 30 ||
+      Number(cfg.auditRetentionDays || 0) > 3650
+    )
+      issues.push("Audit Retention must be between 30 and 3650 days.");
+    if (
+      Number(cfg.apiRateLimitPerMin || 0) < 10 ||
+      Number(cfg.apiRateLimitPerMin || 0) > 5000
+    )
+      issues.push("API Rate Limit must be between 10 and 5000 requests/min.");
 
     if (issues.length) {
       setStatusModal({
@@ -4450,7 +7671,9 @@ function SettingsPage() {
       if (!runConfigCheck()) return;
       updateCfg(cfg);
       if (supabase) {
-        const { error } = await supabase.from("app_settings").upsert({ id: 1, config: cfg });
+        const { error } = await supabase
+          .from("app_settings")
+          .upsert({ id: 1, config: cfg });
         if (error) throw error;
       }
       setStatusModal({
@@ -4469,51 +7692,130 @@ function SettingsPage() {
     }
   };
 
-  const SectionTitle = ({title, sub}) => (
-    <div style={{marginBottom:16,paddingBottom:8,borderBottom:"2px solid #e8f1ff"}}>
-      <div style={{fontWeight:800,fontSize:"1rem",color:"#1e3a8a"}}>{title}</div>
-      {sub && <div style={{fontSize:".8rem",color:"#64748b",marginTop:2}}>{sub}</div>}
+  const SectionTitle = ({ title, sub }) => (
+    <div
+      style={{
+        marginBottom: 16,
+        paddingBottom: 8,
+        borderBottom: "2px solid #e8f1ff",
+      }}
+    >
+      <div style={{ fontWeight: 800, fontSize: "1rem", color: "#1e3a8a" }}>
+        {title}
+      </div>
+      {sub && (
+        <div style={{ fontSize: ".8rem", color: "#64748b", marginTop: 2 }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 
-  const Toggle = ({k, label, sub, danger}) => (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 0",borderBottom:"1px solid #f1f5f9"}}>
+  const Toggle = ({ k, label, sub, danger }) => (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "13px 0",
+        borderBottom: "1px solid #f1f5f9",
+      }}
+    >
       <div>
-        <div style={{fontWeight:600,fontSize:".9rem",color:danger&&cfg[k]?"#dc2626":"inherit"}}>{label}</div>
-        {sub && <div style={{fontSize:".75rem",color:"#94a3b8",marginTop:1}}>{sub}</div>}
+        <div
+          style={{
+            fontWeight: 600,
+            fontSize: ".9rem",
+            color: danger && cfg[k] ? "#dc2626" : "inherit",
+          }}
+        >
+          {label}
+        </div>
+        {sub && (
+          <div style={{ fontSize: ".75rem", color: "#94a3b8", marginTop: 1 }}>
+            {sub}
+          </div>
+        )}
       </div>
-      <button onClick={()=>set(k,!cfg[k])} style={{
-        width:48,height:26,borderRadius:13,background:cfg[k]?(danger?"#dc2626":"#1a56db"):"#e2e8f0",
-        border:"none",cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0,marginLeft:16
-      }}>
-        <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:cfg[k]?25:3,transition:"left .2s",boxShadow:"0 1px 4px rgba(0,0,0,.2)"}}/>
+      <button
+        onClick={() => set(k, !cfg[k])}
+        style={{
+          width: 48,
+          height: 26,
+          borderRadius: 13,
+          background: cfg[k] ? (danger ? "#dc2626" : "#1a56db") : "#e2e8f0",
+          border: "none",
+          cursor: "pointer",
+          position: "relative",
+          transition: "background .2s",
+          flexShrink: 0,
+          marginLeft: 16,
+        }}
+      >
+        <div
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "#fff",
+            position: "absolute",
+            top: 3,
+            left: cfg[k] ? 25 : 3,
+            transition: "left .2s",
+            boxShadow: "0 1px 4px rgba(0,0,0,.2)",
+          }}
+        />
       </button>
     </div>
   );
+  const isSuperAdmin =
+    normalizeRoleKey(session?.user?.role || "") === "super_admin";
 
   return (
     <div className="fade-in">
       <div className="page-header">
         <div className="page-title">Settings</div>
-        <div className="page-sub">Configure system-wide options — changes apply instantly across the app</div>
+        <div className="page-sub">
+          Configure system-wide options — changes apply instantly across the app
+        </div>
       </div>
-      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((s) => ({ ...s, open: false }))} />
+      <ActionStatusModal
+        state={statusModal}
+        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
+      />
 
       {/* General */}
-      <div className="card card-padded" style={{marginBottom:16}}>
-        <SectionTitle title="General" sub="Basic system identity and academic period"/>
-        <div className="form-grid" style={{marginBottom:8}}>
+      <div className="card card-padded" style={{ marginBottom: 16 }}>
+        <SectionTitle
+          title="General"
+          sub="Basic system identity and academic period"
+        />
+        <div className="form-grid" style={{ marginBottom: 8 }}>
           <div className="form-group">
             <label className="form-label">System Name</label>
-            <input className="form-control" value={cfg.systemName||""} onChange={e=>set("systemName",e.target.value)} placeholder="e.g. Campus Ghana"/>
+            <input
+              className="form-control"
+              value={cfg.systemName || ""}
+              onChange={(e) => set("systemName", e.target.value)}
+              placeholder="e.g. Campus Ghana"
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Academic Year</label>
-            <input className="form-control" value={cfg.academicYear||""} onChange={e=>set("academicYear",e.target.value)} placeholder="e.g. 2024/2025"/>
+            <input
+              className="form-control"
+              value={cfg.academicYear || ""}
+              onChange={(e) => set("academicYear", e.target.value)}
+              placeholder="e.g. 2024/2025"
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Current Term</label>
-            <select className="form-control" value={cfg.currentTerm||"First Term"} onChange={e=>set("currentTerm",e.target.value)}>
+            <select
+              className="form-control"
+              value={cfg.currentTerm || "First Term"}
+              onChange={(e) => set("currentTerm", e.target.value)}
+            >
               <option>First Term</option>
               <option>Second Term</option>
               <option>Third Term</option>
@@ -4521,14 +7823,24 @@ function SettingsPage() {
           </div>
           <div className="form-group">
             <label className="form-label">School Region (Filter)</label>
-            <select className="form-control" value={cfg.schoolRegion||"All Regions"} onChange={e=>set("schoolRegion",e.target.value)}>
+            <select
+              className="form-control"
+              value={cfg.schoolRegion || "All Regions"}
+              onChange={(e) => set("schoolRegion", e.target.value)}
+            >
               <option>All Regions</option>
-              {GHANA_REGIONS.map(r=><option key={r}>{r}</option>)}
+              {GHANA_REGIONS.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
             </select>
           </div>
           <div className="form-group">
             <label className="form-label">Locale</label>
-            <select className="form-control" value={cfg.locale||"en-GH"} onChange={e=>set("locale",e.target.value)}>
+            <select
+              className="form-control"
+              value={cfg.locale || "en-GH"}
+              onChange={(e) => set("locale", e.target.value)}
+            >
               <option value="en-GH">English (Ghana)</option>
               <option value="en-US">English (US)</option>
               <option value="en-GB">English (UK)</option>
@@ -4536,7 +7848,11 @@ function SettingsPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Timezone</label>
-            <select className="form-control" value={cfg.timezone||"Africa/Accra"} onChange={e=>set("timezone",e.target.value)}>
+            <select
+              className="form-control"
+              value={cfg.timezone || "Africa/Accra"}
+              onChange={(e) => set("timezone", e.target.value)}
+            >
               <option value="Africa/Accra">Africa/Accra (GMT)</option>
               <option value="Africa/Lagos">Africa/Lagos</option>
               <option value="Europe/London">Europe/London</option>
@@ -4544,7 +7860,11 @@ function SettingsPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Currency</label>
-            <select className="form-control" value={cfg.currency||"GHS"} onChange={e=>set("currency",e.target.value)}>
+            <select
+              className="form-control"
+              value={cfg.currency || "GHS"}
+              onChange={(e) => set("currency", e.target.value)}
+            >
               <option value="GHS">GHS</option>
               <option value="USD">USD</option>
               <option value="EUR">EUR</option>
@@ -4552,84 +7872,246 @@ function SettingsPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Support Email</label>
-            <input type="email" className="form-control" value={cfg.supportEmail||""} onChange={e=>set("supportEmail",e.target.value)} placeholder="support@campusghana.edu.gh"/>
+            <input
+              type="email"
+              className="form-control"
+              value={cfg.supportEmail || ""}
+              onChange={(e) => set("supportEmail", e.target.value)}
+              placeholder="support@campusghana.edu.gh"
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Support Phone</label>
-            <input className="form-control" value={cfg.supportPhone||""} onChange={e=>set("supportPhone",e.target.value)} placeholder="0240000000"/>
+            <input
+              className="form-control"
+              value={cfg.supportPhone || ""}
+              onChange={(e) => set("supportPhone", e.target.value)}
+              placeholder="0240000000"
+            />
           </div>
         </div>
       </div>
 
       {/* Admissions */}
-      <div className="card card-padded" style={{marginBottom:16}}>
-        <SectionTitle title="Admissions & Mock Placement" sub="School selection and application window controls"/>
-        <div className="form-grid" style={{marginBottom:8}}>
+      <div className="card card-padded" style={{ marginBottom: 16 }}>
+        <SectionTitle
+          title="Admissions & Mock Placement"
+          sub="School selection and application window controls"
+        />
+        <div className="form-grid" style={{ marginBottom: 8 }}>
           <div className="form-group">
             <label className="form-label">Max School Choices</label>
-            <input type="number" className="form-control" value={cfg.maxChoices||7} onChange={e=>set("maxChoices",+e.target.value)} min={1} max={10}/>
+            <input
+              type="number"
+              className="form-control"
+              value={cfg.maxChoices || 7}
+              onChange={(e) => set("maxChoices", +e.target.value)}
+              min={1}
+              max={10}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Selection Deadline</label>
-            <input type="date" className="form-control" value={cfg.selectionDeadline||""} onChange={e=>set("selectionDeadline",e.target.value)}/>
+            <input
+              type="date"
+              className="form-control"
+              value={cfg.selectionDeadline || ""}
+              onChange={(e) => set("selectionDeadline", e.target.value)}
+            />
           </div>
-          <div className="form-group" style={{gridColumn:"1 / -1"}}>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}>
             <label className="form-label">Manage Classes</label>
-            <div style={{display:"flex",gap:8,marginBottom:8}}>
-              <input className="form-control" value={newClassOption} onChange={(e)=>setNewClassOption(e.target.value)} placeholder="e.g. JHS 2A" onKeyDown={(e)=>{ if (e.key === "Enter") { e.preventDefault(); addClassOption(); } }} />
-              <button className="btn btn-outline" type="button" onClick={addClassOption}>Add Class</button>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <input
+                className="form-control"
+                value={newClassOption}
+                onChange={(e) => setNewClassOption(e.target.value)}
+                placeholder="e.g. Form 2"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addClassOption();
+                  }
+                }}
+              />
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={addClassOption}
+              >
+                Add Class
+              </button>
             </div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-              {classOptions.map((className) => (
-                <span key={className} style={{display:"inline-flex",alignItems:"center",gap:6,background:"#eef2ff",border:"1px solid #c7d2fe",borderRadius:999,padding:"4px 10px",fontSize:".82rem",fontWeight:700,color:"#3730a3"}}>
-                  {className}
-                  <button type="button" onClick={()=>removeClassOption(className)} style={{border:"none",background:"transparent",cursor:"pointer",color:"#4338ca",fontWeight:800,lineHeight:1}}>x</button>
-                </span>
-              ))}
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <select
+                className="form-control"
+                value={selectedClassOption}
+                onChange={(e) => setSelectedClassOption(e.target.value)}
+              >
+                {!classOptions.length && (
+                  <option value="">No classes configured in Settings</option>
+                )}
+                {classOptions.map((className) => (
+                  <option key={className} value={className}>
+                    {className}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn btn-outline"
+                type="button"
+                disabled={!selectedClassOption}
+                onClick={() =>
+                  selectedClassOption && removeClassOption(selectedClassOption)
+                }
+              >
+                Remove Selected
+              </button>
+            </div>
+            <div style={{ fontSize: ".82rem", color: "#64748b" }}>
+              {classOptions.length
+                ? `${classOptions.length} class option${classOptions.length === 1 ? "" : "s"} configured`
+                : "No classes configured yet"}
             </div>
           </div>
         </div>
-        <Toggle k="allowChanges" label="Allow Selection Changes" sub="Students can edit their school choices"/>
-        <Toggle k="studentPortalOpen" label="Student Portal Open" sub="Allow students to log in and access their portal"/>
-        <Toggle k="autoApproveSelections" label="Auto-approve Selections" sub="Submitted selections are confirmed without admin review"/>
-        <Toggle k="showResultsToStudents" label="Show Results to Students" sub="Students can view their academic scores and grades"/>
+        <Toggle
+          k="allowChanges"
+          label="Allow Selection Changes"
+          sub="Students can edit their school choices"
+        />
+        <Toggle
+          k="studentPortalOpen"
+          label="Student Portal Open"
+          sub="Allow students to log in and access their portal"
+        />
+        <Toggle
+          k="autoApproveSelections"
+          label="Auto-approve Selections"
+          sub="Submitted selections are confirmed without admin review"
+        />
+        <Toggle
+          k="showResultsToStudents"
+          label="Show Results to Students"
+          sub="Students can view their academic scores and grades"
+        />
       </div>
 
       {/* Notifications */}
-      <div className="card card-padded" style={{marginBottom:16}}>
-        <SectionTitle title="Notifications" sub="Alert and messaging preferences"/>
-        <Toggle k="emailNotifs" label="Email Notifications" sub="Send email alerts for submissions, approvals and updates"/>
-        <Toggle k="smsNotifs" label="SMS Notifications" sub="Send SMS alerts to registered phone numbers"/>
+      <div className="card card-padded" style={{ marginBottom: 16 }}>
+        <SectionTitle
+          title="Notifications"
+          sub="Alert and messaging preferences"
+        />
+        <Toggle
+          k="emailNotifs"
+          label="Email Notifications"
+          sub="Send email alerts for submissions, approvals and updates"
+        />
+        <Toggle
+          k="smsNotifs"
+          label="SMS Notifications"
+          sub="Send SMS alerts to registered phone numbers"
+        />
+      </div>
+
+      <div className="card card-padded" style={{ marginBottom: 16 }}>
+        <SectionTitle
+          title="Portal Feature Access"
+          sub="Super admins can enable or hide fee modules per portal."
+        />
+        {isSuperAdmin ? (
+          <>
+            <Toggle
+              k="adminFeesPortalEnabled"
+              label="Enable Fees in Admin Portals"
+              sub="Show fees pages in both admin and school-admin workspaces."
+            />
+            <Toggle
+              k="studentFeesPortalEnabled"
+              label="Enable Fees in Student Portal"
+              sub="Show fees, pay fees, and payment plan pages for students."
+            />
+            <Toggle
+              k="studentSelectionPortalEnabled"
+              label="Enable School Selection in Student Portal"
+              sub="Show select schools, my selection, and predictor pages for students."
+            />
+          </>
+        ) : (
+          <div className="alert alert-info">
+            Only super admins can change fee visibility across portals.
+          </div>
+        )}
       </div>
 
       {/* Security & Access */}
-      <div className="card card-padded" style={{marginBottom:16}}>
-        <SectionTitle title="Security & Access" sub="Session policy, password strength and admin hardening"/>
-        <div className="form-grid" style={{marginBottom:8}}>
+      <div className="card card-padded" style={{ marginBottom: 16 }}>
+        <SectionTitle
+          title="Security & Access"
+          sub="Session policy, password strength and admin hardening"
+        />
+        <div className="form-grid" style={{ marginBottom: 8 }}>
           <div className="form-group">
             <label className="form-label">Session Timeout (minutes)</label>
-            <input type="number" min={5} max={480} className="form-control" value={cfg.sessionTimeoutMins||30} onChange={e=>set("sessionTimeoutMins",+e.target.value)}/>
+            <input
+              type="number"
+              min={5}
+              max={480}
+              className="form-control"
+              value={cfg.sessionTimeoutMins || 30}
+              onChange={(e) => set("sessionTimeoutMins", +e.target.value)}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Password Minimum Length</label>
-            <input type="number" min={6} max={32} className="form-control" value={cfg.passwordMinLength||8} onChange={e=>set("passwordMinLength",+e.target.value)}/>
+            <input
+              type="number"
+              min={6}
+              max={32}
+              className="form-control"
+              value={cfg.passwordMinLength || 8}
+              onChange={(e) => set("passwordMinLength", +e.target.value)}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Account Lockout Attempts</label>
-            <input type="number" min={1} max={20} className="form-control" value={cfg.lockoutAttempts||5} onChange={e=>set("lockoutAttempts",+e.target.value)}/>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              className="form-control"
+              value={cfg.lockoutAttempts || 5}
+              onChange={(e) => set("lockoutAttempts", +e.target.value)}
+            />
           </div>
         </div>
-        <Toggle k="twoFactorAdmins" label="Require 2FA For Admins" sub="Stronger login security for administrative users"/>
-        <Toggle k="enforcePasswordRotation" label="Enforce Password Rotation" sub="Require password updates every 90 days"/>
+        <Toggle
+          k="twoFactorAdmins"
+          label="Require 2FA For Admins"
+          sub="Stronger login security for administrative users"
+        />
+        <Toggle
+          k="enforcePasswordRotation"
+          label="Enforce Password Rotation"
+          sub="Require password updates every 90 days"
+        />
       </div>
 
       {/* Platform Operations */}
-      <div className="card card-padded" style={{marginBottom:16}}>
-        <SectionTitle title="Platform Operations" sub="Backups, audit logging and API safeguards"/>
-        <div className="form-grid" style={{marginBottom:8}}>
+      <div className="card card-padded" style={{ marginBottom: 16 }}>
+        <SectionTitle
+          title="Platform Operations"
+          sub="Backups, audit logging and API safeguards"
+        />
+        <div className="form-grid" style={{ marginBottom: 8 }}>
           <div className="form-group">
             <label className="form-label">Backup Frequency</label>
-            <select className="form-control" value={cfg.backupFrequency||"daily"} onChange={e=>set("backupFrequency",e.target.value)}>
+            <select
+              className="form-control"
+              value={cfg.backupFrequency || "daily"}
+              onChange={(e) => set("backupFrequency", e.target.value)}
+            >
               <option value="hourly">Hourly</option>
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
@@ -4637,34 +8119,83 @@ function SettingsPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Backup Time</label>
-            <input type="time" className="form-control" value={cfg.backupTime||"02:00"} onChange={e=>set("backupTime",e.target.value)}/>
+            <input
+              type="time"
+              className="form-control"
+              value={cfg.backupTime || "02:00"}
+              onChange={(e) => set("backupTime", e.target.value)}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Audit Retention (days)</label>
-            <input type="number" min={30} max={3650} className="form-control" value={cfg.auditRetentionDays||180} onChange={e=>set("auditRetentionDays",+e.target.value)}/>
+            <input
+              type="number"
+              min={30}
+              max={3650}
+              className="form-control"
+              value={cfg.auditRetentionDays || 180}
+              onChange={(e) => set("auditRetentionDays", +e.target.value)}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">API Rate Limit (req/min)</label>
-            <input type="number" min={10} max={5000} className="form-control" value={cfg.apiRateLimitPerMin||120} onChange={e=>set("apiRateLimitPerMin",+e.target.value)}/>
+            <input
+              type="number"
+              min={10}
+              max={5000}
+              className="form-control"
+              value={cfg.apiRateLimitPerMin || 120}
+              onChange={(e) => set("apiRateLimitPerMin", +e.target.value)}
+            />
           </div>
         </div>
-        <Toggle k="auditLogsEnabled" label="Enable Audit Logs" sub="Track critical settings, admissions and result actions"/>
+        <Toggle
+          k="auditLogsEnabled"
+          label="Enable Audit Logs"
+          sub="Track critical settings, admissions and result actions"
+        />
       </div>
 
       {/* System */}
-      <div className="card card-padded" style={{marginBottom:16}}>
-        <SectionTitle title="System" sub="Advanced system controls"/>
-        <Toggle k="maintenanceMode" label="Maintenance Mode" sub="Temporarily restrict access while performing updates" danger={true}/>
-        <div style={{marginTop:8,padding:"10px 12px",background:"#fef9c3",borderRadius:8,fontSize:".82rem",color:"#92400e",display:cfg.maintenanceMode?"flex":"none",alignItems:"center",gap:8}}>
-          ⚠️ Maintenance mode is <strong>ON</strong>. Students will see a maintenance banner. Disable when done.
+      <div className="card card-padded" style={{ marginBottom: 16 }}>
+        <SectionTitle title="System" sub="Advanced system controls" />
+        <Toggle
+          k="maintenanceMode"
+          label="Maintenance Mode"
+          sub="Temporarily restrict access while performing updates"
+          danger={true}
+        />
+        <div
+          style={{
+            marginTop: 8,
+            padding: "10px 12px",
+            background: "#fef9c3",
+            borderRadius: 8,
+            fontSize: ".82rem",
+            color: "#92400e",
+            display: cfg.maintenanceMode ? "flex" : "none",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          ⚠️ Maintenance mode is <strong>ON</strong>. Students will see a
+          maintenance banner. Disable when done.
         </div>
       </div>
 
-      <div style={{display:"flex",gap:12,alignItems:"center"}}>
-        <button className="btn btn-blue" onClick={saveSettings}>Save All Settings</button>
-        <button className="btn btn-outline" onClick={runConfigCheck}>Run Configuration Check</button>
-        <button className="btn btn-outline" onClick={()=>setCfg(globalCfg)}>Discard Changes</button>
-        <button className="btn btn-outline" onClick={resetToDefaults}>Reset Defaults</button>
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <button className="btn btn-blue" onClick={saveSettings}>
+          Save All Settings
+        </button>
+        <button className="btn btn-outline" onClick={runConfigCheck}>
+          Run Configuration Check
+        </button>
+        <button className="btn btn-outline" onClick={() => setCfg(globalCfg)}>
+          Discard Changes
+        </button>
+        <button className="btn btn-outline" onClick={resetToDefaults}>
+          Reset Defaults
+        </button>
       </div>
     </div>
   );
@@ -4673,12 +8204,42 @@ function SettingsPage() {
 function PermissionsMatrixPage({ currentUser }) {
   const { cfg: globalCfg, updateCfg } = useContext(SettingsContext);
   const defaultBaseRoles = [
-    { key: "super_admin", label: "Super Admin", color: "#1d4ed8", note: "Full platform control" },
-    { key: "admin", label: "Admin", color: "#0f766e", note: "School and operations management" },
-    { key: "school_admin", label: "School Admin", color: "#7c3aed", note: "School-scoped operations" },
-    { key: "teacher", label: "Teacher", color: "#d97706", note: "Academic records and attendance" },
-    { key: "staff", label: "Staff", color: "#475569", note: "Support and office workflows" },
-    { key: "student", label: "Student", color: "#dc2626", note: "Self-service access only" },
+    {
+      key: "super_admin",
+      label: "Super Admin",
+      color: "#1d4ed8",
+      note: "Full platform control",
+    },
+    {
+      key: "admin",
+      label: "Admin",
+      color: "#0f766e",
+      note: "School and operations management",
+    },
+    {
+      key: "school_admin",
+      label: "School Admin",
+      color: "#7c3aed",
+      note: "School-scoped operations",
+    },
+    {
+      key: "teacher",
+      label: "Teacher",
+      color: "#d97706",
+      note: "Academic records and attendance",
+    },
+    {
+      key: "staff",
+      label: "Staff",
+      color: "#475569",
+      note: "Support and office workflows",
+    },
+    {
+      key: "student",
+      label: "Student",
+      color: "#dc2626",
+      note: "Self-service access only",
+    },
   ];
   const permissionGroups = [
     {
@@ -4717,7 +8278,10 @@ function PermissionsMatrixPage({ currentUser }) {
         { key: "roles.manage", label: "Assign Role Privileges" },
         { key: "settings.manage", label: "Manage Settings" },
         { key: "audit.view", label: "View Audit Trail" },
-        { key: "registered_schools.manage", label: "Manage Registered Schools" },
+        {
+          key: "registered_schools.manage",
+          label: "Manage Registered Schools",
+        },
       ],
     },
   ];
@@ -4827,10 +8391,19 @@ function PermissionsMatrixPage({ currentUser }) {
   };
 
   const baseRoleKeys = defaultBaseRoles.map((role) => role.key);
-  const [roleMetaOverrides, setRoleMetaOverrides] = useState(() => globalCfg?.roleMetaOverrides || {});
-  const [customRoles, setCustomRoles] = useState(() => Array.isArray(globalCfg?.roleDefinitions) ? globalCfg.roleDefinitions : []);
+  const [roleMetaOverrides, setRoleMetaOverrides] = useState(
+    () => globalCfg?.roleMetaOverrides || {},
+  );
+  const [customRoles, setCustomRoles] = useState(() =>
+    Array.isArray(globalCfg?.roleDefinitions) ? globalCfg.roleDefinitions : [],
+  );
   const [roleFormMode, setRoleFormMode] = useState("create");
-  const [roleForm, setRoleForm] = useState({ key: "", label: "", note: "", color: "#2563eb" });
+  const [roleForm, setRoleForm] = useState({
+    key: "",
+    label: "",
+    note: "",
+    color: "#2563eb",
+  });
 
   const baseRoles = defaultBaseRoles.map((role) => ({
     ...role,
@@ -4841,7 +8414,10 @@ function PermissionsMatrixPage({ currentUser }) {
     const merged = {};
     [...baseRoles, ...customRoles].forEach((role) => {
       const roleKey = role.key;
-      merged[roleKey] = { ...defaultPrivileges[roleKey], ...(incoming?.[roleKey] || {}) };
+      merged[roleKey] = {
+        ...defaultPrivileges[roleKey],
+        ...(incoming?.[roleKey] || {}),
+      };
     });
     return merged;
   };
@@ -4849,51 +8425,95 @@ function PermissionsMatrixPage({ currentUser }) {
   const roles = [...baseRoles, ...customRoles];
 
   const [selectedRole, setSelectedRole] = useState("admin");
-  const [matrix, setMatrix] = useState(() => mergeRolePrivileges(globalCfg?.rolePrivileges));
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const [matrix, setMatrix] = useState(() =>
+    mergeRolePrivileges(globalCfg?.rolePrivileges),
+  );
+  const [statusModal, setStatusModal] = useState({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
   const [saving, setSaving] = useState(false);
   const [promotionAccounts, setPromotionAccounts] = useState([]);
   const [promotionSearch, setPromotionSearch] = useState("");
-  const [selectedPromotionAccountKey, setSelectedPromotionAccountKey] = useState("");
+  const [selectedPromotionAccountKey, setSelectedPromotionAccountKey] =
+    useState("");
   const [promotionRole, setPromotionRole] = useState("admin");
-  const [loadingPromotionAccounts, setLoadingPromotionAccounts] = useState(false);
+  const [loadingPromotionAccounts, setLoadingPromotionAccounts] =
+    useState(false);
   const [promotingAccount, setPromotingAccount] = useState(false);
 
   useEffect(() => {
     setRoleMetaOverrides(globalCfg?.roleMetaOverrides || {});
-    setCustomRoles(Array.isArray(globalCfg?.roleDefinitions) ? globalCfg.roleDefinitions : []);
+    setCustomRoles(
+      Array.isArray(globalCfg?.roleDefinitions)
+        ? globalCfg.roleDefinitions
+        : [],
+    );
     setMatrix(mergeRolePrivileges(globalCfg?.rolePrivileges));
-  }, [globalCfg?.roleDefinitions, globalCfg?.roleMetaOverrides, globalCfg?.rolePrivileges]);
+  }, [
+    globalCfg?.roleDefinitions,
+    globalCfg?.roleMetaOverrides,
+    globalCfg?.rolePrivileges,
+  ]);
 
-  const selectedRoleMeta = roles.find((role) => role.key === selectedRole) || roles[1];
-  const enabledCount = Object.values(matrix[selectedRole] || {}).filter(Boolean).length;
-  const totalPrivilegeCount = permissionGroups.reduce((sum, group) => sum + group.permissions.length, 0);
-  const coverage = totalPrivilegeCount ? Math.round((enabledCount / totalPrivilegeCount) * 100) : 0;
+  const selectedRoleMeta =
+    roles.find((role) => role.key === selectedRole) || roles[1];
+  const enabledCount = Object.values(matrix[selectedRole] || {}).filter(
+    Boolean,
+  ).length;
+  const totalPrivilegeCount = permissionGroups.reduce(
+    (sum, group) => sum + group.permissions.length,
+    0,
+  );
+  const coverage = totalPrivilegeCount
+    ? Math.round((enabledCount / totalPrivilegeCount) * 100)
+    : 0;
   const actorRoleKey = normalizeRoleKey(currentUser?.role);
   const canAssignSuperAdmin = actorRoleKey === "super_admin";
-  const canPromoteAdmins = actorRoleKey === "super_admin" || actorRoleKey === "admin";
+  const canPromoteAdmins =
+    actorRoleKey === "super_admin" || actorRoleKey === "admin";
   const adminPromotionRoles = roles.filter((role) => {
     if (role.key === "super_admin") return canAssignSuperAdmin;
     if (role.key === "admin") return true;
-    if (["school_admin", "teacher", "staff", "student"].includes(role.key)) return false;
-    return ["roles.manage", "settings.manage", "registered_schools.manage", "audit.view"].some((permissionKey) => !!matrix[role.key]?.[permissionKey]);
+    if (["school_admin", "teacher", "staff", "student"].includes(role.key))
+      return false;
+    return [
+      "roles.manage",
+      "settings.manage",
+      "registered_schools.manage",
+      "audit.view",
+    ].some((permissionKey) => !!matrix[role.key]?.[permissionKey]);
   });
   const selectedPrivilegeLabels = permissionGroups.flatMap((group) =>
     group.permissions
       .filter((permission) => !!matrix[selectedRole]?.[permission.key])
-      .map((permission) => ({ ...permission, group: group.title }))
+      .map((permission) => ({ ...permission, group: group.title })),
   );
   const filteredPromotionAccounts = useMemo(() => {
-    const query = String(promotionSearch || "").trim().toLowerCase();
+    const query = String(promotionSearch || "")
+      .trim()
+      .toLowerCase();
     const sorted = [...promotionAccounts].sort((left, right) => {
       const leftName = String(left.full_name || left.email || "").toLowerCase();
-      const rightName = String(right.full_name || right.email || "").toLowerCase();
+      const rightName = String(
+        right.full_name || right.email || "",
+      ).toLowerCase();
       return leftName.localeCompare(rightName);
     });
     if (!query) return sorted;
-    return sorted.filter((account) => [account.full_name, account.email, account.role].join(" ").toLowerCase().includes(query));
+    return sorted.filter((account) =>
+      [account.full_name, account.email, account.role]
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
+    );
   }, [promotionAccounts, promotionSearch]);
-  const selectedPromotionAccount = promotionAccounts.find((account) => account.accountKey === selectedPromotionAccountKey) || null;
+  const selectedPromotionAccount =
+    promotionAccounts.find(
+      (account) => account.accountKey === selectedPromotionAccountKey,
+    ) || null;
 
   useEffect(() => {
     if (!adminPromotionRoles.some((role) => role.key === promotionRole)) {
@@ -4910,16 +8530,32 @@ function PermissionsMatrixPage({ currentUser }) {
     setLoadingPromotionAccounts(true);
     try {
       const profileRequest = profilesTableAvailable
-        ? supabase.from("profiles").select("id, email, full_name, role, registered_school_id, managed_school_name").order("full_name", { ascending: true })
+        ? supabase
+            .from("profiles")
+            .select(
+              "id, email, full_name, role, registered_school_id, managed_school_name",
+            )
+            .order("full_name", { ascending: true })
         : Promise.resolve({ data: [], error: null });
-      const [{ data: tableUsers, error: usersError }, { data: profileRows, error: profilesError }] = await Promise.all([
-        supabase.from("users").select("id, email, full_name, role, registered_school_id, managed_school_name").order("full_name", { ascending: true }),
+      const [
+        { data: tableUsers, error: usersError },
+        { data: profileRows, error: profilesError },
+      ] = await Promise.all([
+        supabase
+          .from("users")
+          .select(
+            "id, email, full_name, role, registered_school_id, managed_school_name",
+          )
+          .order("full_name", { ascending: true }),
         profileRequest,
       ]);
 
       if (usersError && !isMissingTableError(usersError)) throw usersError;
       if (profilesError) {
-        if (isProfilesTableMissingError(profilesError) || isMissingTableError(profilesError)) {
+        if (
+          isProfilesTableMissingError(profilesError) ||
+          isMissingTableError(profilesError)
+        ) {
           profilesTableAvailable = false;
         } else {
           throw profilesError;
@@ -4929,7 +8565,9 @@ function PermissionsMatrixPage({ currentUser }) {
       const mergedAccounts = new Map();
       const upsertPromotionAccount = (row, source) => {
         if (!row) return;
-        const email = String(row.email || "").trim().toLowerCase();
+        const email = String(row.email || "")
+          .trim()
+          .toLowerCase();
         const fallbackId = row.id != null ? String(row.id) : "";
         const accountKey = email || `${source}:${fallbackId}`;
         if (!accountKey) return;
@@ -4950,27 +8588,51 @@ function PermissionsMatrixPage({ currentUser }) {
         mergedAccounts.set(accountKey, {
           ...current,
           email: email || current.email,
-          full_name: String(row.full_name || current.full_name || row.email || "User").trim(),
-          role: normalizeRoleKey(row.role || current.role || "student") || "student",
-          registered_school_id: row.registered_school_id ?? current.registered_school_id ?? null,
-          managed_school_name: row.managed_school_name || current.managed_school_name || "",
-          profileId: source === "profile" ? (row.id ?? current.profileId) : current.profileId,
-          tableUserId: source === "user" ? (row.id ?? current.tableUserId) : current.tableUserId,
+          full_name: String(
+            row.full_name || current.full_name || row.email || "User",
+          ).trim(),
+          role:
+            normalizeRoleKey(row.role || current.role || "student") ||
+            "student",
+          registered_school_id:
+            row.registered_school_id ?? current.registered_school_id ?? null,
+          managed_school_name:
+            row.managed_school_name || current.managed_school_name || "",
+          profileId:
+            source === "profile"
+              ? (row.id ?? current.profileId)
+              : current.profileId,
+          tableUserId:
+            source === "user"
+              ? (row.id ?? current.tableUserId)
+              : current.tableUserId,
           hasProfile: current.hasProfile || source === "profile",
           hasTableUser: current.hasTableUser || source === "user",
         });
       };
 
-      (Array.isArray(tableUsers) ? tableUsers : []).forEach((row) => upsertPromotionAccount(row, "user"));
-      (Array.isArray(profileRows) ? profileRows : []).forEach((row) => upsertPromotionAccount(row, "profile"));
+      (Array.isArray(tableUsers) ? tableUsers : []).forEach((row) =>
+        upsertPromotionAccount(row, "user"),
+      );
+      (Array.isArray(profileRows) ? profileRows : []).forEach((row) =>
+        upsertPromotionAccount(row, "profile"),
+      );
 
       const nextAccounts = Array.from(mergedAccounts.values());
       setPromotionAccounts(nextAccounts);
-      setSelectedPromotionAccountKey((current) => current && nextAccounts.some((account) => account.accountKey === current)
-        ? current
-        : (nextAccounts[0]?.accountKey || ""));
+      setSelectedPromotionAccountKey((current) =>
+        current &&
+        nextAccounts.some((account) => account.accountKey === current)
+          ? current
+          : nextAccounts[0]?.accountKey || "",
+      );
     } catch (error) {
-      setStatusModal({ open: true, type: "failure", title: "Accounts Not Loaded", message: error?.message || "Could not load promotable accounts." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Accounts Not Loaded",
+        message: error?.message || "Could not load promotable accounts.",
+      });
     } finally {
       setLoadingPromotionAccounts(false);
     }
@@ -4994,7 +8656,14 @@ function PermissionsMatrixPage({ currentUser }) {
     const next = {};
     permissionGroups.forEach((group) => {
       group.permissions.forEach((permission) => {
-        next[permission.key] = preset === "full" ? true : preset === "none" ? false : ["students.view", "schools.view", "finance.view"].includes(permission.key);
+        next[permission.key] =
+          preset === "full"
+            ? true
+            : preset === "none"
+              ? false
+              : ["students.view", "schools.view", "finance.view"].includes(
+                  permission.key,
+                );
       });
     });
     setMatrix((current) => ({ ...current, [roleKey]: next }));
@@ -5029,17 +8698,35 @@ function PermissionsMatrixPage({ currentUser }) {
   const createRole = () => {
     const label = String(roleForm.label || "").trim();
     if (!label) {
-      setStatusModal({ open: true, type: "failure", title: "Role Not Created", message: "Role name is required." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Role Not Created",
+        message: "Role name is required.",
+      });
       return;
     }
 
-    const key = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    const key = label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
     if (!key) {
-      setStatusModal({ open: true, type: "failure", title: "Role Not Created", message: "Use a role name with letters or numbers." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Role Not Created",
+        message: "Use a role name with letters or numbers.",
+      });
       return;
     }
     if (roles.some((role) => role.key === key)) {
-      setStatusModal({ open: true, type: "failure", title: "Role Not Created", message: "A role with that name already exists." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Role Not Created",
+        message: "A role with that name already exists.",
+      });
       return;
     }
 
@@ -5054,56 +8741,105 @@ function PermissionsMatrixPage({ currentUser }) {
     setMatrix((current) => ({
       ...current,
       [key]: Object.fromEntries(
-        permissionGroups.flatMap((group) => group.permissions.map((permission) => [permission.key, false]))
+        permissionGroups.flatMap((group) =>
+          group.permissions.map((permission) => [permission.key, false]),
+        ),
       ),
     }));
     setSelectedRole(key);
     resetRoleForm();
-    setStatusModal({ open: true, type: "success", title: "Role Created", message: `${label} is ready for privilege assignment.` });
+    setStatusModal({
+      open: true,
+      type: "success",
+      title: "Role Created",
+      message: `${label} is ready for privilege assignment.`,
+    });
   };
 
   const updateRole = () => {
     const key = String(roleForm.key || "").trim();
     const label = String(roleForm.label || "").trim();
     if (!key) {
-      setStatusModal({ open: true, type: "failure", title: "Role Not Updated", message: "Select a role to edit first." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Role Not Updated",
+        message: "Select a role to edit first.",
+      });
       return;
     }
     if (!label) {
-      setStatusModal({ open: true, type: "failure", title: "Role Not Updated", message: "Role name is required." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Role Not Updated",
+        message: "Role name is required.",
+      });
       return;
     }
 
     const nextMeta = {
       label,
-      note: String(roleForm.note || "").trim() || (baseRoleKeys.includes(key) ? "System role" : "Custom role"),
+      note:
+        String(roleForm.note || "").trim() ||
+        (baseRoleKeys.includes(key) ? "System role" : "Custom role"),
       color: roleForm.color || "#2563eb",
     };
 
     if (baseRoleKeys.includes(key)) {
       setRoleMetaOverrides((current) => ({ ...current, [key]: nextMeta }));
     } else {
-      setCustomRoles((current) => current.map((role) => (
-        role.key === key ? { ...role, ...nextMeta } : role
-      )));
+      setCustomRoles((current) =>
+        current.map((role) =>
+          role.key === key ? { ...role, ...nextMeta } : role,
+        ),
+      );
     }
 
-    setStatusModal({ open: true, type: "success", title: "Role Updated", message: `${label} role details were updated.` });
+    setStatusModal({
+      open: true,
+      type: "success",
+      title: "Role Updated",
+      message: `${label} role details were updated.`,
+    });
     resetRoleForm();
   };
 
   const save = async () => {
-    const mergedConfig = { ...globalCfg, roleDefinitions: customRoles, roleMetaOverrides, rolePrivileges: matrix };
+    const mergedConfig = {
+      ...globalCfg,
+      roleDefinitions: customRoles,
+      roleMetaOverrides,
+      rolePrivileges: matrix,
+    };
     setSaving(true);
     try {
       if (supabase) {
-        const { error } = await supabase.from("app_settings").upsert({ id: 1, config: mergedConfig });
+        const { error } = await supabase
+          .from("app_settings")
+          .upsert({ id: 1, config: mergedConfig });
         if (error) throw error;
       }
-      updateCfg((current) => ({ ...current, roleDefinitions: customRoles, roleMetaOverrides, rolePrivileges: matrix }));
-      setStatusModal({ open: true, type: "success", title: "Privileges Updated", message: `${selectedRoleMeta.label} privileges were saved to Supabase.` });
+      updateCfg((current) => ({
+        ...current,
+        roleDefinitions: customRoles,
+        roleMetaOverrides,
+        rolePrivileges: matrix,
+      }));
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "Privileges Updated",
+        message: `${selectedRoleMeta.label} privileges were saved to Supabase.`,
+      });
     } catch (error) {
-      setStatusModal({ open: true, type: "failure", title: "Save Failed", message: error?.message || "Could not save role privileges to Supabase." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Save Failed",
+        message:
+          error?.message || "Could not save role privileges to Supabase.",
+      });
     } finally {
       setSaving(false);
     }
@@ -5111,34 +8847,70 @@ function PermissionsMatrixPage({ currentUser }) {
 
   const promoteSelectedAccount = async () => {
     if (!canPromoteAdmins) {
-      setStatusModal({ open: true, type: "failure", title: "Promotion Locked", message: "Only super admins can promote global admin accounts." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Promotion Locked",
+        message: "Only super admins can promote global admin accounts.",
+      });
       return;
     }
     if (!supabase) {
-      setStatusModal({ open: true, type: "failure", title: "Promotion Unavailable", message: "Supabase is required to promote accounts." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Promotion Unavailable",
+        message: "Supabase is required to promote accounts.",
+      });
       return;
     }
     if (!selectedPromotionAccount) {
-      setStatusModal({ open: true, type: "failure", title: "No Account Selected", message: "Choose an account to promote first." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "No Account Selected",
+        message: "Choose an account to promote first.",
+      });
       return;
     }
 
     const normalizedPromotionRole = normalizeRoleKey(promotionRole);
     if (!normalizedPromotionRole) {
-      setStatusModal({ open: true, type: "failure", title: "No Role Selected", message: "Select an admin role before continuing." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "No Role Selected",
+        message: "Select an admin role before continuing.",
+      });
       return;
     }
 
-    const targetRoleMeta = getRoleMeta({ roleDefinitions: customRoles, roleMetaOverrides, rolePrivileges: matrix }, normalizedPromotionRole);
+    const targetRoleMeta = getRoleMeta(
+      {
+        roleDefinitions: customRoles,
+        roleMetaOverrides,
+        rolePrivileges: matrix,
+      },
+      normalizedPromotionRole,
+    );
     const payloads = [
-      { role: normalizedPromotionRole, registered_school_id: null, managed_school_name: "" },
+      {
+        role: normalizedPromotionRole,
+        registered_school_id: null,
+        managed_school_name: "",
+      },
       { role: normalizedPromotionRole },
     ];
     const updateRoleInTable = async (tableName, matchColumn, matchValue) => {
       if (!matchValue) return false;
       for (const payload of payloads) {
-        const response = await supabase.from(tableName).update(payload).eq(matchColumn, matchValue).select(matchColumn);
-        if (!response.error) return Array.isArray(response.data) && response.data.length > 0;
+        const response = await supabase
+          .from(tableName)
+          .update(payload)
+          .eq(matchColumn, matchValue)
+          .select(matchColumn);
+        if (!response.error)
+          return Array.isArray(response.data) && response.data.length > 0;
         if (!isMissingColumnError(response.error)) throw response.error;
       }
       return false;
@@ -5147,15 +8919,28 @@ function PermissionsMatrixPage({ currentUser }) {
     setPromotingAccount(true);
     try {
       const updatedUsers = selectedPromotionAccount.hasTableUser
-        ? await updateRoleInTable("users", selectedPromotionAccount.email ? "email" : "id", selectedPromotionAccount.email || selectedPromotionAccount.tableUserId)
+        ? await updateRoleInTable(
+            "users",
+            selectedPromotionAccount.email ? "email" : "id",
+            selectedPromotionAccount.email ||
+              selectedPromotionAccount.tableUserId,
+          )
         : false;
 
       let updatedProfiles = false;
       if (selectedPromotionAccount.hasProfile && profilesTableAvailable) {
         try {
-          updatedProfiles = await updateRoleInTable("profiles", selectedPromotionAccount.profileId ? "id" : "email", selectedPromotionAccount.profileId || selectedPromotionAccount.email);
+          updatedProfiles = await updateRoleInTable(
+            "profiles",
+            selectedPromotionAccount.profileId ? "id" : "email",
+            selectedPromotionAccount.profileId ||
+              selectedPromotionAccount.email,
+          );
         } catch (error) {
-          if (isProfilesTableMissingError(error) || isMissingTableError(error)) {
+          if (
+            isProfilesTableMissingError(error) ||
+            isMissingTableError(error)
+          ) {
             profilesTableAvailable = false;
           } else {
             throw error;
@@ -5164,20 +8949,34 @@ function PermissionsMatrixPage({ currentUser }) {
       }
 
       if (!updatedUsers && !updatedProfiles) {
-        throw new Error("No matching account record was updated. Confirm the user exists in the users or profiles table.");
+        throw new Error(
+          "No matching account record was updated. Confirm the user exists in the users or profiles table.",
+        );
       }
 
-      setPromotionAccounts((current) => current.map((account) => (
-        account.accountKey === selectedPromotionAccount.accountKey
-          ? { ...account, role: normalizedPromotionRole, registered_school_id: null, managed_school_name: "" }
-          : account
-      )));
+      setPromotionAccounts((current) =>
+        current.map((account) =>
+          account.accountKey === selectedPromotionAccount.accountKey
+            ? {
+                ...account,
+                role: normalizedPromotionRole,
+                registered_school_id: null,
+                managed_school_name: "",
+              }
+            : account,
+        ),
+      );
 
       const storedSession = readAppSession();
-      const sameStoredUser = storedSession && (
-        (selectedPromotionAccount.email && String(storedSession.user?.email || "").trim().toLowerCase() === selectedPromotionAccount.email)
-        || (selectedPromotionAccount.profileId && String(storedSession.user?.id || "") === String(selectedPromotionAccount.profileId))
-      );
+      const sameStoredUser =
+        storedSession &&
+        ((selectedPromotionAccount.email &&
+          String(storedSession.user?.email || "")
+            .trim()
+            .toLowerCase() === selectedPromotionAccount.email) ||
+          (selectedPromotionAccount.profileId &&
+            String(storedSession.user?.id || "") ===
+              String(selectedPromotionAccount.profileId)));
       if (sameStoredUser) {
         const nextUser = {
           ...storedSession.user,
@@ -5200,7 +8999,13 @@ function PermissionsMatrixPage({ currentUser }) {
         message: `${selectedPromotionAccount.full_name || selectedPromotionAccount.email || "Account"} is now assigned to ${targetRoleMeta.label}.`,
       });
     } catch (error) {
-      setStatusModal({ open: true, type: "failure", title: "Promotion Failed", message: error?.message || "Could not update the selected account role." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Promotion Failed",
+        message:
+          error?.message || "Could not update the selected account role.",
+      });
     } finally {
       setPromotingAccount(false);
     }
@@ -5208,24 +9013,43 @@ function PermissionsMatrixPage({ currentUser }) {
 
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Role Privileges</div><div className="page-sub">Assign what each role can view, manage, approve, or control across the platform.</div></div>
-      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((s) => ({ ...s, open: false }))} />
+      <div className="page-header">
+        <div className="page-title">Role Privileges</div>
+        <div className="page-sub">
+          Assign what each role can view, manage, approve, or control across the
+          platform.
+        </div>
+      </div>
+      <ActionStatusModal
+        state={statusModal}
+        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
+      />
       <div className="role-priv-shell">
         <div className="role-priv-overview">
           <div className="role-priv-stat">
             <div className="role-priv-stat-label">Roles</div>
             <div className="role-priv-stat-value">{roles.length}</div>
-            <div className="role-priv-stat-sub">System roles available for assignment across the platform.</div>
+            <div className="role-priv-stat-sub">
+              System roles available for assignment across the platform.
+            </div>
           </div>
           <div className="role-priv-stat">
             <div className="role-priv-stat-label">Selected Role</div>
-            <div className="role-priv-stat-value" style={{ color: selectedRoleMeta.color }}>{selectedRoleMeta.label}</div>
+            <div
+              className="role-priv-stat-value"
+              style={{ color: selectedRoleMeta.color }}
+            >
+              {selectedRoleMeta.label}
+            </div>
             <div className="role-priv-stat-sub">{selectedRoleMeta.note}</div>
           </div>
           <div className="role-priv-stat">
             <div className="role-priv-stat-label">Coverage</div>
             <div className="role-priv-stat-value">{coverage}%</div>
-            <div className="role-priv-stat-sub">{enabledCount} of {totalPrivilegeCount} privileges enabled for this role.</div>
+            <div className="role-priv-stat-sub">
+              {enabledCount} of {totalPrivilegeCount} privileges enabled for
+              this role.
+            </div>
           </div>
         </div>
 
@@ -5233,33 +9057,109 @@ function PermissionsMatrixPage({ currentUser }) {
           <aside className="role-priv-sidebar">
             <div className="role-priv-sidebar-head">
               <div className="role-priv-sidebar-title">Roles</div>
-              <div className="role-priv-sidebar-sub">Select a role, review its access level, then assign the exact privileges it should carry.</div>
+              <div className="role-priv-sidebar-sub">
+                Select a role, review its access level, then assign the exact
+                privileges it should carry.
+              </div>
             </div>
             <div className="role-priv-create-card">
               <div className="role-priv-create-head">
                 <div>
-                  <div className="role-priv-create-title">{roleFormMode === "edit" ? "Edit Role" : "Create New Role"}</div>
-                  <div className="role-priv-create-sub">{roleFormMode === "edit" ? "Update the selected role name, note, or accent color. Role keys stay fixed for reliable access mapping." : "Add a custom role, then assign its privileges from this same page."}</div>
+                  <div className="role-priv-create-title">
+                    {roleFormMode === "edit" ? "Edit Role" : "Create New Role"}
+                  </div>
+                  <div className="role-priv-create-sub">
+                    {roleFormMode === "edit"
+                      ? "Update the selected role name, note, or accent color. Role keys stay fixed for reliable access mapping."
+                      : "Add a custom role, then assign its privileges from this same page."}
+                  </div>
                 </div>
                 <div className="role-priv-create-actions">
-                  <button className="btn btn-outline btn-sm" onClick={() => startEditingRole(selectedRoleMeta)}>Edit Selected</button>
-                  {roleFormMode === "edit" && <button className="btn btn-outline btn-sm" onClick={resetRoleForm}>New Role</button>}
+                  <button
+                    className="btn btn-outline btn-sm"
+                    onClick={() => startEditingRole(selectedRoleMeta)}
+                  >
+                    Edit Selected
+                  </button>
+                  {roleFormMode === "edit" && (
+                    <button
+                      className="btn btn-outline btn-sm"
+                      onClick={resetRoleForm}
+                    >
+                      New Role
+                    </button>
+                  )}
                 </div>
               </div>
-              {roleFormMode === "edit" && <div className="role-priv-create-key">Role Key: {roleForm.key}</div>}
-              <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Role Name</label><input className="form-control" value={roleForm.label} onChange={(e) => setRoleForm((current) => ({ ...current, label: e.target.value }))} placeholder="e.g. Registrar" /></div>
-              <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Role Note</label><input className="form-control" value={roleForm.note} onChange={(e) => setRoleForm((current) => ({ ...current, note: e.target.value }))} placeholder="What this role is for" /></div>
-              <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Accent Color</label><input type="color" className="form-control" value={roleForm.color} onChange={(e) => setRoleForm((current) => ({ ...current, color: e.target.value }))} /></div>
-              {roleFormMode === "edit"
-                ? <>
-                    <div className="role-priv-create-help">Changes to built-in roles update their display details only. Their internal keys remain unchanged so privilege and portal routing stays stable.</div>
-                    <button className="btn btn-blue" onClick={updateRole}>Update Role</button>
-                  </>
-                : <button className="btn btn-blue" onClick={createRole}>Create Role</button>}
+              {roleFormMode === "edit" && (
+                <div className="role-priv-create-key">
+                  Role Key: {roleForm.key}
+                </div>
+              )}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Role Name</label>
+                <input
+                  className="form-control"
+                  value={roleForm.label}
+                  onChange={(e) =>
+                    setRoleForm((current) => ({
+                      ...current,
+                      label: e.target.value,
+                    }))
+                  }
+                  placeholder="e.g. Registrar"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Role Note</label>
+                <input
+                  className="form-control"
+                  value={roleForm.note}
+                  onChange={(e) =>
+                    setRoleForm((current) => ({
+                      ...current,
+                      note: e.target.value,
+                    }))
+                  }
+                  placeholder="What this role is for"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Accent Color</label>
+                <input
+                  type="color"
+                  className="form-control"
+                  value={roleForm.color}
+                  onChange={(e) =>
+                    setRoleForm((current) => ({
+                      ...current,
+                      color: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              {roleFormMode === "edit" ? (
+                <>
+                  <div className="role-priv-create-help">
+                    Changes to built-in roles update their display details only.
+                    Their internal keys remain unchanged so privilege and portal
+                    routing stays stable.
+                  </div>
+                  <button className="btn btn-blue" onClick={updateRole}>
+                    Update Role
+                  </button>
+                </>
+              ) : (
+                <button className="btn btn-blue" onClick={createRole}>
+                  Create Role
+                </button>
+              )}
             </div>
             <div className="role-priv-role-list">
               {roles.map((role) => {
-                const count = Object.values(matrix[role.key] || {}).filter(Boolean).length;
+                const count = Object.values(matrix[role.key] || {}).filter(
+                  Boolean,
+                ).length;
                 const active = selectedRole === role.key;
                 const isCustomRole = !baseRoleKeys.includes(role.key);
                 return (
@@ -5267,19 +9167,43 @@ function PermissionsMatrixPage({ currentUser }) {
                     key={role.key}
                     className={`role-priv-role-card ${active ? "active" : ""}`}
                     onClick={() => setSelectedRole(role.key)}
-                    style={{ borderColor: active ? role.color : "#e2e8f0", background: active ? `${role.color}12` : "#fff" }}
+                    style={{
+                      borderColor: active ? role.color : "#e2e8f0",
+                      background: active ? `${role.color}12` : "#fff",
+                    }}
                   >
                     <div className="role-priv-role-head">
                       <div>
-                        <div className="role-priv-role-name" style={{ color: role.color }}>{role.label}</div>
+                        <div
+                          className="role-priv-role-name"
+                          style={{ color: role.color }}
+                        >
+                          {role.label}
+                        </div>
                         <div className="role-priv-role-note">{role.note}</div>
                       </div>
-                      {active && <span className="badge badge-blue">Active</span>}
+                      {active && (
+                        <span className="badge badge-blue">Active</span>
+                      )}
                     </div>
-                    <div className="role-priv-role-count">{count} enabled privileges</div>
+                    <div className="role-priv-role-count">
+                      {count} enabled privileges
+                    </div>
                     <div className="role-priv-role-footer">
-                      <span className={`role-priv-role-meta ${isCustomRole ? "custom" : "system"}`}>{isCustomRole ? "Custom role" : "System role"}</span>
-                      <button className="btn btn-outline btn-sm" onClick={(event) => { event.stopPropagation(); startEditingRole(role); }}>Edit</button>
+                      <span
+                        className={`role-priv-role-meta ${isCustomRole ? "custom" : "system"}`}
+                      >
+                        {isCustomRole ? "Custom role" : "System role"}
+                      </span>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          startEditingRole(role);
+                        }}
+                      >
+                        Edit
+                      </button>
                     </div>
                   </button>
                 );
@@ -5290,14 +9214,39 @@ function PermissionsMatrixPage({ currentUser }) {
           <div className="role-priv-main">
             <div className="role-priv-toolbar">
               <div className="role-priv-toolbar-copy">
-                <div className="role-priv-toolbar-kicker">Privileges Workspace</div>
-                <div className="role-priv-toolbar-title" style={{ color: selectedRoleMeta.color }}>{selectedRoleMeta.label} privileges</div>
-                <div className="role-priv-toolbar-sub">{selectedRoleMeta.note}. Use presets for a fast baseline, then fine-tune access by privilege group.</div>
+                <div className="role-priv-toolbar-kicker">
+                  Privileges Workspace
+                </div>
+                <div
+                  className="role-priv-toolbar-title"
+                  style={{ color: selectedRoleMeta.color }}
+                >
+                  {selectedRoleMeta.label} privileges
+                </div>
+                <div className="role-priv-toolbar-sub">
+                  {selectedRoleMeta.note}. Use presets for a fast baseline, then
+                  fine-tune access by privilege group.
+                </div>
               </div>
               <div className="role-priv-toolbar-actions">
-                <button className="btn btn-outline btn-sm" onClick={() => applyPreset(selectedRole, "minimum")}>Minimum Access</button>
-                <button className="btn btn-outline btn-sm" onClick={() => applyPreset(selectedRole, "full")}>Full Access</button>
-                <button className="btn btn-outline btn-sm" onClick={() => applyPreset(selectedRole, "none")}>Clear All</button>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => applyPreset(selectedRole, "minimum")}
+                >
+                  Minimum Access
+                </button>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => applyPreset(selectedRole, "full")}
+                >
+                  Full Access
+                </button>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => applyPreset(selectedRole, "none")}
+                >
+                  Clear All
+                </button>
               </div>
             </div>
 
@@ -5307,12 +9256,40 @@ function PermissionsMatrixPage({ currentUser }) {
                   <div key={group.title} className="role-priv-group-card">
                     <div className="role-priv-group-head">
                       <div>
-                        <div className="role-priv-group-title">{group.title}</div>
+                        <div className="role-priv-group-title">
+                          {group.title}
+                        </div>
                         <div className="role-priv-group-sub">{group.sub}</div>
                       </div>
                       <div className="role-priv-group-actions">
-                        <button className="btn btn-outline btn-sm" onClick={() => setGroupPrivileges(selectedRole, group.permissions.map((permission) => permission.key), true)}>Select Group</button>
-                        <button className="btn btn-outline btn-sm" onClick={() => setGroupPrivileges(selectedRole, group.permissions.map((permission) => permission.key), false)}>Clear Group</button>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() =>
+                            setGroupPrivileges(
+                              selectedRole,
+                              group.permissions.map(
+                                (permission) => permission.key,
+                              ),
+                              true,
+                            )
+                          }
+                        >
+                          Select Group
+                        </button>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() =>
+                            setGroupPrivileges(
+                              selectedRole,
+                              group.permissions.map(
+                                (permission) => permission.key,
+                              ),
+                              false,
+                            )
+                          }
+                        >
+                          Clear Group
+                        </button>
                       </div>
                     </div>
                     <div className="role-priv-items">
@@ -5321,13 +9298,28 @@ function PermissionsMatrixPage({ currentUser }) {
                           key={permission.key}
                           className={`role-priv-item ${matrix[selectedRole]?.[permission.key] ? "active" : ""}`}
                           onClick={() => toggle(selectedRole, permission.key)}
-                          style={{ "--role-accent": selectedRoleMeta.color, "--role-soft": `${selectedRoleMeta.color}10` }}
+                          style={{
+                            "--role-accent": selectedRoleMeta.color,
+                            "--role-soft": `${selectedRoleMeta.color}10`,
+                          }}
                         >
                           <div className="role-priv-item-copy">
-                            <div className="role-priv-item-title">{permission.label}</div>
-                            <div className="role-priv-item-meta">{group.title}</div>
+                            <div className="role-priv-item-title">
+                              {permission.label}
+                            </div>
+                            <div className="role-priv-item-meta">
+                              {group.title}
+                            </div>
                           </div>
-                          <input className="role-priv-item-toggle" type="checkbox" checked={!!matrix[selectedRole]?.[permission.key]} onChange={() => toggle(selectedRole, permission.key)} onClick={(event) => event.stopPropagation()} />
+                          <input
+                            className="role-priv-item-toggle"
+                            type="checkbox"
+                            checked={!!matrix[selectedRole]?.[permission.key]}
+                            onChange={() =>
+                              toggle(selectedRole, permission.key)
+                            }
+                            onClick={(event) => event.stopPropagation()}
+                          />
                         </div>
                       ))}
                     </div>
@@ -5337,26 +9329,55 @@ function PermissionsMatrixPage({ currentUser }) {
 
               <div className="role-priv-summary-column">
                 <div className="role-priv-summary-card">
-                  <div className="role-priv-summary-title">Selected Privileges</div>
-                  <div className="role-priv-summary-sub">Enabled access currently assigned to {selectedRoleMeta.label}.</div>
+                  <div className="role-priv-summary-title">
+                    Selected Privileges
+                  </div>
+                  <div className="role-priv-summary-sub">
+                    Enabled access currently assigned to{" "}
+                    {selectedRoleMeta.label}.
+                  </div>
                   <div className="role-priv-chip-list">
-                    {selectedPrivilegeLabels.length ? selectedPrivilegeLabels.map((permission) => (
-                      <span key={permission.key} className="role-priv-chip">
-                        {permission.label}
-                        <span className="role-priv-chip-group">{permission.group}</span>
-                      </span>
-                    )) : <div className="role-priv-empty">No privileges selected for this role yet.</div>}
+                    {selectedPrivilegeLabels.length ? (
+                      selectedPrivilegeLabels.map((permission) => (
+                        <span key={permission.key} className="role-priv-chip">
+                          {permission.label}
+                          <span className="role-priv-chip-group">
+                            {permission.group}
+                          </span>
+                        </span>
+                      ))
+                    ) : (
+                      <div className="role-priv-empty">
+                        No privileges selected for this role yet.
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="role-priv-summary-card">
-                  <div className="role-priv-summary-title">Privilege Summary</div>
-                  <div className="role-priv-summary-sub">Quick overview of how much access each role currently has.</div>
+                  <div className="role-priv-summary-title">
+                    Privilege Summary
+                  </div>
+                  <div className="role-priv-summary-sub">
+                    Quick overview of how much access each role currently has.
+                  </div>
                   <div className="role-priv-summary-list">
                     {roles.map((role) => (
                       <div key={role.key} className="role-priv-summary-row">
-                        <span className="role-priv-summary-name" style={{ color: role.color }}>{role.label}</span>
-                        <span className="role-priv-summary-count">{Object.values(matrix[role.key] || {}).filter(Boolean).length} enabled</span>
+                        <span
+                          className="role-priv-summary-name"
+                          style={{ color: role.color }}
+                        >
+                          {role.label}
+                        </span>
+                        <span className="role-priv-summary-count">
+                          {
+                            Object.values(matrix[role.key] || {}).filter(
+                              Boolean,
+                            ).length
+                          }{" "}
+                          enabled
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -5364,65 +9385,207 @@ function PermissionsMatrixPage({ currentUser }) {
 
                 <div className="role-priv-save-card">
                   <div className="role-priv-save-title">Save Changes</div>
-                  <div className="role-priv-save-sub">Commit the current privilege selections so this role keeps the updated access pattern across the platform.</div>
-                  <button className="btn btn-blue" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Role Privileges"}</button>
+                  <div className="role-priv-save-sub">
+                    Commit the current privilege selections so this role keeps
+                    the updated access pattern across the platform.
+                  </div>
+                  <button
+                    className="btn btn-blue"
+                    onClick={save}
+                    disabled={saving}
+                  >
+                    {saving ? "Saving..." : "Save Role Privileges"}
+                  </button>
                 </div>
 
                 <div className="role-priv-promo-card">
                   <div className="role-priv-promo-head">
                     <div>
-                      <div className="role-priv-promo-title">Admin Promotion</div>
-                      <div className="role-priv-promo-sub">Promote an existing account into a global admin role from this page. Promotion clears any school scope so the account lands in the main admin portal on its next session refresh.</div>
+                      <div className="role-priv-promo-title">
+                        Admin Promotion
+                      </div>
+                      <div className="role-priv-promo-sub">
+                        Promote an existing account into a global admin role
+                        from this page. Promotion clears any school scope so the
+                        account lands in the main admin portal on its next
+                        session refresh.
+                      </div>
                     </div>
-                    <button className="btn btn-outline btn-sm" onClick={loadPromotionAccounts} disabled={loadingPromotionAccounts}>{loadingPromotionAccounts ? "Refreshing..." : "Refresh Accounts"}</button>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      onClick={loadPromotionAccounts}
+                      disabled={loadingPromotionAccounts}
+                    >
+                      {loadingPromotionAccounts
+                        ? "Refreshing..."
+                        : "Refresh Accounts"}
+                    </button>
                   </div>
-                  {!canPromoteAdmins && <div className="role-priv-promo-note">Only admin-level accounts can apply global admin promotions.</div>}
-                  {!supabase && <div className="role-priv-promo-note">Supabase must be connected before account promotion can be used.</div>}
+                  {!canPromoteAdmins && (
+                    <div className="role-priv-promo-note">
+                      Only admin-level accounts can apply global admin
+                      promotions.
+                    </div>
+                  )}
+                  {!supabase && (
+                    <div className="role-priv-promo-note">
+                      Supabase must be connected before account promotion can be
+                      used.
+                    </div>
+                  )}
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Find Account</label>
-                    <input className="form-control" value={promotionSearch} onChange={(event) => setPromotionSearch(event.target.value)} placeholder="Search by name, email, or current role" disabled={!canPromoteAdmins || !supabase} />
+                    <input
+                      className="form-control"
+                      value={promotionSearch}
+                      onChange={(event) =>
+                        setPromotionSearch(event.target.value)
+                      }
+                      placeholder="Search by name, email, or current role"
+                      disabled={!canPromoteAdmins || !supabase}
+                    />
                   </div>
                   <div className="role-priv-promo-list">
-                    {filteredPromotionAccounts.length ? filteredPromotionAccounts.slice(0, 8).map((account) => {
-                      const accountRoleMeta = getRoleMeta({ roleDefinitions: customRoles, roleMetaOverrides, rolePrivileges: matrix }, account.role);
-                      const active = selectedPromotionAccountKey === account.accountKey;
-                      return (
-                        <button key={account.accountKey} className={`role-priv-promo-item ${active ? "active" : ""}`} onClick={() => setSelectedPromotionAccountKey(account.accountKey)} disabled={!canPromoteAdmins || !supabase}>
-                          <div className="role-priv-promo-item-head">
-                            <div>
-                              <div className="role-priv-promo-item-name">{account.full_name || "Unnamed User"}</div>
-                              <div className="role-priv-promo-item-email">{account.email || "No email recorded"}</div>
+                    {filteredPromotionAccounts.length ? (
+                      filteredPromotionAccounts.slice(0, 8).map((account) => {
+                        const accountRoleMeta = getRoleMeta(
+                          {
+                            roleDefinitions: customRoles,
+                            roleMetaOverrides,
+                            rolePrivileges: matrix,
+                          },
+                          account.role,
+                        );
+                        const active =
+                          selectedPromotionAccountKey === account.accountKey;
+                        return (
+                          <button
+                            key={account.accountKey}
+                            className={`role-priv-promo-item ${active ? "active" : ""}`}
+                            onClick={() =>
+                              setSelectedPromotionAccountKey(account.accountKey)
+                            }
+                            disabled={!canPromoteAdmins || !supabase}
+                          >
+                            <div className="role-priv-promo-item-head">
+                              <div>
+                                <div className="role-priv-promo-item-name">
+                                  {account.full_name || "Unnamed User"}
+                                </div>
+                                <div className="role-priv-promo-item-email">
+                                  {account.email || "No email recorded"}
+                                </div>
+                              </div>
+                              <span
+                                className="role-priv-promo-badge"
+                                style={{
+                                  color: accountRoleMeta.color,
+                                  borderColor: `${accountRoleMeta.color}55`,
+                                }}
+                              >
+                                {accountRoleMeta.label}
+                              </span>
                             </div>
-                            <span className="role-priv-promo-badge" style={{ color: accountRoleMeta.color, borderColor: `${accountRoleMeta.color}55` }}>{accountRoleMeta.label}</span>
-                          </div>
-                          <div className="role-priv-promo-item-meta">
-                            {account.hasProfile && <span className="role-priv-promo-badge">Profiles</span>}
-                            {account.hasTableUser && <span className="role-priv-promo-badge">Users</span>}
-                            {(account.registered_school_id != null || account.managed_school_name) && <span className="role-priv-promo-badge">School scoped</span>}
-                          </div>
-                        </button>
-                      );
-                    }) : <div className="role-priv-empty">{loadingPromotionAccounts ? "Loading accounts..." : "No matching accounts found."}</div>}
+                            <div className="role-priv-promo-item-meta">
+                              {account.hasProfile && (
+                                <span className="role-priv-promo-badge">
+                                  Profiles
+                                </span>
+                              )}
+                              {account.hasTableUser && (
+                                <span className="role-priv-promo-badge">
+                                  Users
+                                </span>
+                              )}
+                              {(account.registered_school_id != null ||
+                                account.managed_school_name) && (
+                                <span className="role-priv-promo-badge">
+                                  School scoped
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="role-priv-empty">
+                        {loadingPromotionAccounts
+                          ? "Loading accounts..."
+                          : "No matching accounts found."}
+                      </div>
+                    )}
                   </div>
-                  {selectedPromotionAccount && <div className="role-priv-promo-selected">
-                    <div className="role-priv-promo-selected-head">
-                      <div>
-                        <div className="role-priv-promo-selected-name">{selectedPromotionAccount.full_name || "Unnamed User"}</div>
-                        <div className="role-priv-promo-selected-meta">{selectedPromotionAccount.email || "No email recorded"}</div>
+                  {selectedPromotionAccount && (
+                    <div className="role-priv-promo-selected">
+                      <div className="role-priv-promo-selected-head">
+                        <div>
+                          <div className="role-priv-promo-selected-name">
+                            {selectedPromotionAccount.full_name ||
+                              "Unnamed User"}
+                          </div>
+                          <div className="role-priv-promo-selected-meta">
+                            {selectedPromotionAccount.email ||
+                              "No email recorded"}
+                          </div>
+                        </div>
+                        <div className="role-priv-promo-badges">
+                          <span className="role-priv-promo-badge">
+                            Current role:{" "}
+                            {
+                              getRoleMeta(
+                                {
+                                  roleDefinitions: customRoles,
+                                  roleMetaOverrides,
+                                  rolePrivileges: matrix,
+                                },
+                                selectedPromotionAccount.role,
+                              ).label
+                            }
+                          </span>
+                        </div>
                       </div>
-                      <div className="role-priv-promo-badges">
-                        <span className="role-priv-promo-badge">Current role: {getRoleMeta({ roleDefinitions: customRoles, roleMetaOverrides, rolePrivileges: matrix }, selectedPromotionAccount.role).label}</span>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Promote To</label>
+                        <select
+                          className="form-control"
+                          value={promotionRole}
+                          onChange={(event) =>
+                            setPromotionRole(event.target.value)
+                          }
+                          disabled={
+                            !canPromoteAdmins ||
+                            !supabase ||
+                            !adminPromotionRoles.length
+                          }
+                        >
+                          {adminPromotionRoles.map((role) => (
+                            <option key={role.key} value={role.key}>
+                              {role.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
+                      <div className="role-priv-promo-note">
+                        Admins can assign admin-capable roles here. Only super
+                        admins can assign the Super Admin role.
+                      </div>
+                      <button
+                        className="btn btn-blue"
+                        onClick={promoteSelectedAccount}
+                        disabled={
+                          !canPromoteAdmins ||
+                          !supabase ||
+                          !selectedPromotionAccount ||
+                          !promotionRole ||
+                          promotingAccount
+                        }
+                      >
+                        {promotingAccount
+                          ? "Applying Promotion..."
+                          : "Apply Promotion"}
+                      </button>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Promote To</label>
-                      <select className="form-control" value={promotionRole} onChange={(event) => setPromotionRole(event.target.value)} disabled={!canPromoteAdmins || !supabase || !adminPromotionRoles.length}>
-                        {adminPromotionRoles.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}
-                      </select>
-                    </div>
-                    <div className="role-priv-promo-note">Admins can assign admin-capable roles here. Only super admins can assign the Super Admin role.</div>
-                    <button className="btn btn-blue" onClick={promoteSelectedAccount} disabled={!canPromoteAdmins || !supabase || !selectedPromotionAccount || !promotionRole || promotingAccount}>{promotingAccount ? "Applying Promotion..." : "Apply Promotion"}</button>
-                  </div>}
+                  )}
                 </div>
               </div>
             </div>
@@ -5435,19 +9598,62 @@ function PermissionsMatrixPage({ currentUser }) {
 
 function AuditTrailPage() {
   const [logs, setLogs] = useState([
-    { id: 1, actor: "Admin", action: "Updated settings", target: "System", at: new Date().toISOString() },
-    { id: 2, actor: "Admissions", action: "Approved selection", target: "Student #2024001", at: new Date(Date.now() - 3600000).toISOString() },
+    {
+      id: 1,
+      actor: "Admin",
+      action: "Updated settings",
+      target: "System",
+      at: new Date().toISOString(),
+    },
+    {
+      id: 2,
+      actor: "Admissions",
+      action: "Approved selection",
+      target: "Student #2024001",
+      at: new Date(Date.now() - 3600000).toISOString(),
+    },
   ]);
   const [filter, setFilter] = useState("");
-  const rows = logs.filter((l) => [l.actor, l.action, l.target].join(" ").toLowerCase().includes(filter.toLowerCase()));
+  const rows = logs.filter((l) =>
+    [l.actor, l.action, l.target]
+      .join(" ")
+      .toLowerCase()
+      .includes(filter.toLowerCase()),
+  );
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Audit Trail</div><div className="page-sub">Feature 2: Immutable log of critical actions.</div></div>
-      <input className="form-control search-input-compact" placeholder="Filter logs..." value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <div className="page-header">
+        <div className="page-title">Audit Trail</div>
+        <div className="page-sub">
+          Feature 2: Immutable log of critical actions.
+        </div>
+      </div>
+      <input
+        className="form-control search-input-compact"
+        placeholder="Filter logs..."
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+      />
       <div className="card table-wrap">
         <table>
-          <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
-          <tbody>{rows.map((l) => <tr key={l.id}><td>{new Date(l.at).toLocaleString()}</td><td>{l.actor}</td><td>{l.action}</td><td>{l.target}</td></tr>)}</tbody>
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Actor</th>
+              <th>Action</th>
+              <th>Target</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((l) => (
+              <tr key={l.id}>
+                <td>{new Date(l.at).toLocaleString()}</td>
+                <td>{l.actor}</td>
+                <td>{l.action}</td>
+                <td>{l.target}</td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
     </div>
@@ -5455,81 +9661,331 @@ function AuditTrailPage() {
 }
 
 function NotificationCenterPage() {
-  const [template, setTemplate] = useState({ title: "", body: "", channel: "in-app" });
+  const [template, setTemplate] = useState({
+    title: "",
+    body: "",
+    channel: "in-app",
+  });
   const [history, setHistory] = useState([]);
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const [statusModal, setStatusModal] = useState({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
   const send = () => {
     if (!template.title || !template.body) {
-      setStatusModal({ open: true, type: "failure", title: "Message Not Sent", message: "Title and message body are required." });
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Message Not Sent",
+        message: "Title and message body are required.",
+      });
       return;
     }
-    setHistory((h) => [{ id: Date.now(), ...template, at: new Date().toISOString() }, ...h]);
+    setHistory((h) => [
+      { id: Date.now(), ...template, at: new Date().toISOString() },
+      ...h,
+    ]);
     setTemplate({ title: "", body: "", channel: "in-app" });
-    setStatusModal({ open: true, type: "success", title: "Notification Sent", message: "Message dispatched successfully." });
+    setStatusModal({
+      open: true,
+      type: "success",
+      title: "Notification Sent",
+      message: "Message dispatched successfully.",
+    });
   };
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Notification Center</div><div className="page-sub">Feature 3: In-app/email/SMS notifications with templates.</div></div>
-      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((s) => ({ ...s, open: false }))} />
-      <div className="card card-padded" style={{marginBottom:12}}>
-        <div className="form-grid">
-          <div className="form-group"><label className="form-label">Title</label><input className="form-control" value={template.title} onChange={(e) => setTemplate((t) => ({ ...t, title: e.target.value }))} /></div>
-          <div className="form-group"><label className="form-label">Channel</label><select className="form-control" value={template.channel} onChange={(e) => setTemplate((t) => ({ ...t, channel: e.target.value }))}><option value="in-app">In-app</option><option value="email">Email</option><option value="sms">SMS</option></select></div>
-          <div className="form-group" style={{gridColumn:"1 / -1"}}><label className="form-label">Message</label><textarea className="form-control" rows={3} value={template.body} onChange={(e) => setTemplate((t) => ({ ...t, body: e.target.value }))} /></div>
+      <div className="page-header">
+        <div className="page-title">Notification Center</div>
+        <div className="page-sub">
+          Feature 3: In-app/email/SMS notifications with templates.
         </div>
-        <button className="btn btn-blue" style={{marginTop:10}} onClick={send}>Send Notification</button>
       </div>
-      <div className="card table-wrap"><table><thead><tr><th>When</th><th>Channel</th><th>Title</th><th>Message</th></tr></thead><tbody>{history.map((h) => <tr key={h.id}><td>{new Date(h.at).toLocaleString()}</td><td>{h.channel}</td><td>{h.title}</td><td>{h.body}</td></tr>)}</tbody></table></div>
+      <ActionStatusModal
+        state={statusModal}
+        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
+      />
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Title</label>
+            <input
+              className="form-control"
+              value={template.title}
+              onChange={(e) =>
+                setTemplate((t) => ({ ...t, title: e.target.value }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Channel</label>
+            <select
+              className="form-control"
+              value={template.channel}
+              onChange={(e) =>
+                setTemplate((t) => ({ ...t, channel: e.target.value }))
+              }
+            >
+              <option value="in-app">In-app</option>
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+            <label className="form-label">Message</label>
+            <textarea
+              className="form-control"
+              rows={3}
+              value={template.body}
+              onChange={(e) =>
+                setTemplate((t) => ({ ...t, body: e.target.value }))
+              }
+            />
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={send}
+        >
+          Send Notification
+        </button>
+      </div>
+      <div className="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Channel</th>
+              <th>Title</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {history.map((h) => (
+              <tr key={h.id}>
+                <td>{new Date(h.at).toLocaleString()}</td>
+                <td>{h.channel}</td>
+                <td>{h.title}</td>
+                <td>{h.body}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 function PaymentsReceiptsPage() {
-  const [form, setForm] = useState({ payer: "", amount: "", method: "mobile-money" });
+  const [form, setForm] = useState({
+    payer: "",
+    amount: "",
+    method: "mobile-money",
+  });
   const [receipts, setReceipts] = useState([]);
   const add = () => {
     if (!form.payer || !form.amount) return;
     const receiptNo = `RCPT-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-    setReceipts((r) => [{ id: Date.now(), receiptNo, ...form, at: new Date().toISOString() }, ...r]);
+    setReceipts((r) => [
+      { id: Date.now(), receiptNo, ...form, at: new Date().toISOString() },
+      ...r,
+    ]);
     setForm({ payer: "", amount: "", method: "mobile-money" });
   };
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Payments & Receipts</div><div className="page-sub">Feature 5: Record payments and generate receipts.</div></div>
-      <div className="card card-padded" style={{marginBottom:12}}>
-        <div className="form-grid">
-          <div className="form-group"><label className="form-label">Payer</label><input className="form-control" value={form.payer} onChange={(e) => setForm((f) => ({ ...f, payer: e.target.value }))} /></div>
-          <div className="form-group"><label className="form-label">Amount (GHS)</label><input className="form-control" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} /></div>
-          <div className="form-group"><label className="form-label">Method</label><select className="form-control" value={form.method} onChange={(e) => setForm((f) => ({ ...f, method: e.target.value }))}><option value="mobile-money">Mobile Money</option><option value="card">Card</option><option value="cash">Cash</option></select></div>
+      <div className="page-header">
+        <div className="page-title">Payments & Receipts</div>
+        <div className="page-sub">
+          Feature 5: Record payments and generate receipts.
         </div>
-        <button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Create Receipt</button>
       </div>
-      <div className="card table-wrap"><table><thead><tr><th>Receipt</th><th>Payer</th><th>Amount</th><th>Method</th><th>Date</th></tr></thead><tbody>{receipts.map((r) => <tr key={r.id}><td>{r.receiptNo}</td><td>{r.payer}</td><td>GHS {r.amount}</td><td>{r.method}</td><td>{new Date(r.at).toLocaleString()}</td></tr>)}</tbody></table></div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Payer</label>
+            <input
+              className="form-control"
+              value={form.payer}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, payer: e.target.value }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Amount (GHS)</label>
+            <input
+              className="form-control"
+              type="number"
+              value={form.amount}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, amount: e.target.value }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Method</label>
+            <select
+              className="form-control"
+              value={form.method}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, method: e.target.value }))
+              }
+            >
+              <option value="mobile-money">Mobile Money</option>
+              <option value="card">Card</option>
+              <option value="cash">Cash</option>
+            </select>
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={add}
+        >
+          Create Receipt
+        </button>
+      </div>
+      <div className="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Receipt</th>
+              <th>Payer</th>
+              <th>Amount</th>
+              <th>Method</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {receipts.map((r) => (
+              <tr key={r.id}>
+                <td>{r.receiptNo}</td>
+                <td>{r.payer}</td>
+                <td>GHS {r.amount}</td>
+                <td>{r.method}</td>
+                <td>{new Date(r.at).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 function DocumentWorkflowPage() {
-  const [docs, setDocs] = useState([{ id: 1, student: "Kwame Asante", type: "Birth Certificate", status: "pending" }]);
-  const update = (id, status) => setDocs((d) => d.map((x) => (x.id === id ? { ...x, status } : x)));
+  const [docs, setDocs] = useState([
+    {
+      id: 1,
+      student: "Kwame Asante",
+      type: "Birth Certificate",
+      status: "pending",
+    },
+  ]);
+  const update = (id, status) =>
+    setDocs((d) => d.map((x) => (x.id === id ? { ...x, status } : x)));
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Document Workflow</div><div className="page-sub">Feature 6: Verify and track student documents.</div></div>
-      <div className="card table-wrap"><table><thead><tr><th>Student</th><th>Document</th><th>Status</th><th>Actions</th></tr></thead><tbody>{docs.map((d) => <tr key={d.id}><td>{d.student}</td><td>{d.type}</td><td><span className={`badge ${d.status === "approved" ? "badge-success" : d.status === "rejected" ? "badge-danger" : "badge-warning"}`}>{d.status}</span></td><td><button className="btn btn-sm btn-green" onClick={() => update(d.id, "approved")}>Approve</button> <button className="btn btn-sm btn-red" onClick={() => update(d.id, "rejected")}>Reject</button></td></tr>)}</tbody></table></div>
+      <div className="page-header">
+        <div className="page-title">Document Workflow</div>
+        <div className="page-sub">
+          Feature 6: Verify and track student documents.
+        </div>
+      </div>
+      <div className="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Document</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {docs.map((d) => (
+              <tr key={d.id}>
+                <td>{d.student}</td>
+                <td>{d.type}</td>
+                <td>
+                  <span
+                    className={`badge ${d.status === "approved" ? "badge-success" : d.status === "rejected" ? "badge-danger" : "badge-warning"}`}
+                  >
+                    {d.status}
+                  </span>
+                </td>
+                <td>
+                  <button
+                    className="btn btn-sm btn-green"
+                    onClick={() => update(d.id, "approved")}
+                  >
+                    Approve
+                  </button>{" "}
+                  <button
+                    className="btn btn-sm btn-red"
+                    onClick={() => update(d.id, "rejected")}
+                  >
+                    Reject
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 function ReportsExportsPage() {
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
-  const trigger = (type) => setStatusModal({ open: true, type: "success", title: `${type} Report Ready`, message: `Feature 7: ${type} export generated.` });
+  const [statusModal, setStatusModal] = useState({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
+  const trigger = (type) =>
+    setStatusModal({
+      open: true,
+      type: "success",
+      title: `${type} Report Ready`,
+      message: `Feature 7: ${type} export generated.`,
+    });
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Reports & Exports</div><div className="page-sub">Feature 7: Generate CSV/PDF report packs.</div></div>
-      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((s) => ({ ...s, open: false }))} />
+      <div className="page-header">
+        <div className="page-title">Reports & Exports</div>
+        <div className="page-sub">
+          Feature 7: Generate CSV/PDF report packs.
+        </div>
+      </div>
+      <ActionStatusModal
+        state={statusModal}
+        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
+      />
       <div className="grid3">
         {["Admissions", "Attendance", "Finance", "Results"].map((name) => (
-          <div key={name} className="card card-padded"><div style={{fontWeight:700,marginBottom:10}}>{name} Report</div><button className="btn btn-blue btn-sm" onClick={() => trigger(name)}>Export CSV</button> <button className="btn btn-outline btn-sm" onClick={() => trigger(name)}>Export PDF</button></div>
+          <div key={name} className="card card-padded">
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>
+              {name} Report
+            </div>
+            <button
+              className="btn btn-blue btn-sm"
+              onClick={() => trigger(name)}
+            >
+              Export CSV
+            </button>{" "}
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => trigger(name)}
+            >
+              Export PDF
+            </button>
+          </div>
         ))}
       </div>
     </div>
@@ -5543,84 +9999,572 @@ function AdvancedAnalyticsPage() {
     { label: "Fee Default Risk", value: "11%", color: "#dc2626" },
     { label: "Mock Placement Success", value: "84%", color: "#1e40af" },
   ];
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Advanced Analytics</div><div className="page-sub">Feature 8: Trends, risks and forecasts.</div></div><div className="stats-grid">{cards.map((c) => <div key={c.label} className="stat-card"><div className="stat-label">{c.label}</div><div className="stat-value" style={{color:c.color}}>{c.value}</div><div className="stat-sub">Updated just now</div></div>)}</div></div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Advanced Analytics</div>
+        <div className="page-sub">Feature 8: Trends, risks and forecasts.</div>
+      </div>
+      <div className="stats-grid">
+        {cards.map((c) => (
+          <div key={c.label} className="stat-card">
+            <div className="stat-label">{c.label}</div>
+            <div className="stat-value" style={{ color: c.color }}>
+              {c.value}
+            </div>
+            <div className="stat-sub">Updated just now</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function BulkOperationsPage() {
   const [rows, setRows] = useState("");
-  const [statusModal, setStatusModal] = useState({ open: false, type: "success", title: "", message: "" });
+  const [statusModal, setStatusModal] = useState({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
   const run = (action) => {
-    const count = rows.split("\n").map((x) => x.trim()).filter(Boolean).length;
-    setStatusModal({ open: true, type: count ? "success" : "failure", title: count ? "Bulk Operation Complete" : "No Rows Provided", message: count ? `${action} executed for ${count} rows.` : "Paste one record per line to continue." });
+    const count = rows
+      .split("\n")
+      .map((x) => x.trim())
+      .filter(Boolean).length;
+    setStatusModal({
+      open: true,
+      type: count ? "success" : "failure",
+      title: count ? "Bulk Operation Complete" : "No Rows Provided",
+      message: count
+        ? `${action} executed for ${count} rows.`
+        : "Paste one record per line to continue.",
+    });
   };
   return (
-    <div className="fade-in"><div className="page-header"><div className="page-title">Bulk Operations</div><div className="page-sub">Feature 9: Bulk import/update actions.</div></div>
-      <ActionStatusModal state={statusModal} onClose={() => setStatusModal((s) => ({ ...s, open: false }))} />
-      <div className="card card-padded"><label className="form-label">Paste rows (one per line)</label><textarea className="form-control" rows={8} value={rows} onChange={(e) => setRows(e.target.value)} /><div style={{display:"flex",gap:8,marginTop:10}}><button className="btn btn-blue" onClick={() => run("Import")}>Bulk Import</button><button className="btn btn-outline" onClick={() => run("Update")}>Bulk Update</button></div></div>
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Bulk Operations</div>
+        <div className="page-sub">Feature 9: Bulk import/update actions.</div>
+      </div>
+      <ActionStatusModal
+        state={statusModal}
+        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
+      />
+      <div className="card card-padded">
+        <label className="form-label">Paste rows (one per line)</label>
+        <textarea
+          className="form-control"
+          rows={8}
+          value={rows}
+          onChange={(e) => setRows(e.target.value)}
+        />
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button className="btn btn-blue" onClick={() => run("Import")}>
+            Bulk Import
+          </button>
+          <button className="btn btn-outline" onClick={() => run("Update")}>
+            Bulk Update
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 function OfflineSyncPage() {
   const [online, setOnline] = useState(globalThis.navigator?.onLine ?? true);
-  const [queue, setQueue] = useState([{ id: 1, item: "Attendance sync", status: "queued" }]);
+  const [queue, setQueue] = useState([
+    { id: 1, item: "Attendance sync", status: "queued" },
+  ]);
   const isMobile = useIsMobileLayout();
   useEffect(() => {
     const on = () => setOnline(true);
     const off = () => setOnline(false);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
   }, []);
-  const retry = () => setQueue((q) => q.map((x) => ({ ...x, status: online ? "synced" : "queued" })));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Offline Sync</div><div className="page-sub">Feature 10: Offline queue and sync recovery.</div></div><div className="alert alert-info">Network: <strong>{online ? "Online" : "Offline"}</strong></div>{isMobile ? <div className="mobile-record-list">{queue.map((q) => <div key={q.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{q.item}</div></div><span className={`badge ${q.status === "synced" ? "badge-success" : "badge-warning"}`}>{q.status}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Queue Item</th><th>Status</th></tr></thead><tbody>{queue.map((q) => <tr key={q.id}><td>{q.item}</td><td>{q.status}</td></tr>)}</tbody></table></div>}<button className="btn btn-blue" style={{marginTop:10}} onClick={retry}>Retry Sync</button></div>;
+  const retry = () =>
+    setQueue((q) =>
+      q.map((x) => ({ ...x, status: online ? "synced" : "queued" })),
+    );
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Offline Sync</div>
+        <div className="page-sub">
+          Feature 10: Offline queue and sync recovery.
+        </div>
+      </div>
+      <div className="alert alert-info">
+        Network: <strong>{online ? "Online" : "Offline"}</strong>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {queue.map((q) => (
+            <div key={q.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{q.item}</div>
+                </div>
+                <span
+                  className={`badge ${q.status === "synced" ? "badge-success" : "badge-warning"}`}
+                >
+                  {q.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Queue Item</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {queue.map((q) => (
+                <tr key={q.id}>
+                  <td>{q.item}</td>
+                  <td>{q.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <button
+        className="btn btn-blue"
+        style={{ marginTop: 10 }}
+        onClick={retry}
+      >
+        Retry Sync
+      </button>
+    </div>
+  );
 }
 
 function AcademicCalendarPage() {
-  const [items, setItems] = useState([{ id: 1, title: "Midterm Exams", date: "2026-05-10", type: "exam" }]);
+  const [items, setItems] = useState([
+    { id: 1, title: "Midterm Exams", date: "2026-05-10", type: "exam" },
+  ]);
   const [form, setForm] = useState({ title: "", date: "", type: "event" });
   const isMobile = useIsMobileLayout();
-  const add = () => { if (!form.title || !form.date) return; setItems((i) => [{ id: Date.now(), ...form }, ...i]); setForm({ title: "", date: "", type: "event" }); };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Academic Calendar</div><div className="page-sub">Feature 11: Term calendar and key academic milestones.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Title</label><input className="form-control" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-control" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} /></div><div className="form-group"><label className="form-label">Type</label><select className="form-control" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}><option value="event">Event</option><option value="exam">Exam</option><option value="deadline">Deadline</option></select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Add Calendar Item</button></div>{isMobile ? <div className="mobile-record-list">{items.map((i) => <div key={i.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{i.title}</div><div className="mobile-record-sub">{i.date}</div></div><span className="badge badge-blue">{i.type}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Date</th><th>Title</th><th>Type</th></tr></thead><tbody>{items.map((i) => <tr key={i.id}><td>{i.date}</td><td>{i.title}</td><td>{i.type}</td></tr>)}</tbody></table></div>}</div>;
+  const add = () => {
+    if (!form.title || !form.date) return;
+    setItems((i) => [{ id: Date.now(), ...form }, ...i]);
+    setForm({ title: "", date: "", type: "event" });
+  };
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Academic Calendar</div>
+        <div className="page-sub">
+          Feature 11: Term calendar and key academic milestones.
+        </div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Title</label>
+            <input
+              className="form-control"
+              value={form.title}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, title: e.target.value }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Date</label>
+            <input
+              type="date"
+              className="form-control"
+              value={form.date}
+              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Type</label>
+            <select
+              className="form-control"
+              value={form.type}
+              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+            >
+              <option value="event">Event</option>
+              <option value="exam">Exam</option>
+              <option value="deadline">Deadline</option>
+            </select>
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={add}
+        >
+          Add Calendar Item
+        </button>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {items.map((i) => (
+            <div key={i.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{i.title}</div>
+                  <div className="mobile-record-sub">{i.date}</div>
+                </div>
+                <span className="badge badge-blue">{i.type}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Title</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((i) => (
+                <tr key={i.id}>
+                  <td>{i.date}</td>
+                  <td>{i.title}</td>
+                  <td>{i.type}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function HelpdeskPage() {
-  const [tickets, setTickets] = useState([{ id: 1, subject: "Unable to update profile", status: "open", priority: "high" }]);
+  const [tickets, setTickets] = useState([
+    {
+      id: 1,
+      subject: "Unable to update profile",
+      status: "open",
+      priority: "high",
+    },
+  ]);
   const [form, setForm] = useState({ subject: "", priority: "medium" });
   const isMobile = useIsMobileLayout();
-  const add = () => { if (!form.subject) return; setTickets((t) => [{ id: Date.now(), subject: form.subject, priority: form.priority, status: "open" }, ...t]); setForm({ subject: "", priority: "medium" }); };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Helpdesk</div><div className="page-sub">Feature 12: Internal ticketing and support workflow.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Issue Subject</label><input className="form-control" value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} /></div><div className="form-group"><label className="form-label">Priority</label><select className="form-control" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}><option>low</option><option>medium</option><option>high</option></select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Create Ticket</button></div>{isMobile ? <div className="mobile-record-list">{tickets.map((t) => <div key={t.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{t.subject}</div><div className="mobile-record-sub">Priority: {t.priority}</div></div><span className="badge badge-warning">{t.status}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Priority</th><th>Status</th></tr></thead><tbody>{tickets.map((t) => <tr key={t.id}><td>{t.subject}</td><td>{t.priority}</td><td>{t.status}</td></tr>)}</tbody></table></div>}</div>;
+  const add = () => {
+    if (!form.subject) return;
+    setTickets((t) => [
+      {
+        id: Date.now(),
+        subject: form.subject,
+        priority: form.priority,
+        status: "open",
+      },
+      ...t,
+    ]);
+    setForm({ subject: "", priority: "medium" });
+  };
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Helpdesk</div>
+        <div className="page-sub">
+          Feature 12: Internal ticketing and support workflow.
+        </div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Issue Subject</label>
+            <input
+              className="form-control"
+              value={form.subject}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, subject: e.target.value }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Priority</label>
+            <select
+              className="form-control"
+              value={form.priority}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, priority: e.target.value }))
+              }
+            >
+              <option>low</option>
+              <option>medium</option>
+              <option>high</option>
+            </select>
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={add}
+        >
+          Create Ticket
+        </button>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {tickets.map((t) => (
+            <div key={t.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{t.subject}</div>
+                  <div className="mobile-record-sub">
+                    Priority: {t.priority}
+                  </div>
+                </div>
+                <span className="badge badge-warning">{t.status}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Subject</th>
+                <th>Priority</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tickets.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.subject}</td>
+                  <td>{t.priority}</td>
+                  <td>{t.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PrivacyCompliancePage() {
-  const [cfg, setCfg] = useState({ consentRequired: true, dataExportEnabled: true, rightToDeleteEnabled: true });
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Privacy & Compliance</div><div className="page-sub">Feature 13: Consent, retention and data rights controls.</div></div><div className="card card-padded">{[["consentRequired","Require consent capture"],["dataExportEnabled","Allow data export requests"],["rightToDeleteEnabled","Allow right-to-delete requests"]].map(([k,l]) => <div key={k} className="toggle-row"><span>{l}</span><input type="checkbox" checked={!!cfg[k]} onChange={() => setCfg((c) => ({ ...c, [k]: !c[k] }))} /></div>)}</div></div>;
+  const [cfg, setCfg] = useState({
+    consentRequired: true,
+    dataExportEnabled: true,
+    rightToDeleteEnabled: true,
+  });
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Privacy & Compliance</div>
+        <div className="page-sub">
+          Feature 13: Consent, retention and data rights controls.
+        </div>
+      </div>
+      <div className="card card-padded">
+        {[
+          ["consentRequired", "Require consent capture"],
+          ["dataExportEnabled", "Allow data export requests"],
+          ["rightToDeleteEnabled", "Allow right-to-delete requests"],
+        ].map(([k, l]) => (
+          <div key={k} className="toggle-row">
+            <span>{l}</span>
+            <input
+              type="checkbox"
+              checked={!!cfg[k]}
+              onChange={() => setCfg((c) => ({ ...c, [k]: !c[k] }))}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function DisasterRecoveryPage() {
-  const [points, setPoints] = useState([{ id: 1, name: "Nightly Backup", at: new Date().toISOString(), status: "verified" }]);
+  const [points, setPoints] = useState([
+    {
+      id: 1,
+      name: "Nightly Backup",
+      at: new Date().toISOString(),
+      status: "verified",
+    },
+  ]);
   const isMobile = useIsMobileLayout();
-  const createPoint = () => setPoints((p) => [{ id: Date.now(), name: "Manual Restore Point", at: new Date().toISOString(), status: "pending" }, ...p]);
-  const verify = (id) => setPoints((p) => p.map((x) => x.id === id ? { ...x, status: "verified" } : x));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Disaster Recovery</div><div className="page-sub">Feature 14: Restore points and recovery validation.</div></div><button className="btn btn-blue" style={{marginBottom:10}} onClick={createPoint}>Create Restore Point</button>{isMobile ? <div className="mobile-record-list">{points.map((p) => <div key={p.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{p.name}</div><div className="mobile-record-sub">{new Date(p.at).toLocaleString()}</div></div><span className={`badge ${p.status === "verified" ? "badge-success" : "badge-warning"}`}>{p.status}</span></div><div className="mobile-record-actions"><button className="btn btn-sm btn-outline" onClick={() => verify(p.id)}>Test Restore</button></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Name</th><th>Created</th><th>Status</th><th>Action</th></tr></thead><tbody>{points.map((p) => <tr key={p.id}><td>{p.name}</td><td>{new Date(p.at).toLocaleString()}</td><td>{p.status}</td><td><button className="btn btn-sm btn-outline" onClick={() => verify(p.id)}>Test Restore</button></td></tr>)}</tbody></table></div>}</div>;
+  const createPoint = () =>
+    setPoints((p) => [
+      {
+        id: Date.now(),
+        name: "Manual Restore Point",
+        at: new Date().toISOString(),
+        status: "pending",
+      },
+      ...p,
+    ]);
+  const verify = (id) =>
+    setPoints((p) =>
+      p.map((x) => (x.id === id ? { ...x, status: "verified" } : x)),
+    );
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Disaster Recovery</div>
+        <div className="page-sub">
+          Feature 14: Restore points and recovery validation.
+        </div>
+      </div>
+      <button
+        className="btn btn-blue"
+        style={{ marginBottom: 10 }}
+        onClick={createPoint}
+      >
+        Create Restore Point
+      </button>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {points.map((p) => (
+            <div key={p.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{p.name}</div>
+                  <div className="mobile-record-sub">
+                    {new Date(p.at).toLocaleString()}
+                  </div>
+                </div>
+                <span
+                  className={`badge ${p.status === "verified" ? "badge-success" : "badge-warning"}`}
+                >
+                  {p.status}
+                </span>
+              </div>
+              <div className="mobile-record-actions">
+                <button
+                  className="btn btn-sm btn-outline"
+                  onClick={() => verify(p.id)}
+                >
+                  Test Restore
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Created</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {points.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.name}</td>
+                  <td>{new Date(p.at).toLocaleString()}</td>
+                  <td>{p.status}</td>
+                  <td>
+                    <button
+                      className="btn btn-sm btn-outline"
+                      onClick={() => verify(p.id)}
+                    >
+                      Test Restore
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function MobilePwaPage() {
-  const [cfg, setCfg] = useState({ pushEnabled: true, biometricPreferred: false, compactMode: true });
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Mobile & PWA</div><div className="page-sub">Feature 15: Mobile optimization and installable app controls.</div></div><div className="card card-padded"><div style={{marginBottom:10,color:"#475569"}}>Install status: {window.matchMedia && window.matchMedia("(display-mode: standalone)").matches ? "Installed" : "Browser mode"}</div>{[["pushEnabled","Enable push notifications"],["biometricPreferred","Prefer biometric unlock"],["compactMode","Compact mobile layout"]].map(([k,l]) => <div key={k} className="toggle-row"><span>{l}</span><input type="checkbox" checked={!!cfg[k]} onChange={() => setCfg((c) => ({ ...c, [k]: !c[k] }))} /></div>)}</div></div>;
+  const [cfg, setCfg] = useState({
+    pushEnabled: true,
+    biometricPreferred: false,
+    compactMode: true,
+  });
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Mobile & PWA</div>
+        <div className="page-sub">
+          Feature 15: Mobile optimization and installable app controls.
+        </div>
+      </div>
+      <div className="card card-padded">
+        <div style={{ marginBottom: 10, color: "#475569" }}>
+          Install status:{" "}
+          {window.matchMedia &&
+          window.matchMedia("(display-mode: standalone)").matches
+            ? "Installed"
+            : "Browser mode"}
+        </div>
+        {[
+          ["pushEnabled", "Enable push notifications"],
+          ["biometricPreferred", "Prefer biometric unlock"],
+          ["compactMode", "Compact mobile layout"],
+        ].map(([k, l]) => (
+          <div key={k} className="toggle-row">
+            <span>{l}</span>
+            <input
+              type="checkbox"
+              checked={!!cfg[k]}
+              onChange={() => setCfg((c) => ({ ...c, [k]: !c[k] }))}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // â”€â”€â”€ CHAT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ChatPage({ chatUsers, onChatUsersChange }) {
   const [selectedUserId, setSelectedUserId] = useState(1);
   const [msgs, setMsgs] = useState([
-    {id:1,text:"Hello! How can I help you today?",mine:false,time:"10:00"},
-    {id:2,text:"I have a question about school selection",mine:true,time:"10:01"},
-    {id:3,text:"Sure! You can select up to 6 schools before May 15.",mine:false,time:"10:02"},
+    {
+      id: 1,
+      text: "Hello! How can I help you today?",
+      mine: false,
+      time: "10:00",
+    },
+    {
+      id: 2,
+      text: "I have a question about school selection",
+      mine: true,
+      time: "10:01",
+    },
+    {
+      id: 3,
+      text: "Sure! You can select up to 6 schools before May 15.",
+      mine: false,
+      time: "10:02",
+    },
   ]);
   const [input, setInput] = useState("");
   const userEmail = getSessionUserEmail();
-  const selectedUser = chatUsers.find(u => u.id === selectedUserId);
+  const selectedUser = chatUsers.find((u) => u.id === selectedUserId);
 
   const refreshUnreadCounts = useCallback(async () => {
     if (!supabase) return;
@@ -5645,29 +10589,34 @@ function ChatPage({ chatUsers, onChatUsersChange }) {
       }
     });
 
-    onChatUsersChange((users) => users.map((u) => ({ ...u, unread: unreadByPeer.get(u.id) || 0 })));
+    onChatUsersChange((users) =>
+      users.map((u) => ({ ...u, unread: unreadByPeer.get(u.id) || 0 })),
+    );
   }, [onChatUsersChange, userEmail]);
 
-  const markConversationRead = useCallback(async (peerId) => {
-    if (!supabase) return;
-    const nowIso = new Date().toISOString();
-    const { error } = await supabase
-      .from("chat_messages")
-      .update({ is_read: true, read_at: nowIso })
-      .eq("user_email", userEmail)
-      .eq("peer_id", peerId)
-      .eq("mine", false)
-      .eq("is_read", false);
-
-    if (error && !isMissingColumnError(error)) {
-      await supabase
+  const markConversationRead = useCallback(
+    async (peerId) => {
+      if (!supabase) return;
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase
         .from("chat_messages")
-        .update({ is_read: true })
+        .update({ is_read: true, read_at: nowIso })
         .eq("user_email", userEmail)
         .eq("peer_id", peerId)
-        .eq("mine", false);
-    }
-  }, [userEmail]);
+        .eq("mine", false)
+        .eq("is_read", false);
+
+      if (error && !isMissingColumnError(error)) {
+        await supabase
+          .from("chat_messages")
+          .update({ is_read: true })
+          .eq("user_email", userEmail)
+          .eq("peer_id", peerId)
+          .eq("mine", false);
+      }
+    },
+    [userEmail],
+  );
 
   useEffect(() => {
     const loadMessages = async () => {
@@ -5691,7 +10640,14 @@ function ChatPage({ chatUsers, onChatUsersChange }) {
       }
 
       if (Array.isArray(data) && data.length > 0) {
-        setMsgs(data.map((m) => ({ id: m.id, text: m.text, mine: !!m.mine, time: m.time || "" })));
+        setMsgs(
+          data.map((m) => ({
+            id: m.id,
+            text: m.text,
+            mine: !!m.mine,
+            time: m.time || "",
+          })),
+        );
       }
 
       await markConversationRead(selectedUserId);
@@ -5703,19 +10659,21 @@ function ChatPage({ chatUsers, onChatUsersChange }) {
   useEffect(() => {
     refreshUnreadCounts();
   }, [refreshUnreadCounts]);
-  
+
   const handleSelectUser = async (userId) => {
     setSelectedUserId(userId);
-    onChatUsersChange(u => u.map(user => user.id === userId ? {...user, unread:0} : user));
+    onChatUsersChange((u) =>
+      u.map((user) => (user.id === userId ? { ...user, unread: 0 } : user)),
+    );
     await markConversationRead(userId);
     await refreshUnreadCounts();
   };
-  
+
   const send = async () => {
-    if(!input.trim()) return;
-    const t = new Date().toTimeString().slice(0,5);
-    const newMsg = {id:Date.now(),text:input,mine:true,time:t};
-    setMsgs(m=>[...m,newMsg]);
+    if (!input.trim()) return;
+    const t = new Date().toTimeString().slice(0, 5);
+    const newMsg = { id: Date.now(), text: input, mine: true, time: t };
+    setMsgs((m) => [...m, newMsg]);
     if (supabase) {
       const { error } = await supabase.from("chat_messages").insert({
         user_email: userEmail,
@@ -5737,9 +10695,14 @@ function ChatPage({ chatUsers, onChatUsersChange }) {
       }
     }
     setInput("");
-    setTimeout(async ()=>{
-      const reply = {id:Date.now()+1,text:"Thanks for your message! I'll get back to you shortly.",mine:false,time:t};
-      setMsgs(m=>[...m,reply]);
+    setTimeout(async () => {
+      const reply = {
+        id: Date.now() + 1,
+        text: "Thanks for your message! I'll get back to you shortly.",
+        mine: false,
+        time: t,
+      };
+      setMsgs((m) => [...m, reply]);
       if (supabase) {
         const { error } = await supabase.from("chat_messages").insert({
           user_email: userEmail,
@@ -5760,67 +10723,294 @@ function ChatPage({ chatUsers, onChatUsersChange }) {
         }
       }
       await refreshUnreadCounts();
-    },1000);
+    }, 1000);
   };
-  
+
   return (
     <div className="fade-in messages-page">
-      <div className="page-header" style={{flexShrink:0}}><div className="page-title">Messages</div></div>
+      <div className="page-header" style={{ flexShrink: 0 }}>
+        <div className="page-title">Messages</div>
+      </div>
       <div className="messages-layout">
-        <div style={{background:"#fff",borderRight:"1px solid #e2e8f0",display:"flex",flexDirection:"column",overflow:"hidden"}}>
-          <div style={{padding:16,borderBottom:"1px solid #e2e8f0",flexShrink:0}}>
-            <div style={{fontSize:".875rem",fontWeight:700,color:"#64748b"}}>CONVERSATIONS</div>
+        <div
+          style={{
+            background: "#fff",
+            borderRight: "1px solid #e2e8f0",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: 16,
+              borderBottom: "1px solid #e2e8f0",
+              flexShrink: 0,
+            }}
+          >
+            <div
+              style={{ fontSize: ".875rem", fontWeight: 700, color: "#64748b" }}
+            >
+              CONVERSATIONS
+            </div>
           </div>
-          <div style={{flex:1,overflowY:"auto"}}>
-            {chatUsers.map(u => (
-              <button key={u.id} onClick={() => handleSelectUser(u.id)} style={{
-                width:"100%",padding:12,border:"none",cursor:"pointer",
-                borderBottom:"1px solid #f1f5f9",textAlign:"left",transition:"background .15s",
-                background: selectedUserId === u.id ? "#f0f9ff" : "transparent",
-                ':hover': {background:"#f9fafb"}
-              }} onMouseEnter={(e)=>e.target.style.background=selectedUserId!==u.id?"#f9fafb":"#f0f9ff"} onMouseLeave={(e)=>e.target.style.background=selectedUserId===u.id?"#f0f9ff":"transparent"}>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <div style={{position:"relative",width:40,height:40,borderRadius:50,background:"#dbeafe",color:"#1e40af",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:".95rem",flexShrink:0}}>
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            {chatUsers.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => handleSelectUser(u.id)}
+                style={{
+                  width: "100%",
+                  padding: 12,
+                  border: "none",
+                  cursor: "pointer",
+                  borderBottom: "1px solid #f1f5f9",
+                  textAlign: "left",
+                  transition: "background .15s",
+                  background:
+                    selectedUserId === u.id ? "#f0f9ff" : "transparent",
+                  ":hover": { background: "#f9fafb" },
+                }}
+                onMouseEnter={(e) =>
+                  (e.target.style.background =
+                    selectedUserId !== u.id ? "#f9fafb" : "#f0f9ff")
+                }
+                onMouseLeave={(e) =>
+                  (e.target.style.background =
+                    selectedUserId === u.id ? "#f0f9ff" : "transparent")
+                }
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div
+                    style={{
+                      position: "relative",
+                      width: 40,
+                      height: 40,
+                      borderRadius: 50,
+                      background: "#dbeafe",
+                      color: "#1e40af",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 700,
+                      fontSize: ".95rem",
+                      flexShrink: 0,
+                    }}
+                  >
                     {u.avatar}
-                    {u.status==="active" && <div style={{position:"absolute",bottom:0,right:0,width:10,height:10,borderRadius:50,background:"#10b981",border:"2px solid #fff"}}/>}
+                    {u.status === "active" && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          right: 0,
+                          width: 10,
+                          height: 10,
+                          borderRadius: 50,
+                          background: "#10b981",
+                          border: "2px solid #fff",
+                        }}
+                      />
+                    )}
                   </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:600,fontSize:".9rem",color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.name}</div>
-                    <div style={{fontSize:".75rem",color:"#94a3b8"}}>{u.status}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        fontSize: ".9rem",
+                        color: "#0f172a",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {u.name}
+                    </div>
+                    <div style={{ fontSize: ".75rem", color: "#94a3b8" }}>
+                      {u.status}
+                    </div>
                   </div>
-                  {u.unread > 0 && <div style={{background:"#ef4444",color:"#fff",fontWeight:700,fontSize:".65rem",width:20,height:20,borderRadius:50,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{u.unread}</div>}
+                  {u.unread > 0 && (
+                    <div
+                      style={{
+                        background: "#ef4444",
+                        color: "#fff",
+                        fontWeight: 700,
+                        fontSize: ".65rem",
+                        width: 20,
+                        height: 20,
+                        borderRadius: 50,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {u.unread}
+                    </div>
+                  )}
                 </div>
               </button>
             ))}
           </div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",background:"#f8fafc",overflow:"hidden"}}>
-          <div style={{padding:16,borderBottom:"1px solid #e2e8f0",background:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <div style={{position:"relative",width:40,height:40,borderRadius:50,background:"#dbeafe",color:"#1e40af",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            background: "#f8fafc",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: 16,
+              borderBottom: "1px solid #e2e8f0",
+              background: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                style={{
+                  position: "relative",
+                  width: 40,
+                  height: 40,
+                  borderRadius: 50,
+                  background: "#dbeafe",
+                  color: "#1e40af",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                }}
+              >
                 {selectedUser?.avatar}
-                {selectedUser?.status==="active" && <div style={{position:"absolute",bottom:0,right:0,width:10,height:10,borderRadius:50,background:"#10b981",border:"2px solid #fff"}}/>}
+                {selectedUser?.status === "active" && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      right: 0,
+                      width: 10,
+                      height: 10,
+                      borderRadius: 50,
+                      background: "#10b981",
+                      border: "2px solid #fff",
+                    }}
+                  />
+                )}
               </div>
               <div>
-                <div style={{fontWeight:700,color:"#0f172a"}}>{selectedUser?.name}</div>
-                <div style={{fontSize:".75rem",color:"#94a3b8"}}>{selectedUser?.status}</div>
+                <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                  {selectedUser?.name}
+                </div>
+                <div style={{ fontSize: ".75rem", color: "#94a3b8" }}>
+                  {selectedUser?.status}
+                </div>
               </div>
             </div>
-            <div style={{fontSize:".75rem",color:"#94a3b8",background:"#f1f5f9",padding:"4px 8px",borderRadius:4}}>#{selectedUser?.id}</div>
+            <div
+              style={{
+                fontSize: ".75rem",
+                color: "#94a3b8",
+                background: "#f1f5f9",
+                padding: "4px 8px",
+                borderRadius: 4,
+              }}
+            >
+              #{selectedUser?.id}
+            </div>
           </div>
-          <div style={{flex:1,overflowY:"auto",padding:20,display:"flex",flexDirection:"column",gap:12}}>
-            {msgs.map(m=>(
-              <div key={m.id} style={{display:"flex",justifyContent:m.mine?"flex-end":"flex-start"}}>
-                <div className="messages-bubble" style={{background:m.mine?"#1a56db":"#fff",color:m.mine?"#fff":"#0f172a",padding:"10px 14px",borderRadius:8,boxShadow:"0 1px 2px rgba(0,0,0,.05)",borderTopLeftRadius:m.mine?8:4,borderTopRightRadius:m.mine?4:8}}>
-                  <div style={{fontSize:".9rem",lineHeight:1.4}}>{m.text}</div>
-                  <div style={{fontSize:".7rem",opacity:m.mine?.7:.5,marginTop:4}}>{m.time}</div>
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: 20,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            {msgs.map((m) => (
+              <div
+                key={m.id}
+                style={{
+                  display: "flex",
+                  justifyContent: m.mine ? "flex-end" : "flex-start",
+                }}
+              >
+                <div
+                  className="messages-bubble"
+                  style={{
+                    background: m.mine ? "#1a56db" : "#fff",
+                    color: m.mine ? "#fff" : "#0f172a",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    boxShadow: "0 1px 2px rgba(0,0,0,.05)",
+                    borderTopLeftRadius: m.mine ? 8 : 4,
+                    borderTopRightRadius: m.mine ? 4 : 8,
+                  }}
+                >
+                  <div style={{ fontSize: ".9rem", lineHeight: 1.4 }}>
+                    {m.text}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: ".7rem",
+                      opacity: m.mine ? 0.7 : 0.5,
+                      marginTop: 4,
+                    }}
+                  >
+                    {m.time}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
-          <div className="messages-composer" style={{padding:16,borderTop:"1px solid #e2e8f0",background:"#fff"}}>
-            <input className="form-control" style={{flex:1,padding:"10px 12px",fontSize:".9rem",border:"1px solid #d1d5db",borderRadius:6}} value={input} onChange={e=>setInput(e.target.value)} placeholder="Type a message..." onKeyDown={e=>e.key==="Enter"&&send()}/>
-            <button style={{background:"#1a56db",color:"#fff",border:"none",padding:"10px 20px",borderRadius:6,fontWeight:600,cursor:"pointer",transition:"background .2s",fontSize:".9rem"}} onClick={send} onMouseEnter={(e)=>e.target.style.background="#1e40af"} onMouseLeave={(e)=>e.target.style.background="#1a56db"}>Send</button>
+          <div
+            className="messages-composer"
+            style={{
+              padding: 16,
+              borderTop: "1px solid #e2e8f0",
+              background: "#fff",
+            }}
+          >
+            <input
+              className="form-control"
+              style={{
+                flex: 1,
+                padding: "10px 12px",
+                fontSize: ".9rem",
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+              }}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type a message..."
+              onKeyDown={(e) => e.key === "Enter" && send()}
+            />
+            <button
+              style={{
+                background: "#1a56db",
+                color: "#fff",
+                border: "none",
+                padding: "10px 20px",
+                borderRadius: 6,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "background .2s",
+                fontSize: ".9rem",
+              }}
+              onClick={send}
+              onMouseEnter={(e) => (e.target.style.background = "#1e40af")}
+              onMouseLeave={(e) => (e.target.style.background = "#1a56db")}
+            >
+              Send
+            </button>
           </div>
         </div>
       </div>
@@ -5832,24 +11022,61 @@ function ChatPage({ chatUsers, onChatUsersChange }) {
 function GradingPage() {
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Grade Report</div></div>
+      <div className="page-header">
+        <div className="page-title">Grade Report</div>
+      </div>
       <div className="card table-wrap">
         <table>
-          <thead><tr><th>Student</th>{SUBJECTS.map(s=><th key={s} style={{fontSize:".7rem"}}>{s.substring(0,8)}</th>)}<th>Avg</th><th>Grade</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Student</th>
+              {SUBJECTS.map((s) => (
+                <th key={s} style={{ fontSize: ".7rem" }}>
+                  {s.substring(0, 8)}
+                </th>
+              ))}
+              <th>Avg</th>
+              <th>Grade</th>
+            </tr>
+          </thead>
           <tbody>
-            {SCORES_DATA.map(s=>{
+            {SCORES_DATA.map((s) => {
               const vals = Object.values(s.scores);
-              const avg = Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+              const avg = Math.round(
+                vals.reduce((a, b) => a + b, 0) / vals.length,
+              );
               const g = getGrade(avg);
               return (
                 <tr key={s.student_id}>
-                  <td style={{fontWeight:700,whiteSpace:"nowrap"}}>{s.name.split(" ")[0]}</td>
-                  {SUBJECTS.map(sub=>{
-                    const sc = s.scores[sub]; const gg = getGrade(sc);
-                    return <td key={sub} style={{background:gg.bg,color:gg.color,fontWeight:700,textAlign:"center"}}>{sc}</td>;
+                  <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+                    {s.name.split(" ")[0]}
+                  </td>
+                  {SUBJECTS.map((sub) => {
+                    const sc = s.scores[sub];
+                    const gg = getGrade(sc);
+                    return (
+                      <td
+                        key={sub}
+                        style={{
+                          background: gg.bg,
+                          color: gg.color,
+                          fontWeight: 700,
+                          textAlign: "center",
+                        }}
+                      >
+                        {sc}
+                      </td>
+                    );
                   })}
-                  <td style={{fontWeight:800}}>{avg}</td>
-                  <td><span className="grade-chip" style={{background:g.bg,color:g.color}}>{g.grade}</span></td>
+                  <td style={{ fontWeight: 800 }}>{avg}</td>
+                  <td>
+                    <span
+                      className="grade-chip"
+                      style={{ background: g.bg, color: g.color }}
+                    >
+                      {g.grade}
+                    </span>
+                  </td>
                 </tr>
               );
             })}
@@ -5861,60 +11088,206 @@ function GradingPage() {
 }
 
 // â”€â”€â”€ STUDENT DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function StudentDashboard({ user, studentData, attendanceData, feesData, selectionInfo, scoreValues }) {
+function StudentDashboard({
+  user,
+  studentData,
+  attendanceData,
+  feesData,
+  selectionInfo,
+  scoreValues,
+}) {
   const { cfg } = useContext(SettingsContext);
-  const student = studentData || { full_name: user?.name || "Student", index: "-", class: "-", region: "-" };
-  const avatarInitials = (user?.name||student?.full_name||"K").split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();
-  const money = new Intl.NumberFormat(cfg.locale || "en-GH", { style: "currency", currency: cfg.currency || "GHS", maximumFractionDigits: 0 });
+  const student = studentData || {
+    full_name: user?.name || "Student",
+    index: "-",
+    class: "-",
+    region: "-",
+  };
+  const avatarInitials = (user?.name || student?.full_name || "K")
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+  const money = new Intl.NumberFormat(cfg.locale || "en-GH", {
+    style: "currency",
+    currency: cfg.currency || "GHS",
+    maximumFractionDigits: 0,
+  });
   const baseScores = Array.isArray(scoreValues) ? scoreValues : [];
-  const avg = Math.round(Object.values(baseScores).reduce((a,b)=>a+b,0)/Math.max(Object.values(baseScores).length, 1));
+  const avg = Math.round(
+    Object.values(baseScores).reduce((a, b) => a + b, 0) /
+      Math.max(Object.values(baseScores).length, 1),
+  );
   const g = getGrade(avg);
   const attendanceRows = Array.isArray(attendanceData) ? attendanceData : [];
   const feeRows = Array.isArray(feesData) ? feesData : [];
-  const present = attendanceRows.filter(a=>String(a.status).toLowerCase()==="present").length;
-  const outstanding = feeRows.reduce((sum, f) => sum + Math.max((Number(f.amount)||0) - (Number(f.paid)||0), 0), 0);
+  const present = attendanceRows.filter(
+    (a) => String(a.status).toLowerCase() === "present",
+  ).length;
+  const outstanding = feeRows.reduce(
+    (sum, f) =>
+      sum + Math.max((Number(f.amount) || 0) - (Number(f.paid) || 0), 0),
+    0,
+  );
   const selectionCount = Number(selectionInfo?.count || 0);
-  const selectionStatus = String(selectionInfo?.status || "not-submitted").toLowerCase();
-  const selectionLabel = selectionStatus === "confirmed" ? "Confirmed" : selectionStatus === "submitted" || selectionStatus === "pending" ? "Submitted" : "Not Submitted";
+  const selectionStatus = String(
+    selectionInfo?.status || "not-submitted",
+  ).toLowerCase();
+  const selectionLabel =
+    selectionStatus === "confirmed"
+      ? "Confirmed"
+      : selectionStatus === "submitted" || selectionStatus === "pending"
+        ? "Submitted"
+        : "Not Submitted";
   return (
     <div className="fade-in">
       <div className="profile-header">
-        <div className="profile-avatar" style={{overflow:"hidden",padding:0}}>
+        <div
+          className="profile-avatar"
+          style={{ overflow: "hidden", padding: 0 }}
+        >
           {student?.photo_url ? (
-            <img src={student.photo_url} alt={student.full_name || "Student"} style={{width:"100%",height:"100%",objectFit:"cover"}} />
+            <img
+              src={student.photo_url}
+              alt={student.full_name || "Student"}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
           ) : (
             avatarInitials
           )}
         </div>
         <div>
           <div className="profile-name">{user?.name || student.full_name}</div>
-          <div className="profile-role">Student ID: {student.index} - {student.class}</div>
-          <div style={{marginTop:6,fontSize:".82rem",opacity:.85}}>{student.region} Region &nbsp;·&nbsp; <strong>{cfg.currentTerm}</strong> &nbsp;·&nbsp; {cfg.academicYear}</div>
-          {cfg.selectionDeadline && <div style={{marginTop:4,fontSize:".78rem",color:"#ef4444",fontWeight:600}}>Selection Deadline: {cfg.selectionDeadline}</div>}
+          <div className="profile-role">
+            Student ID: {student.index} - {student.class}
+          </div>
+          <div style={{ marginTop: 6, fontSize: ".82rem", opacity: 0.85 }}>
+            {student.region} Region &nbsp;·&nbsp;{" "}
+            <strong>{cfg.currentTerm}</strong> &nbsp;·&nbsp; {cfg.academicYear}
+          </div>
+          {cfg.selectionDeadline && (
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: ".78rem",
+                color: "#ef4444",
+                fontWeight: 600,
+              }}
+            >
+              Selection Deadline: {cfg.selectionDeadline}
+            </div>
+          )}
         </div>
       </div>
       <div className="stats-grid">
         {[
           cfg.showResultsToStudents
-            ? {label:"Current Average",value:baseScores.length?`${avg}%`:"N/A",sub:baseScores.length?g.grade:"No score records",ic:g.grade === "A1" ? "#00b86b" : g.grade === "B2" || g.grade === "B3" ? "#0059ff" : "#ff7a00",bgStart:g.grade === "A1" ? "#ecfff5" : g.grade === "B2" || g.grade === "B3" ? "#eff5ff" : "#fff4e8",bgEnd:g.grade === "A1" ? "#92f0c2" : g.grade === "B2" || g.grade === "B3" ? "#9cc2ff" : "#ffc47a",text:g.grade === "A1" ? "#007a46" : g.grade === "B2" || g.grade === "B3" ? "#0039a6" : "#a54800",icon:"results"}
-            : {label:"Current Average",value:"—",sub:"Results hidden by admin",ic:"#64748b",bgStart:"#f8fafc",bgEnd:"#dce6f2",text:"#475569",icon:"results"},
-          {label:"Attendance Rate",value:`${Math.round(present/Math.max(attendanceRows.length,1)*100)}%`,sub:`${present}/${attendanceRows.length} days`,ic:"#00b86b",bgStart:"#ecfff5",bgEnd:"#92f0c2",text:"#007a46",icon:"attendance"},
-          {label:"Fees Status",value:outstanding>0?"Outstanding":"Cleared",sub:`${money.format(outstanding)} outstanding`,ic:outstanding>0?"#ff7a00":"#00b86b",bgStart:outstanding>0?"#fff4e8":"#ecfff5",bgEnd:outstanding>0?"#ffc47a":"#92f0c2",text:outstanding>0?"#a54800":"#007a46",icon:"fees"},
-          {label:"Selection",value:selectionLabel,sub:`${selectionCount} choice(s) made`,ic:"#c026ff",bgStart:"#fdf0ff",bgEnd:"#efadff",text:"#8610b3",icon:"selection"},
-        ].map(s=>(
-          <div key={s.label} className="stat-card dashboard-stat-card" style={{"--dash-bg-start":s.bgStart,"--dash-bg-end":s.bgEnd,"--dash-accent":s.ic,"--dash-text":s.text,"--dash-border":"rgba(148,163,184,.18)","--dash-glow":"rgba(255,255,255,.82)","--dash-shadow":"rgba(30,41,59,.22)"}}>
-            <div className="stat-icon"><Ico name={s.icon} size={20} color={s.ic}/></div>
+            ? {
+                label: "Current Average",
+                value: baseScores.length ? `${avg}%` : "N/A",
+                sub: baseScores.length ? g.grade : "No score records",
+                ic:
+                  g.grade === "A1"
+                    ? "#00b86b"
+                    : g.grade === "B2" || g.grade === "B3"
+                      ? "#0059ff"
+                      : "#ff7a00",
+                bgStart:
+                  g.grade === "A1"
+                    ? "#ecfff5"
+                    : g.grade === "B2" || g.grade === "B3"
+                      ? "#eff5ff"
+                      : "#fff4e8",
+                bgEnd:
+                  g.grade === "A1"
+                    ? "#92f0c2"
+                    : g.grade === "B2" || g.grade === "B3"
+                      ? "#9cc2ff"
+                      : "#ffc47a",
+                text:
+                  g.grade === "A1"
+                    ? "#007a46"
+                    : g.grade === "B2" || g.grade === "B3"
+                      ? "#0039a6"
+                      : "#a54800",
+                icon: "results",
+              }
+            : {
+                label: "Current Average",
+                value: "—",
+                sub: "Results hidden by admin",
+                ic: "#64748b",
+                bgStart: "#f8fafc",
+                bgEnd: "#dce6f2",
+                text: "#475569",
+                icon: "results",
+              },
+          {
+            label: "Attendance Rate",
+            value: `${Math.round((present / Math.max(attendanceRows.length, 1)) * 100)}%`,
+            sub: `${present}/${attendanceRows.length} days`,
+            ic: "#00b86b",
+            bgStart: "#ecfff5",
+            bgEnd: "#92f0c2",
+            text: "#007a46",
+            icon: "attendance",
+          },
+          {
+            label: "Fees Status",
+            value: outstanding > 0 ? "Outstanding" : "Cleared",
+            sub: `${money.format(outstanding)} outstanding`,
+            ic: outstanding > 0 ? "#ff7a00" : "#00b86b",
+            bgStart: outstanding > 0 ? "#fff4e8" : "#ecfff5",
+            bgEnd: outstanding > 0 ? "#ffc47a" : "#92f0c2",
+            text: outstanding > 0 ? "#a54800" : "#007a46",
+            icon: "fees",
+          },
+          {
+            label: "Selection",
+            value: selectionLabel,
+            sub: `${selectionCount} choice(s) made`,
+            ic: "#c026ff",
+            bgStart: "#fdf0ff",
+            bgEnd: "#efadff",
+            text: "#8610b3",
+            icon: "selection",
+          },
+        ].map((s) => (
+          <div
+            key={s.label}
+            className="stat-card dashboard-stat-card"
+            style={{
+              "--dash-bg-start": s.bgStart,
+              "--dash-bg-end": s.bgEnd,
+              "--dash-accent": s.ic,
+              "--dash-text": s.text,
+              "--dash-border": "rgba(148,163,184,.18)",
+              "--dash-glow": "rgba(255,255,255,.82)",
+              "--dash-shadow": "rgba(30,41,59,.22)",
+            }}
+          >
+            <div className="stat-icon">
+              <Ico name={s.icon} size={20} color={s.ic} />
+            </div>
             <div className="stat-label">{s.label}</div>
-            <div className="stat-value" style={{fontSize:"1.5rem"}}>{s.value}</div>
+            <div className="stat-value" style={{ fontSize: "1.5rem" }}>
+              {s.value}
+            </div>
             <div className="stat-sub">{s.sub}</div>
           </div>
         ))}
       </div>
       <div className="card card-padded">
-        <h3 style={{fontWeight:700,marginBottom:12}}>Announcements</h3>
-        {ANNOUNCEMENTS.map(a=>(
-          <div key={a.id} className={`alert ${a.type==="urgent"?"alert-danger":a.type==="info"?"alert-info":"alert-warning"}`} style={{marginBottom:8}}>
-            <strong>{a.title}</strong> â€” {a.body} <span style={{opacity:.7,fontSize:".78rem"}}>({a.date})</span>
+        <h3 style={{ fontWeight: 700, marginBottom: 12 }}>Announcements</h3>
+        {ANNOUNCEMENTS.map((a) => (
+          <div
+            key={a.id}
+            className={`alert ${a.type === "urgent" ? "alert-danger" : a.type === "info" ? "alert-info" : "alert-warning"}`}
+            style={{ marginBottom: 8 }}
+          >
+            <strong>{a.title}</strong> â€” {a.body}{" "}
+            <span style={{ opacity: 0.7, fontSize: ".78rem" }}>({a.date})</span>
           </div>
         ))}
       </div>
@@ -5941,37 +11314,57 @@ function StudentProfile({ user, studentData }) {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
-  const aggregateValue = isLoadingProfile ? null : Number(student?.aggregate ?? 0);
-  const readiness = aggregateValue == null ? null : Math.max(0, 100 - (aggregateValue * 5));
+  const aggregateValue = isLoadingProfile
+    ? null
+    : Number(student?.aggregate ?? 0);
+  const readiness =
+    aggregateValue == null ? null : Math.max(0, 100 - aggregateValue * 5);
   const readinessGrade = getGrade(readiness);
   const supportEmail = cfg.supportEmail || "support@campusghana.edu";
   const supportPhone = cfg.supportPhone || "+233 00 000 0000";
 
-
-
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">My Profile</div><div className="page-sub">{cfg.systemName} • {cfg.currentTerm} • {cfg.academicYear}</div></div>
-      {isLoadingProfile && <div className="alert alert-info">Loading your profile data...</div>}
+      <div className="page-header">
+        <div className="page-title">My Profile</div>
+        <div className="page-sub">
+          {cfg.systemName} • {cfg.currentTerm} • {cfg.academicYear}
+        </div>
+      </div>
+      {isLoadingProfile && (
+        <div className="alert alert-info">Loading your profile data...</div>
+      )}
       <div className="student-profile-shell">
         <section className="student-profile-hero">
-          <div className="student-profile-avatar" style={{overflow:"hidden",padding:0}}>
+          <div
+            className="student-profile-avatar"
+            style={{ overflow: "hidden", padding: 0 }}
+          >
             {student?.photo_url ? (
-              <img src={student.photo_url} alt={student.full_name || "Student"} style={{width:"100%",height:"100%",objectFit:"cover"}} />
+              <img
+                src={student.photo_url}
+                alt={student.full_name || "Student"}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
             ) : (
               initials || "ST"
             )}
           </div>
           <div>
-            <div className="student-profile-title">{student.full_name || user?.name || "Student"}</div>
+            <div className="student-profile-title">
+              {student.full_name || user?.name || "Student"}
+            </div>
             <div className="student-profile-meta">
-              Student ID: {student.index || "-"} • {student.class || "-"} • {student.region || "-"} Region
+              Student ID: {student.index || "-"} • {student.class || "-"} •{" "}
+              {student.region || "-"} Region
             </div>
           </div>
           <div className="student-profile-term">
             <small>Academic Session</small>
             <strong>{cfg.currentTerm}</strong>
-            <span style={{fontSize:".78rem",color:"#e2e8f0"}}>{cfg.academicYear}</span>
+            <span style={{ fontSize: ".78rem", color: "#e2e8f0" }}>
+              {cfg.academicYear}
+            </span>
           </div>
         </section>
 
@@ -6005,15 +11398,20 @@ function StudentProfile({ user, studentData }) {
                 </div>
                 <div className="student-profile-row">
                   <label>Date of Birth</label>
-                  <span>{
-                    student.date_of_birth
+                  <span>
+                    {student.date_of_birth
                       ? (() => {
                           const dt = new Date(student.date_of_birth);
                           if (isNaN(dt.getTime())) return student.date_of_birth;
-                          return dt.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+                          return dt.toLocaleDateString(undefined, {
+                            weekday: "long",
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          });
                         })()
-                      : "-"
-                  }</span>
+                      : "-"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -6065,7 +11463,9 @@ function StudentProfile({ user, studentData }) {
                 </div>
                 <div className="student-profile-row">
                   <label>Aggregate</label>
-                  <span>{Number.isFinite(aggregateValue) ? aggregateValue : "-"}</span>
+                  <span>
+                    {Number.isFinite(aggregateValue) ? aggregateValue : "-"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -6107,9 +11507,10 @@ function StudentProfile({ user, studentData }) {
                 </div>
                 <div className="student-profile-row">
                   <label>Aggregate</label>
-                  <span>{Number.isFinite(aggregateValue) ? aggregateValue : "-"}</span>
+                  <span>
+                    {Number.isFinite(aggregateValue) ? aggregateValue : "-"}
+                  </span>
                 </div>
-
               </div>
             </div>
             {/* Edit mode removed: read-only profile fields only */}
@@ -6122,21 +11523,47 @@ function StudentProfile({ user, studentData }) {
             </div>
             <div className="student-profile-card-body">
               <div className="student-profile-kpis">
-                <div className="student-profile-kpi" style={{background:readinessGrade.bg}}>
-                  <label style={{color:readinessGrade.color}}>Readiness Score</label>
-                  <strong style={{color:readinessGrade.color}}>{readiness == null ? "Loading..." : `${readiness}% (${readinessGrade.grade})`}</strong>
-                  <small style={{color:readinessGrade.color}}>{readiness == null ? "Will calculate after profile loads" : "Estimated from your current aggregate"}</small>
+                <div
+                  className="student-profile-kpi"
+                  style={{ background: readinessGrade.bg }}
+                >
+                  <label style={{ color: readinessGrade.color }}>
+                    Readiness Score
+                  </label>
+                  <strong style={{ color: readinessGrade.color }}>
+                    {readiness == null
+                      ? "Loading..."
+                      : `${readiness}% (${readinessGrade.grade})`}
+                  </strong>
+                  <small style={{ color: readinessGrade.color }}>
+                    {readiness == null
+                      ? "Will calculate after profile loads"
+                      : "Estimated from your current aggregate"}
+                  </small>
                 </div>
-                <div className="student-profile-kpi" style={{background:"#eff6ff"}}>
-                  <label style={{color:"#1d4ed8"}}>Support Email</label>
-                  <strong style={{color:"#1e3a8a",fontSize:".9rem"}}>{supportEmail}</strong>
+                <div
+                  className="student-profile-kpi"
+                  style={{ background: "#eff6ff" }}
+                >
+                  <label style={{ color: "#1d4ed8" }}>Support Email</label>
+                  <strong style={{ color: "#1e3a8a", fontSize: ".9rem" }}>
+                    {supportEmail}
+                  </strong>
                 </div>
-                <div className="student-profile-kpi" style={{background:"#f0fdf4"}}>
-                  <label style={{color:"#15803d"}}>Support Phone</label>
-                  <strong style={{color:"#166534",fontSize:".9rem"}}>{supportPhone}</strong>
+                <div
+                  className="student-profile-kpi"
+                  style={{ background: "#f0fdf4" }}
+                >
+                  <label style={{ color: "#15803d" }}>Support Phone</label>
+                  <strong style={{ color: "#166534", fontSize: ".9rem" }}>
+                    {supportPhone}
+                  </strong>
                 </div>
               </div>
-              <p className="student-profile-help">Profile information is synced with school records. Contact support if any field appears incorrect.</p>
+              <p className="student-profile-help">
+                Profile information is synced with school records. Contact
+                support if any field appears incorrect.
+              </p>
             </div>
           </article>
         </section>
@@ -6152,32 +11579,69 @@ function StudentAttendance({ attendanceData }) {
   const formatDate = (value) => {
     if (!value) return "-";
     const dt = new Date(value);
-    return Number.isNaN(dt.getTime()) ? String(value) : new Intl.DateTimeFormat(cfg.locale || "en-GH", { timeZone: cfg.timezone || "Africa/Accra", dateStyle: "medium" }).format(dt);
+    return Number.isNaN(dt.getTime())
+      ? String(value)
+      : new Intl.DateTimeFormat(cfg.locale || "en-GH", {
+          timeZone: cfg.timezone || "Africa/Accra",
+          dateStyle: "medium",
+        }).format(dt);
   };
-  const present = rows.filter(a=>String(a.status).toLowerCase()==="present").length;
+  const present = rows.filter(
+    (a) => String(a.status).toLowerCase() === "present",
+  ).length;
   const absent = rows.length - present;
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">My Attendance</div></div>
-      <div style={{display:"flex",gap:16,marginBottom:20}}>
-        <div className="att-circle" style={{background:"#dcfce7",color:"#16a34a"}}>
-          {Math.round(present/Math.max(rows.length,1)*100)}%<div style={{fontSize:".75rem",fontWeight:400}}>Present</div>
+      <div className="page-header">
+        <div className="page-title">My Attendance</div>
+      </div>
+      <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+        <div
+          className="att-circle"
+          style={{ background: "#dcfce7", color: "#16a34a" }}
+        >
+          {Math.round((present / Math.max(rows.length, 1)) * 100)}%
+          <div style={{ fontSize: ".75rem", fontWeight: 400 }}>Present</div>
         </div>
-        <div className="att-circle" style={{background:"#fee2e2",color:"#dc2626"}}>
-          {Math.round(absent/Math.max(rows.length,1)*100)}%<div style={{fontSize:".75rem",fontWeight:400}}>Absent</div>
+        <div
+          className="att-circle"
+          style={{ background: "#fee2e2", color: "#dc2626" }}
+        >
+          {Math.round((absent / Math.max(rows.length, 1)) * 100)}%
+          <div style={{ fontSize: ".75rem", fontWeight: 400 }}>Absent</div>
         </div>
       </div>
       <div className="card table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Status</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
           <tbody>
-            {rows.map(a=>(
+            {rows.map((a) => (
               <tr key={a.id}>
                 <td>{formatDate(a.date)}</td>
-                <td><span className={`badge ${a.status==="Present"?"badge-success":"badge-danger"}`}>{a.status}</span></td>
+                <td>
+                  <span
+                    className={`badge ${a.status === "Present" ? "badge-success" : "badge-danger"}`}
+                  >
+                    {a.status}
+                  </span>
+                </td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan="2" style={{textAlign:"center",padding:20,color:"#64748b"}}>No live attendance records found.</td></tr>}
+            {!rows.length && (
+              <tr>
+                <td
+                  colSpan="2"
+                  style={{ textAlign: "center", padding: 20, color: "#64748b" }}
+                >
+                  No live attendance records found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -6189,28 +11653,69 @@ function StudentAttendance({ attendanceData }) {
 function StudentFees({ feesData }) {
   const { cfg } = useContext(SettingsContext);
   const rows = Array.isArray(feesData) ? feesData : [];
-  const money = new Intl.NumberFormat(cfg.locale || "en-GH", { style: "currency", currency: cfg.currency || "GHS", maximumFractionDigits: 0 });
+  const money = new Intl.NumberFormat(cfg.locale || "en-GH", {
+    style: "currency",
+    currency: cfg.currency || "GHS",
+    maximumFractionDigits: 0,
+  });
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">My Fees</div></div>
+      <div className="page-header">
+        <div className="page-title">My Fees</div>
+      </div>
       <div className="card table-wrap">
         <table>
-          <thead><tr><th>Term</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Term</th>
+              <th>Amount</th>
+              <th>Paid</th>
+              <th>Balance</th>
+              <th>Status</th>
+            </tr>
+          </thead>
           <tbody>
-            {rows.map(f=>(
+            {rows.map((f) => (
               <tr key={f.id}>
-                <td><strong>{f.term}</strong></td>
+                <td>
+                  <strong>{f.term}</strong>
+                </td>
                 <td>{money.format(Number(f.amount || 0))}</td>
                 <td>{money.format(Number(f.paid || 0))}</td>
-                <td style={{color:f.amount-f.paid>0?"#dc2626":"#16a34a",fontWeight:700}}>{money.format(Number((f.amount || 0) - (f.paid || 0)))} </td>
-                <td><span className={`badge ${f.status==="paid"?"badge-success":f.status==="partial"?"badge-warning":"badge-danger"}`}>{f.status}</span></td>
+                <td
+                  style={{
+                    color: f.amount - f.paid > 0 ? "#dc2626" : "#16a34a",
+                    fontWeight: 700,
+                  }}
+                >
+                  {money.format(Number((f.amount || 0) - (f.paid || 0)))}{" "}
+                </td>
+                <td>
+                  <span
+                    className={`badge ${f.status === "paid" ? "badge-success" : f.status === "partial" ? "badge-warning" : "badge-danger"}`}
+                  >
+                    {f.status}
+                  </span>
+                </td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan="5" style={{textAlign:"center",padding:20,color:"#64748b"}}>No live fee records found.</td></tr>}
+            {!rows.length && (
+              <tr>
+                <td
+                  colSpan="5"
+                  style={{ textAlign: "center", padding: 20, color: "#64748b" }}
+                >
+                  No live fee records found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
-      <div className="alert alert-info" style={{marginTop:12}}>Need billing help? Contact {cfg.supportEmail || "support"} {cfg.supportPhone ? `or ${cfg.supportPhone}` : ""}.</div>
+      <div className="alert alert-info" style={{ marginTop: 12 }}>
+        Need billing help? Contact {cfg.supportEmail || "support"}{" "}
+        {cfg.supportPhone ? `or ${cfg.supportPhone}` : ""}.
+      </div>
     </div>
   );
 }
@@ -6225,12 +11730,17 @@ function SchoolSelection({ schoolsData, studentData }) {
   const [ruleWarning, setRuleWarning] = useState("");
   const [showReviewModal, setShowReviewModal] = useState(false);
   const userEmail = getSessionUserEmail();
-  const schools = sortSchoolsByCategory(schoolsData?.length ? schoolsData : SCHOOLS_DATA);
-  const counts = schools.reduce((acc, school) => {
-    const key = String(school.category || "").toUpperCase();
-    if (key === "A" || key === "B" || key === "C") acc[key] += 1;
-    return acc;
-  }, { A: 0, B: 0, C: 0 });
+  const schools = sortSchoolsByCategory(
+    schoolsData?.length ? schoolsData : SCHOOLS_DATA,
+  );
+  const counts = schools.reduce(
+    (acc, school) => {
+      const key = String(school.category || "").toUpperCase();
+      if (key === "A" || key === "B" || key === "C") acc[key] += 1;
+      return acc;
+    },
+    { A: 0, B: 0, C: 0 },
+  );
   const validPatterns = [
     { A: 1, B: 2, C: 4 },
     { A: 1, B: 0, C: 6 },
@@ -6238,20 +11748,25 @@ function SchoolSelection({ schoolsData, studentData }) {
     { A: 0, B: 0, C: 7 },
   ];
 
-  const getSelectionCounts = (items) => items.reduce((acc, item) => {
-    const key = String(item.category || "").toUpperCase();
-    if (key === "A" || key === "B" || key === "C") acc[key] += 1;
-    return acc;
-  }, { A: 0, B: 0, C: 0 });
+  const getSelectionCounts = (items) =>
+    items.reduce(
+      (acc, item) => {
+        const key = String(item.category || "").toUpperCase();
+        if (key === "A" || key === "B" || key === "C") acc[key] += 1;
+        return acc;
+      },
+      { A: 0, B: 0, C: 0 },
+    );
 
   const canStillFitAValidPattern = (items) => {
     const picked = getSelectionCounts(items);
-    return validPatterns.some((pattern) => (
-      picked.A <= pattern.A &&
-      picked.B <= pattern.B &&
-      picked.C <= pattern.C &&
-      items.length <= pattern.A + pattern.B + pattern.C
-    ));
+    return validPatterns.some(
+      (pattern) =>
+        picked.A <= pattern.A &&
+        picked.B <= pattern.B &&
+        picked.C <= pattern.C &&
+        items.length <= pattern.A + pattern.B + pattern.C,
+    );
   };
   const showRuleWarning = (message) => {
     setRuleWarning(message);
@@ -6262,11 +11777,18 @@ function SchoolSelection({ schoolsData, studentData }) {
     const loadRemote = async () => {
       if (!supabase) return;
       setLoadingSelection(true);
-      const data = await fetchStudentSelection({ supabase, userEmail, studentData });
+      const data = await fetchStudentSelection({
+        supabase,
+        userEmail,
+        studentData,
+      });
       if (data) {
         const picks = normalizeSelectionList(data);
         if (picks.length) setSelected(picks);
-        setSubmitted(!!data.submitted || String(data.status || "").toLowerCase() !== "draft");
+        setSubmitted(
+          !!data.submitted ||
+            String(data.status || "").toLowerCase() !== "draft",
+        );
       }
       setLoadingSelection(false);
     };
@@ -6287,32 +11809,36 @@ function SchoolSelection({ schoolsData, studentData }) {
 
   const toggle = (school) => {
     if (!cfg.allowChanges) return;
-    if (selected.find(s=>s.id===school.id)) {
+    if (selected.find((s) => s.id === school.id)) {
       setRuleWarning("");
-      setSelected(s=>s.filter(x=>x.id!==school.id));
+      setSelected((s) => s.filter((x) => x.id !== school.id));
       return;
     }
-    if (selected.length>=maxChoices) {
+    if (selected.length >= maxChoices) {
       showRuleWarning(`You can select a maximum of ${maxChoices} schools.`);
       return;
     }
     const nextSelected = [...selected, school];
     if (!canStillFitAValidPattern(nextSelected)) {
-      showRuleWarning("This selection breaks the allowed combinations: 1A + 2B + 4C, 1A + 6C, 2B + 5C, or 7C.");
+      showRuleWarning(
+        "This selection breaks the allowed combinations: 1A + 2B + 4C, 1A + 6C, 2B + 5C, or 7C.",
+      );
       return;
     }
     setRuleWarning("");
     setSelected(nextSelected);
   };
   const validate = () => {
-    const catA = selected.filter(s=>s.category==="A").length;
-    const catB = selected.filter(s=>s.category==="B").length;
-    const catC = selected.filter(s=>s.category==="C").length;
-    if(selected.length===0) return "Select at least one school.";
-    if(selected.length > maxChoices) return `You can select a maximum of ${maxChoices} schools.`;
-    const matchesValidPattern = validPatterns.some((pattern) => (
-      catA === pattern.A && catB === pattern.B && catC === pattern.C
-    ));
+    const catA = selected.filter((s) => s.category === "A").length;
+    const catB = selected.filter((s) => s.category === "B").length;
+    const catC = selected.filter((s) => s.category === "C").length;
+    if (selected.length === 0) return "Select at least one school.";
+    if (selected.length > maxChoices)
+      return `You can select a maximum of ${maxChoices} schools.`;
+    const matchesValidPattern = validPatterns.some(
+      (pattern) =>
+        catA === pattern.A && catB === pattern.B && catC === pattern.C,
+    );
     if (selected.length === maxChoices && !matchesValidPattern) {
       return "Allowed combinations are: 1A + 2B + 4C, 1A + 6C, 2B + 5C, or 7C.";
     }
@@ -6334,7 +11860,9 @@ function SchoolSelection({ schoolsData, studentData }) {
           category: s.category,
         })),
       };
-      const { error } = await supabase.from("school_selections").insert(newSchemaPayload);
+      const { error } = await supabase
+        .from("school_selections")
+        .insert(newSchemaPayload);
       if (error) {
         await supabase.from("school_selections").insert({
           user_email: userEmail,
@@ -6347,63 +11875,172 @@ function SchoolSelection({ schoolsData, studentData }) {
 
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Select Schools</div><div className="page-sub">{`Choose ${maxChoices} secondary schools in an approved pattern (${schools.length} schools available: A ${counts.A}, B ${counts.B}, C ${counts.C})${cfg.selectionDeadline ? " — Deadline: "+cfg.selectionDeadline : ""}`}</div></div>
-      {loadingSelection && <div className="alert alert-info">Loading your saved selection...</div>}
-      {!cfg.allowChanges && !submitted && <div className="alert alert-warning" style={{fontWeight:600}}>School selection is currently locked by the administrator. Changes are not allowed at this time.</div>}
-      {submitted ? <div className="alert alert-success">Your school selection has been submitted successfully!</div> : (
+      <div className="page-header">
+        <div className="page-title">Select Schools</div>
+        <div className="page-sub">{`Choose ${maxChoices} secondary schools in an approved pattern (${schools.length} schools available: A ${counts.A}, B ${counts.B}, C ${counts.C})${cfg.selectionDeadline ? " — Deadline: " + cfg.selectionDeadline : ""}`}</div>
+      </div>
+      {loadingSelection && (
+        <div className="alert alert-info">Loading your saved selection...</div>
+      )}
+      {!cfg.allowChanges && !submitted && (
+        <div className="alert alert-warning" style={{ fontWeight: 600 }}>
+          School selection is currently locked by the administrator. Changes are
+          not allowed at this time.
+        </div>
+      )}
+      {submitted ? (
+        <div className="alert alert-success">
+          Your school selection has been submitted successfully!
+        </div>
+      ) : (
         <>
-          <div className="alert alert-info">Selection Rules: 1A + 2B + 4C, 1A + 6C, 2B + 5C, or 7C.</div>
-          {ruleWarning && <div className="alert alert-warning">{ruleWarning}</div>}
-          {err && selected.length>0 && <div className="alert alert-warning">{err}</div>}
-          <div className="card-grid-auto" style={{marginBottom:20,opacity:cfg.allowChanges?1:0.5,pointerEvents:cfg.allowChanges?"auto":"none"}}>
-            {schools.map(s=>(
-              <button key={s.id} className={`selection-card ${selected.find(x=>x.id===s.id)?"selected":""}`} onClick={()=>toggle(s)}>
-                <div className={`cat-badge cat-${s.category}`}>{s.category}</div>
-                <div style={{flex:1,textAlign:"left"}}>
-                  <div style={{fontWeight:700,fontSize:".9rem"}}>{s.name}</div>
-                  <div style={{fontSize:".78rem",color:"#64748b"}}>{s.region} - Cutoff: {s.cutoff}</div>
+          <div className="alert alert-info">
+            Selection Rules: 1A + 2B + 4C, 1A + 6C, 2B + 5C, or 7C.
+          </div>
+          {ruleWarning && (
+            <div className="alert alert-warning">{ruleWarning}</div>
+          )}
+          {err && selected.length > 0 && (
+            <div className="alert alert-warning">{err}</div>
+          )}
+          <div
+            className="card-grid-auto"
+            style={{
+              marginBottom: 20,
+              opacity: cfg.allowChanges ? 1 : 0.5,
+              pointerEvents: cfg.allowChanges ? "auto" : "none",
+            }}
+          >
+            {schools.map((s) => (
+              <button
+                key={s.id}
+                className={`selection-card ${selected.find((x) => x.id === s.id) ? "selected" : ""}`}
+                onClick={() => toggle(s)}
+              >
+                <div className={`cat-badge cat-${s.category}`}>
+                  {s.category}
                 </div>
-                {selected.find(x=>x.id===s.id) && <Ico name="confirmed" size={16} color="#1a56db"/>}
+                <div style={{ flex: 1, textAlign: "left" }}>
+                  <div style={{ fontWeight: 700, fontSize: ".9rem" }}>
+                    {s.name}
+                  </div>
+                  <div style={{ fontSize: ".78rem", color: "#64748b" }}>
+                    {s.region} - Cutoff: {s.cutoff}
+                  </div>
+                </div>
+                {selected.find((x) => x.id === s.id) && (
+                  <Ico name="confirmed" size={16} color="#1a56db" />
+                )}
               </button>
             ))}
           </div>
-          <div className="card card-padded" style={{marginBottom:16}}>
-            <strong>Selected ({selected.length}/{maxChoices}):</strong>
-            {selected.length===0 ? <span style={{color:"#94a3b8",marginLeft:8}}>None yet</span> : (
-              <ol style={{marginTop:8,paddingLeft:20}}>
-                {selected.map((s,i)=><li key={s.id} style={{marginBottom:4,fontSize:".9rem"}}>{s.name} <span className={`badge cat-${s.category}`} style={{marginLeft:6,padding:"2px 8px",borderRadius:6,fontSize:".7rem"}}>Cat {s.category}</span></li>)}
+          <div className="card card-padded" style={{ marginBottom: 16 }}>
+            <strong>
+              Selected ({selected.length}/{maxChoices}):
+            </strong>
+            {selected.length === 0 ? (
+              <span style={{ color: "#94a3b8", marginLeft: 8 }}>None yet</span>
+            ) : (
+              <ol style={{ marginTop: 8, paddingLeft: 20 }}>
+                {selected.map((s, i) => (
+                  <li key={s.id} style={{ marginBottom: 4, fontSize: ".9rem" }}>
+                    {s.name}{" "}
+                    <span
+                      className={`badge cat-${s.category}`}
+                      style={{
+                        marginLeft: 6,
+                        padding: "2px 8px",
+                        borderRadius: 6,
+                        fontSize: ".7rem",
+                      }}
+                    >
+                      Cat {s.category}
+                    </span>
+                  </li>
+                ))}
               </ol>
             )}
           </div>
-          <button className="btn btn-blue" disabled={!!err||selected.length!==maxChoices} onClick={()=>setShowReviewModal(true)}>Review Selection</button>
+          <button
+            className="btn btn-blue"
+            disabled={!!err || selected.length !== maxChoices}
+            onClick={() => setShowReviewModal(true)}
+          >
+            Review Selection
+          </button>
         </>
       )}
       {showReviewModal && !submitted && (
-        <div className="modal-backdrop" onClick={() => setShowReviewModal(false)}>
+        <div
+          className="modal-backdrop"
+          onClick={() => setShowReviewModal(false)}
+        >
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <div>
                 <div className="modal-title">Review Selected Schools</div>
-                <div className="modal-sub">Confirm your 7-school selection before final submission.</div>
+                <div className="modal-sub">
+                  Confirm your 7-school selection before final submission.
+                </div>
               </div>
-              <button className="modal-close" onClick={() => setShowReviewModal(false)}>
-                <Ico name="logout" size={16} color="#1e3a8a" style={{transform:"rotate(45deg)"}}/>
+              <button
+                className="modal-close"
+                onClick={() => setShowReviewModal(false)}
+              >
+                <Ico
+                  name="logout"
+                  size={16}
+                  color="#1e3a8a"
+                  style={{ transform: "rotate(45deg)" }}
+                />
               </button>
             </div>
-            <div className="card card-padded" style={{marginBottom:0}}>
-              <ol style={{paddingLeft:20,display:"flex",flexDirection:"column",gap:10}}>
+            <div className="card card-padded" style={{ marginBottom: 0 }}>
+              <ol
+                style={{
+                  paddingLeft: 20,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
                 {selected.map((s, i) => (
-                  <li key={s.id} style={{fontSize:".92rem"}}>
+                  <li key={s.id} style={{ fontSize: ".92rem" }}>
                     <strong>{s.name}</strong>
-                    <span className={`badge cat-${s.category}`} style={{marginLeft:8,padding:"2px 8px",borderRadius:6,fontSize:".72rem"}}>Cat {s.category}</span>
-                    <div style={{fontSize:".78rem",color:"#64748b",marginTop:4}}>{s.region} - Cutoff: {s.cutoff}</div>
+                    <span
+                      className={`badge cat-${s.category}`}
+                      style={{
+                        marginLeft: 8,
+                        padding: "2px 8px",
+                        borderRadius: 6,
+                        fontSize: ".72rem",
+                      }}
+                    >
+                      Cat {s.category}
+                    </span>
+                    <div
+                      style={{
+                        fontSize: ".78rem",
+                        color: "#64748b",
+                        marginTop: 4,
+                      }}
+                    >
+                      {s.region} - Cutoff: {s.cutoff}
+                    </div>
                   </li>
                 ))}
               </ol>
             </div>
             <div className="modal-actions">
-              <button className="btn btn-outline" onClick={() => setShowReviewModal(false)}>Edit</button>
-              <button className="btn btn-blue" onClick={submitSelection}>Submit</button>
+              <button
+                className="btn btn-outline"
+                onClick={() => setShowReviewModal(false)}
+              >
+                Edit
+              </button>
+              <button className="btn btn-blue" onClick={submitSelection}>
+                Submit
+              </button>
             </div>
           </div>
         </div>
@@ -6416,28 +12053,71 @@ function SchoolSelection({ schoolsData, studentData }) {
 function MySelection({ selectionRow, approvalInfo }) {
   const rows = normalizeSelectionList(selectionRow);
   const status = String(selectionRow?.status || "not-submitted").toLowerCase();
-  const statusText = status === "confirmed" ? "Your selection has been confirmed." : status === "submitted" || status === "pending" ? "Your selection is under review." : "You have not submitted a selection yet.";
+  const statusText =
+    status === "confirmed"
+      ? "Your selection has been confirmed."
+      : status === "submitted" || status === "pending"
+        ? "Your selection is under review."
+        : "You have not submitted a selection yet.";
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">My Selection</div></div>
+      <div className="page-header">
+        <div className="page-title">My Selection</div>
+      </div>
       {approvalInfo?.isApproved && (
-        <div className="alert alert-success" style={{fontWeight:700}}>
-          Approval update: Your school selection has been approved by the admin{approvalInfo.approvedAtLabel ? ` on ${approvalInfo.approvedAtLabel}` : ""}.
+        <div className="alert alert-success" style={{ fontWeight: 700 }}>
+          Approval update: Your school selection has been approved by the admin
+          {approvalInfo.approvedAtLabel
+            ? ` on ${approvalInfo.approvedAtLabel}`
+            : ""}
+          .
         </div>
       )}
       <div className="alert alert-info">{statusText}</div>
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {rows.map((s,i)=>(
-          <div key={s.id} className="card card-padded" style={{display:"flex",alignItems:"center",gap:14}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"#eef2ff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:"#1a56db",flexShrink:0}}>#{i+1}</div>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:700}}>{s.name}</div>
-              <div style={{fontSize:".8rem",color:"#64748b"}}>{s.region}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {rows.map((s, i) => (
+          <div
+            key={s.id}
+            className="card card-padded"
+            style={{ display: "flex", alignItems: "center", gap: 14 }}
+          >
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: "#eef2ff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 800,
+                color: "#1a56db",
+                flexShrink: 0,
+              }}
+            >
+              #{i + 1}
             </div>
-            <span className={`badge ${s.category==="A"?"badge-warning":"badge-blue"}`}>Cat {s.category}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700 }}>{s.name}</div>
+              <div style={{ fontSize: ".8rem", color: "#64748b" }}>
+                {s.region}
+              </div>
+            </div>
+            <span
+              className={`badge ${s.category === "A" ? "badge-warning" : "badge-blue"}`}
+            >
+              Cat {s.category}
+            </span>
           </div>
         ))}
-        {!rows.length && <div className="card card-padded" style={{textAlign:"center",color:"#64748b"}}>No live selection records found.</div>}
+        {!rows.length && (
+          <div
+            className="card card-padded"
+            style={{ textAlign: "center", color: "#64748b" }}
+          >
+            No live selection records found.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -6447,14 +12127,43 @@ function MySelection({ selectionRow, approvalInfo }) {
 function DocumentsPage() {
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Documents</div></div>
+      <div className="page-header">
+        <div className="page-title">Documents</div>
+      </div>
       <div className="card-grid-tight">
-        {[{name:"BECE Form",type:"Form",icon:"docs"},{name:"School Report",type:"Report",icon:"results"},{name:"Admission Letter",type:"Letter",icon:"enroll"},{name:"Medical Certificate",type:"Health",icon:"fees"}].map(d=>(
-          <div key={d.name} className="card card-padded" style={{textAlign:"center"}}>
-            <div style={{fontSize:"2.5rem",marginBottom:8,display:"flex",justifyContent:"center"}}><Ico name={d.icon} size={34} color="#1a56db"/></div>
-            <div style={{fontWeight:700}}>{d.name}</div>
-            <div style={{fontSize:".78rem",color:"#94a3b8",marginBottom:12}}>{d.type}</div>
-            <button className="btn btn-outline btn-sm" style={{width:"100%"}}>Download</button>
+        {[
+          { name: "BECE Form", type: "Form", icon: "docs" },
+          { name: "School Report", type: "Report", icon: "results" },
+          { name: "Admission Letter", type: "Letter", icon: "enroll" },
+          { name: "Medical Certificate", type: "Health", icon: "fees" },
+        ].map((d) => (
+          <div
+            key={d.name}
+            className="card card-padded"
+            style={{ textAlign: "center" }}
+          >
+            <div
+              style={{
+                fontSize: "2.5rem",
+                marginBottom: 8,
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
+              <Ico name={d.icon} size={34} color="#1a56db" />
+            </div>
+            <div style={{ fontWeight: 700 }}>{d.name}</div>
+            <div
+              style={{ fontSize: ".78rem", color: "#94a3b8", marginBottom: 12 }}
+            >
+              {d.type}
+            </div>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ width: "100%" }}
+            >
+              Download
+            </button>
           </div>
         ))}
       </div>
@@ -6464,34 +12173,67 @@ function DocumentsPage() {
 
 // PLACEMENT PREDICTOR
 function PlacementPredictor({ schoolsData }) {
-  const [agg, setAgg] = useState(""); const [school, setSchool] = useState(""); const [result, setResult] = useState(null);
-  const schools = sortSchoolsByCategory(schoolsData?.length ? schoolsData : SCHOOLS_DATA);
+  const [agg, setAgg] = useState("");
+  const [school, setSchool] = useState("");
+  const [result, setResult] = useState(null);
+  const schools = sortSchoolsByCategory(
+    schoolsData?.length ? schoolsData : SCHOOLS_DATA,
+  );
   const predict = () => {
-    const s = schools.find(x=>String(x.id)===String(school));
-    if (!s||!agg) return;
+    const s = schools.find((x) => String(x.id) === String(school));
+    if (!s || !agg) return;
     const likely = parseInt(agg) <= s.cutoff;
-    setResult({ likely, school:s.name, cutoff:s.cutoff, agg:parseInt(agg) });
+    setResult({ likely, school: s.name, cutoff: s.cutoff, agg: parseInt(agg) });
   };
   return (
     <div className="fade-in">
-      <div className="page-header"><div className="page-title">Mock Placement Predictor</div><div className="page-sub">Estimate your likely secondary school mock placement</div></div>
-      <div className="card card-padded" style={{maxWidth:500,marginBottom:16}}>
-        <div className="form-group" style={{marginBottom:14}}>
+      <div className="page-header">
+        <div className="page-title">Mock Placement Predictor</div>
+        <div className="page-sub">
+          Estimate your likely secondary school mock placement
+        </div>
+      </div>
+      <div
+        className="card card-padded"
+        style={{ maxWidth: 500, marginBottom: 16 }}
+      >
+        <div className="form-group" style={{ marginBottom: 14 }}>
           <label className="form-label">Select School</label>
-          <select className="form-control" value={school} onChange={e=>setSchool(e.target.value)}>
+          <select
+            className="form-control"
+            value={school}
+            onChange={(e) => setSchool(e.target.value)}
+          >
             <option value="">-- Choose a school --</option>
-            {schools.map(s=><option key={s.id} value={s.id}>{s.name} (Cutoff: {s.cutoff})</option>)}
+            {schools.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} (Cutoff: {s.cutoff})
+              </option>
+            ))}
           </select>
         </div>
-        <div className="form-group" style={{marginBottom:14}}>
+        <div className="form-group" style={{ marginBottom: 14 }}>
           <label className="form-label">Your Aggregate (1=best)</label>
-          <input type="number" className="form-control" value={agg} onChange={e=>setAgg(e.target.value)} min={1} max={40} placeholder="e.g. 8"/>
+          <input
+            type="number"
+            className="form-control"
+            value={agg}
+            onChange={(e) => setAgg(e.target.value)}
+            min={1}
+            max={40}
+            placeholder="e.g. 8"
+          />
         </div>
-        <button className="btn btn-blue" onClick={predict}>Predict Mock Placement</button>
+        <button className="btn btn-blue" onClick={predict}>
+          Predict Mock Placement
+        </button>
       </div>
       {result && (
-        <div className={`alert ${result.likely?"alert-success":"alert-warning"}`}>
-          {result.likely ? `Success: Your aggregate of ${result.agg} meets the cutoff (${result.cutoff}) for ${result.school}. You are likely to be placed here.` 
+        <div
+          className={`alert ${result.likely ? "alert-success" : "alert-warning"}`}
+        >
+          {result.likely
+            ? `Success: Your aggregate of ${result.agg} meets the cutoff (${result.cutoff}) for ${result.school}. You are likely to be placed here.`
             : `Warning: Your aggregate of ${result.agg} is above the cutoff of ${result.cutoff} for ${result.school}. Consider lower-cutoff schools.`}
         </div>
       )}
@@ -6501,27 +12243,200 @@ function PlacementPredictor({ schoolsData }) {
 
 function AssignmentTrackerPage() {
   const [tasks, setTasks] = useState([
-    { id: 1, subject: "Mathematics", title: "Algebra Worksheet", due: "2026-04-20", status: "pending" },
-    { id: 2, subject: "English", title: "Essay Draft", due: "2026-04-18", status: "submitted" },
+    {
+      id: 1,
+      subject: "Mathematics",
+      title: "Algebra Worksheet",
+      due: "2026-04-20",
+      status: "pending",
+    },
+    {
+      id: 2,
+      subject: "English",
+      title: "Essay Draft",
+      due: "2026-04-18",
+      status: "submitted",
+    },
   ]);
   const isMobile = useIsMobileLayout();
-  const update = (id, status) => setTasks((t) => t.map((x) => x.id === id ? { ...x, status } : x));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Assignments</div><div className="page-sub">Track homework, due dates and submission status.</div></div>{isMobile ? <div className="mobile-record-list">{tasks.map((t)=><div key={t.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{t.title}</div><div className="mobile-record-sub">{t.subject} • Due {t.due}</div></div><span className={`badge ${t.status==="submitted"?"badge-success":t.status==="late"?"badge-danger":"badge-warning"}`}>{t.status}</span></div><div className="mobile-record-actions"><button className="btn btn-sm btn-outline" onClick={()=>update(t.id,"submitted")}>Mark Submitted</button></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Task</th><th>Due</th><th>Status</th><th>Action</th></tr></thead><tbody>{tasks.map((t)=><tr key={t.id}><td>{t.subject}</td><td>{t.title}</td><td>{t.due}</td><td><span className={`badge ${t.status==="submitted"?"badge-success":t.status==="late"?"badge-danger":"badge-warning"}`}>{t.status}</span></td><td><button className="btn btn-sm btn-outline" onClick={()=>update(t.id,"submitted")}>Mark Submitted</button></td></tr>)}</tbody></table></div>}</div>;
+  const update = (id, status) =>
+    setTasks((t) => t.map((x) => (x.id === id ? { ...x, status } : x)));
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Assignments</div>
+        <div className="page-sub">
+          Track homework, due dates and submission status.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {tasks.map((t) => (
+            <div key={t.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{t.title}</div>
+                  <div className="mobile-record-sub">
+                    {t.subject} • Due {t.due}
+                  </div>
+                </div>
+                <span
+                  className={`badge ${t.status === "submitted" ? "badge-success" : t.status === "late" ? "badge-danger" : "badge-warning"}`}
+                >
+                  {t.status}
+                </span>
+              </div>
+              <div className="mobile-record-actions">
+                <button
+                  className="btn btn-sm btn-outline"
+                  onClick={() => update(t.id, "submitted")}
+                >
+                  Mark Submitted
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Subject</th>
+                <th>Task</th>
+                <th>Due</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.subject}</td>
+                  <td>{t.title}</td>
+                  <td>{t.due}</td>
+                  <td>
+                    <span
+                      className={`badge ${t.status === "submitted" ? "badge-success" : t.status === "late" ? "badge-danger" : "badge-warning"}`}
+                    >
+                      {t.status}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-sm btn-outline"
+                      onClick={() => update(t.id, "submitted")}
+                    >
+                      Mark Submitted
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ExamSchedulePage() {
   const rows = [
-    { id: 1, subject: "Mathematics", date: "2026-05-03", time: "09:00", venue: "Hall A", seat: "A-14" },
-    { id: 2, subject: "English", date: "2026-05-05", time: "11:00", venue: "Hall B", seat: "B-22" },
+    {
+      id: 1,
+      subject: "Mathematics",
+      date: "2026-05-03",
+      time: "09:00",
+      venue: "Hall A",
+      seat: "A-14",
+    },
+    {
+      id: 2,
+      subject: "English",
+      date: "2026-05-05",
+      time: "11:00",
+      venue: "Hall B",
+      seat: "B-22",
+    },
   ];
   const isMobile = useIsMobileLayout();
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Exam Timetable & Seat Plan</div><div className="page-sub">See your exam schedule, venue, and seat allocation.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.subject}</div><div className="mobile-record-sub">{r.date} • {r.time}</div></div><strong>{r.seat}</strong></div><div className="mobile-record-item"><label>Venue</label><span>{r.venue}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Date</th><th>Time</th><th>Venue</th><th>Seat</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.subject}</td><td>{r.date}</td><td>{r.time}</td><td>{r.venue}</td><td><strong>{r.seat}</strong></td></tr>)}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Exam Timetable & Seat Plan</div>
+        <div className="page-sub">
+          See your exam schedule, venue, and seat allocation.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {rows.map((r) => (
+            <div key={r.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{r.subject}</div>
+                  <div className="mobile-record-sub">
+                    {r.date} • {r.time}
+                  </div>
+                </div>
+                <strong>{r.seat}</strong>
+              </div>
+              <div className="mobile-record-item">
+                <label>Venue</label>
+                <span>{r.venue}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Subject</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Venue</th>
+                <th>Seat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.subject}</td>
+                  <td>{r.date}</td>
+                  <td>{r.time}</td>
+                  <td>{r.venue}</td>
+                  <td>
+                    <strong>{r.seat}</strong>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ReportCardPage({ studentData, attendanceData, feesData }) {
-  const student = studentData || { full_name: "Student", index: "-", class: "-" };
-  const attendanceRate = Math.round((attendanceData || []).filter((x) => String(x.status).toLowerCase()==="present").length / Math.max((attendanceData || []).length, 1) * 100);
-  const totalOutstanding = (feesData || []).reduce((s, f) => s + Math.max(Number(f.amount || 0) - Number(f.paid || 0), 0), 0);
+  const student = studentData || {
+    full_name: "Student",
+    index: "-",
+    class: "-",
+  };
+  const attendanceRate = Math.round(
+    ((attendanceData || []).filter(
+      (x) => String(x.status).toLowerCase() === "present",
+    ).length /
+      Math.max((attendanceData || []).length, 1)) *
+      100,
+  );
+  const totalOutstanding = (feesData || []).reduce(
+    (s, f) => s + Math.max(Number(f.amount || 0) - Number(f.paid || 0), 0),
+    0,
+  );
   const generate = async () => {
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -6550,7 +12465,42 @@ function ReportCardPage({ studentData, attendanceData, feesData }) {
 
     doc.save(`report-card-${student.index || "student"}.pdf`);
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Term Report Card</div><div className="page-sub">Generate and download your report summary.</div></div><div className="card card-padded"><div style={{display:"grid",gap:8}}><div><strong>Name:</strong> {student.full_name}</div><div><strong>Student ID:</strong> {student.index}</div><div><strong>Class:</strong> {student.class}</div><div><strong>Attendance Rate:</strong> {attendanceRate}%</div><div><strong>Outstanding Fees:</strong> GHS {totalOutstanding}</div></div><button className="btn btn-blue" style={{marginTop:12}} onClick={generate}>Download Report</button></div></div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Term Report Card</div>
+        <div className="page-sub">
+          Generate and download your report summary.
+        </div>
+      </div>
+      <div className="card card-padded">
+        <div style={{ display: "grid", gap: 8 }}>
+          <div>
+            <strong>Name:</strong> {student.full_name}
+          </div>
+          <div>
+            <strong>Student ID:</strong> {student.index}
+          </div>
+          <div>
+            <strong>Class:</strong> {student.class}
+          </div>
+          <div>
+            <strong>Attendance Rate:</strong> {attendanceRate}%
+          </div>
+          <div>
+            <strong>Outstanding Fees:</strong> GHS {totalOutstanding}
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 12 }}
+          onClick={generate}
+        >
+          Download Report
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function StudentResultsPage({ scoreValues }) {
@@ -6565,14 +12515,23 @@ function StudentResultsPage({ scoreValues }) {
       bg: gradeInfo.bg,
     };
   });
-  const averageScore = rows.length ? Math.round(rows.reduce((sum, row) => sum + row.score, 0) / rows.length) : 0;
-  const bestSubject = rows.length ? [...rows].sort((a, b) => b.score - a.score)[0] : null;
-  const weakSubject = rows.length ? [...rows].sort((a, b) => a.score - b.score)[0] : null;
-  const gradeCounts = rows.reduce((acc, row) => {
-    const key = String(row.grade || "F").toUpperCase();
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, { A: 0, B: 0, C: 0, D: 0, F: 0 });
+  const averageScore = rows.length
+    ? Math.round(rows.reduce((sum, row) => sum + row.score, 0) / rows.length)
+    : 0;
+  const bestSubject = rows.length
+    ? [...rows].sort((a, b) => b.score - a.score)[0]
+    : null;
+  const weakSubject = rows.length
+    ? [...rows].sort((a, b) => a.score - b.score)[0]
+    : null;
+  const gradeCounts = rows.reduce(
+    (acc, row) => {
+      const key = String(row.grade || "F").toUpperCase();
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    },
+    { A: 0, B: 0, C: 0, D: 0, F: 0 },
+  );
   const total = Math.max(rows.length, 1);
   const summarySegments = [
     { grade: "A", color: "#16a34a" },
@@ -6582,23 +12541,65 @@ function StudentResultsPage({ scoreValues }) {
     { grade: "F", color: "#7f1d1d" },
   ];
   let studentProgress = 0;
-  const studentDonut = summarySegments.map((segment) => {
-    const start = Math.round(studentProgress * 360);
-    studentProgress += (gradeCounts[segment.grade] || 0) / total;
-    const end = Math.round(studentProgress * 360);
-    return `${segment.color} ${start}deg ${end}deg`;
-  }).join(", ");
+  const studentDonut = summarySegments
+    .map((segment) => {
+      const start = Math.round(studentProgress * 360);
+      studentProgress += (gradeCounts[segment.grade] || 0) / total;
+      const end = Math.round(studentProgress * 360);
+      return `${segment.color} ${start}deg ${end}deg`;
+    })
+    .join(", ");
 
   return (
     <div className="fade-in">
       <div className="page-header">
         <div className="page-title">Results</div>
-        <div className="page-sub">Your subject scores and grades for the current term.</div>
+        <div className="page-sub">
+          Your subject scores and grades for the current term.
+        </div>
       </div>
       <div className="stats-grid stats-grid-3">
-        <div className="stat-card" style={{background:"#eef2ff"}}><div className="stat-label" style={{color:"#1e3a8a"}}>Average Score</div><div className="stat-value" style={{color:"#1e3a8a"}}>{rows.length ? `${averageScore}%` : "N/A"}</div><div className="stat-sub" style={{color:"#1e3a8a"}}>Across all recorded subjects</div></div>
-        <div className="stat-card" style={{background:"#dcfce7"}}><div className="stat-label" style={{color:"#166534"}}>Best Subject</div><div className="stat-value" style={{color:"#166534",fontSize:"1.1rem"}}>{bestSubject?.subject || "N/A"}</div><div className="stat-sub" style={{color:"#166534"}}>{bestSubject ? `${bestSubject.score}%` : "No subject score yet"}</div></div>
-        <div className="stat-card" style={{background:"#fee2e2"}}><div className="stat-label" style={{color:"#991b1b"}}>Focus Subject</div><div className="stat-value" style={{color:"#991b1b",fontSize:"1.1rem"}}>{weakSubject?.subject || "N/A"}</div><div className="stat-sub" style={{color:"#991b1b"}}>{weakSubject ? `${weakSubject.score}% - prioritize revision` : "No subject score yet"}</div></div>
+        <div className="stat-card" style={{ background: "#eef2ff" }}>
+          <div className="stat-label" style={{ color: "#1e3a8a" }}>
+            Average Score
+          </div>
+          <div className="stat-value" style={{ color: "#1e3a8a" }}>
+            {rows.length ? `${averageScore}%` : "N/A"}
+          </div>
+          <div className="stat-sub" style={{ color: "#1e3a8a" }}>
+            Across all recorded subjects
+          </div>
+        </div>
+        <div className="stat-card" style={{ background: "#dcfce7" }}>
+          <div className="stat-label" style={{ color: "#166534" }}>
+            Best Subject
+          </div>
+          <div
+            className="stat-value"
+            style={{ color: "#166534", fontSize: "1.1rem" }}
+          >
+            {bestSubject?.subject || "N/A"}
+          </div>
+          <div className="stat-sub" style={{ color: "#166534" }}>
+            {bestSubject ? `${bestSubject.score}%` : "No subject score yet"}
+          </div>
+        </div>
+        <div className="stat-card" style={{ background: "#fee2e2" }}>
+          <div className="stat-label" style={{ color: "#991b1b" }}>
+            Focus Subject
+          </div>
+          <div
+            className="stat-value"
+            style={{ color: "#991b1b", fontSize: "1.1rem" }}
+          >
+            {weakSubject?.subject || "N/A"}
+          </div>
+          <div className="stat-sub" style={{ color: "#991b1b" }}>
+            {weakSubject
+              ? `${weakSubject.score}% - prioritize revision`
+              : "No subject score yet"}
+          </div>
+        </div>
       </div>
       <div className="results-visual-grid results-visual-grid-wide">
         <div className="results-panel">
@@ -6607,16 +12608,38 @@ function StudentResultsPage({ scoreValues }) {
             {rows.map((row) => (
               <div className="results-bar-row" key={`student-score-${row.id}`}>
                 <span>{row.subject}</span>
-                <div className="results-bar-track"><div className="results-bar-fill" style={{width:`${Math.max(0, Math.min(100, row.score))}%`,background:row.score >= 75 ? "#16a34a" : row.score >= 60 ? "#d97706" : "#dc2626"}}/></div>
+                <div className="results-bar-track">
+                  <div
+                    className="results-bar-fill"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, row.score))}%`,
+                      background:
+                        row.score >= 75
+                          ? "#16a34a"
+                          : row.score >= 60
+                            ? "#d97706"
+                            : "#dc2626",
+                    }}
+                  />
+                </div>
                 <strong>{row.score}%</strong>
               </div>
             ))}
-            {!rows.length && <div style={{color:"#64748b",fontSize:".82rem"}}>No subjects with recorded scores yet.</div>}
+            {!rows.length && (
+              <div style={{ color: "#64748b", fontSize: ".82rem" }}>
+                No subjects with recorded scores yet.
+              </div>
+            )}
           </div>
         </div>
         <div className="results-panel">
           <h3>Grade Mix</h3>
-          <div className="results-donut" style={{background:`conic-gradient(${studentDonut || "#e2e8f0 0deg 360deg"})`}}>
+          <div
+            className="results-donut"
+            style={{
+              background: `conic-gradient(${studentDonut || "#e2e8f0 0deg 360deg"})`,
+            }}
+          >
             <div className="results-donut-center">
               <strong>{rows.length}</strong>
               <span>Subjects</span>
@@ -6625,7 +12648,13 @@ function StudentResultsPage({ scoreValues }) {
           <div className="results-legend">
             {summarySegments.map((segment) => (
               <div key={segment.grade} className="results-legend-item">
-                <span style={{display:"inline-flex",alignItems:"center"}}><span className="results-dot" style={{background:segment.color}}/>Grade {segment.grade}</span>
+                <span style={{ display: "inline-flex", alignItems: "center" }}>
+                  <span
+                    className="results-dot"
+                    style={{ background: segment.color }}
+                  />
+                  Grade {segment.grade}
+                </span>
                 <b>{gradeCounts[segment.grade] || 0}</b>
               </div>
             ))}
@@ -6633,28 +12662,83 @@ function StudentResultsPage({ scoreValues }) {
         </div>
         <div className="results-panel">
           <h3>Readiness Gauge</h3>
-          <div style={{padding:"10px 6px"}}>
-            <div className="progress" style={{height:14,background:"#e2e8f0"}}>
-              <div className="progress-bar" style={{width:`${Math.max(0, Math.min(100, averageScore))}%`,background:averageScore >= 75 ? "#16a34a" : averageScore >= 60 ? "#d97706" : "#dc2626"}}/>
+          <div style={{ padding: "10px 6px" }}>
+            <div
+              className="progress"
+              style={{ height: 14, background: "#e2e8f0" }}
+            >
+              <div
+                className="progress-bar"
+                style={{
+                  width: `${Math.max(0, Math.min(100, averageScore))}%`,
+                  background:
+                    averageScore >= 75
+                      ? "#16a34a"
+                      : averageScore >= 60
+                        ? "#d97706"
+                        : "#dc2626",
+                }}
+              />
             </div>
-            <div className="progress-scale"><span>0%</span><span>50%</span><span>100%</span></div>
-            <div style={{marginTop:12,fontWeight:700,color:"#0f172a",fontSize:".95rem"}}>Exam Readiness: {rows.length ? `${averageScore}%` : "N/A"}</div>
-            <div style={{marginTop:6,color:"#64748b",fontSize:".8rem"}}>{averageScore >= 75 ? "Strong performance profile" : averageScore >= 60 ? "Stable progress with room to improve" : "Focused intervention recommended"}</div>
+            <div className="progress-scale">
+              <span>0%</span>
+              <span>50%</span>
+              <span>100%</span>
+            </div>
+            <div
+              style={{
+                marginTop: 12,
+                fontWeight: 700,
+                color: "#0f172a",
+                fontSize: ".95rem",
+              }}
+            >
+              Exam Readiness: {rows.length ? `${averageScore}%` : "N/A"}
+            </div>
+            <div style={{ marginTop: 6, color: "#64748b", fontSize: ".8rem" }}>
+              {averageScore >= 75
+                ? "Strong performance profile"
+                : averageScore >= 60
+                  ? "Stable progress with room to improve"
+                  : "Focused intervention recommended"}
+            </div>
           </div>
         </div>
       </div>
       <div className="card table-wrap">
         <table>
-          <thead><tr><th>Subject</th><th>Score</th><th>Grade</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Subject</th>
+              <th>Score</th>
+              <th>Grade</th>
+            </tr>
+          </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
                 <td>{r.subject}</td>
                 <td>{r.score}</td>
-                <td><span className="grade-chip" style={{background:r.bg,color:r.color}}>{r.grade}</span></td>
+                <td>
+                  <span
+                    className="grade-chip"
+                    style={{ background: r.bg, color: r.color }}
+                  >
+                    {r.grade}
+                  </span>
+                </td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan="3" style={{textAlign:"center",padding:22,color:"#64748b"}}>No live result rows available yet.</td></tr>}
+            {!rows.length && (
+              <tr>
+                <td
+                  colSpan="3"
+                  style={{ textAlign: "center", padding: 22, color: "#64748b" }}
+                >
+                  No live result rows available yet.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -6663,101 +12747,702 @@ function StudentResultsPage({ scoreValues }) {
 }
 
 function StudentAnalyticsPage({ scoreValues, attendanceData, feesData }) {
-  const values = Array.isArray(scoreValues) ? scoreValues.map((v) => Number(v || 0)).filter((v) => Number.isFinite(v)) : [];
-  const avg = values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : 0;
+  const values = Array.isArray(scoreValues)
+    ? scoreValues.map((v) => Number(v || 0)).filter((v) => Number.isFinite(v))
+    : [];
+  const avg = values.length
+    ? Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+    : 0;
   const attendanceRows = attendanceData || [];
-  const present = attendanceRows.filter((a) => String(a.status).toLowerCase() === "present").length;
-  const attendanceRate = Math.round((present / Math.max(attendanceRows.length, 1)) * 100);
+  const present = attendanceRows.filter(
+    (a) => String(a.status).toLowerCase() === "present",
+  ).length;
+  const attendanceRate = Math.round(
+    (present / Math.max(attendanceRows.length, 1)) * 100,
+  );
   const feeRows = feesData || [];
-  const outstanding = feeRows.reduce((sum, f) => sum + Math.max(Number(f.amount || 0) - Number(f.paid || 0), 0), 0);
+  const outstanding = feeRows.reduce(
+    (sum, f) => sum + Math.max(Number(f.amount || 0) - Number(f.paid || 0), 0),
+    0,
+  );
 
   return (
     <div className="fade-in">
       <div className="page-header">
         <div className="page-title">Analytics</div>
-        <div className="page-sub">Performance insights from your live academic and finance records.</div>
+        <div className="page-sub">
+          Performance insights from your live academic and finance records.
+        </div>
       </div>
       <div className="stats-grid">
         {[
-          { label: "Average Score", value: values.length ? `${avg}%` : "N/A", sub: values.length ? "From live scores" : "No score data", bg: "#dbeafe", c: "#1e40af" },
-          { label: "Attendance", value: `${attendanceRate}%`, sub: `${present}/${attendanceRows.length} present`, bg: "#dcfce7", c: "#16a34a" },
-          { label: "Outstanding Fees", value: `GHS ${outstanding}`, sub: outstanding > 0 ? "Pending payment" : "Cleared", bg: outstanding > 0 ? "#fee2e2" : "#dcfce7", c: outstanding > 0 ? "#dc2626" : "#16a34a" },
+          {
+            label: "Average Score",
+            value: values.length ? `${avg}%` : "N/A",
+            sub: values.length ? "From live scores" : "No score data",
+            bg: "#dbeafe",
+            c: "#1e40af",
+          },
+          {
+            label: "Attendance",
+            value: `${attendanceRate}%`,
+            sub: `${present}/${attendanceRows.length} present`,
+            bg: "#dcfce7",
+            c: "#16a34a",
+          },
+          {
+            label: "Outstanding Fees",
+            value: `GHS ${outstanding}`,
+            sub: outstanding > 0 ? "Pending payment" : "Cleared",
+            bg: outstanding > 0 ? "#fee2e2" : "#dcfce7",
+            c: outstanding > 0 ? "#dc2626" : "#16a34a",
+          },
         ].map((s) => (
-          <div key={s.label} className="stat-card" style={{background:s.bg}}>
-            <div className="stat-label" style={{color:s.c}}>{s.label}</div>
-            <div className="stat-value" style={{color:s.c,fontSize:"1.5rem"}}>{s.value}</div>
-            <div className="stat-sub" style={{color:s.c}}>{s.sub}</div>
+          <div key={s.label} className="stat-card" style={{ background: s.bg }}>
+            <div className="stat-label" style={{ color: s.c }}>
+              {s.label}
+            </div>
+            <div
+              className="stat-value"
+              style={{ color: s.c, fontSize: "1.5rem" }}
+            >
+              {s.value}
+            </div>
+            <div className="stat-sub" style={{ color: s.c }}>
+              {s.sub}
+            </div>
           </div>
         ))}
       </div>
       <div className="card card-padded">
-        <h3 style={{fontWeight:700,marginBottom:10}}>Subject Strength Snapshot</h3>
-        {values.length ? values.map((v, i) => (
-          <div key={`${i}-${v}`} className="subject-progress-row">
-            <span className="subject-progress-label">{SUBJECTS[i] || `Subject ${i + 1}`}</span>
-            <div className="progress" style={{flex:1}}><div className="progress-bar" style={{width:`${Math.max(0, Math.min(100, v))}%`,background:v>=70?"#16a34a":v>=55?"#d97706":"#dc2626"}}/></div>
-            <span className="subject-progress-value">{v}%</span>
-          </div>
-        )) : <div style={{color:"#64748b"}}>No score data to analyze yet.</div>}
+        <h3 style={{ fontWeight: 700, marginBottom: 10 }}>
+          Subject Strength Snapshot
+        </h3>
+        {values.length ? (
+          values.map((v, i) => (
+            <div key={`${i}-${v}`} className="subject-progress-row">
+              <span className="subject-progress-label">
+                {SUBJECTS[i] || `Subject ${i + 1}`}
+              </span>
+              <div className="progress" style={{ flex: 1 }}>
+                <div
+                  className="progress-bar"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, v))}%`,
+                    background:
+                      v >= 70 ? "#16a34a" : v >= 55 ? "#d97706" : "#dc2626",
+                  }}
+                />
+              </div>
+              <span className="subject-progress-value">{v}%</span>
+            </div>
+          ))
+        ) : (
+          <div style={{ color: "#64748b" }}>No score data to analyze yet.</div>
+        )}
       </div>
     </div>
   );
 }
 
 function SubjectProgressPage() {
-  const rows = SUBJECTS.slice(0, 8).map((s) => ({ subject: s, avg: Math.floor(Math.random() * 35) + 55 }));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Subject Progress</div><div className="page-sub">View performance trend by subject.</div></div><div className="card card-padded">{rows.map((r) => <div key={r.subject} className="subject-progress-row"><div className="subject-progress-label">{r.subject}</div><div className="progress" style={{flex:1}}><div className="progress-bar" style={{width:`${r.avg}%`,background:r.avg>=70?"#16a34a":r.avg>=55?"#d97706":"#dc2626"}}/></div><div className="subject-progress-value">{r.avg}%</div></div>)}</div></div>;
+  const rows = SUBJECTS.slice(0, 8).map((s) => ({
+    subject: s,
+    avg: Math.floor(Math.random() * 35) + 55,
+  }));
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Subject Progress</div>
+        <div className="page-sub">View performance trend by subject.</div>
+      </div>
+      <div className="card card-padded">
+        {rows.map((r) => (
+          <div key={r.subject} className="subject-progress-row">
+            <div className="subject-progress-label">{r.subject}</div>
+            <div className="progress" style={{ flex: 1 }}>
+              <div
+                className="progress-bar"
+                style={{
+                  width: `${r.avg}%`,
+                  background:
+                    r.avg >= 70
+                      ? "#16a34a"
+                      : r.avg >= 55
+                        ? "#d97706"
+                        : "#dc2626",
+                }}
+              />
+            </div>
+            <div className="subject-progress-value">{r.avg}%</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function StudyPlannerPage() {
-  const [plan, setPlan] = useState([{ id: 1, day: "Monday", focus: "Mathematics - Algebra", duration: "1h" }]);
-  const [form, setForm] = useState({ day: "Monday", focus: "", duration: "1h" });
+  const [plan, setPlan] = useState([
+    { id: 1, day: "Monday", focus: "Mathematics - Algebra", duration: "1h" },
+  ]);
+  const [form, setForm] = useState({
+    day: "Monday",
+    focus: "",
+    duration: "1h",
+  });
   const isMobile = useIsMobileLayout();
-  const add = () => { if (!form.focus) return; setPlan((p) => [...p, { id: Date.now(), ...form }]); setForm({ day: "Monday", focus: "", duration: "1h" }); };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Study Planner</div><div className="page-sub">Build a weekly revision plan.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Day</label><select className="form-control" value={form.day} onChange={(e)=>setForm((f)=>({...f,day:e.target.value}))}>{["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((d)=><option key={d}>{d}</option>)}</select></div><div className="form-group"><label className="form-label">Focus Area</label><input className="form-control" value={form.focus} onChange={(e)=>setForm((f)=>({...f,focus:e.target.value}))}/></div><div className="form-group"><label className="form-label">Duration</label><input className="form-control" value={form.duration} onChange={(e)=>setForm((f)=>({...f,duration:e.target.value}))}/></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Add Session</button></div>{isMobile ? <div className="mobile-record-list">{plan.map((p)=><div key={p.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{p.focus}</div><div className="mobile-record-sub">{p.day}</div></div><strong>{p.duration}</strong></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Day</th><th>Focus</th><th>Duration</th></tr></thead><tbody>{plan.map((p)=><tr key={p.id}><td>{p.day}</td><td>{p.focus}</td><td>{p.duration}</td></tr>)}</tbody></table></div>}</div>;
+  const add = () => {
+    if (!form.focus) return;
+    setPlan((p) => [...p, { id: Date.now(), ...form }]);
+    setForm({ day: "Monday", focus: "", duration: "1h" });
+  };
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Study Planner</div>
+        <div className="page-sub">Build a weekly revision plan.</div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Day</label>
+            <select
+              className="form-control"
+              value={form.day}
+              onChange={(e) => setForm((f) => ({ ...f, day: e.target.value }))}
+            >
+              {[
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday",
+              ].map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Focus Area</label>
+            <input
+              className="form-control"
+              value={form.focus}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, focus: e.target.value }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Duration</label>
+            <input
+              className="form-control"
+              value={form.duration}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, duration: e.target.value }))
+              }
+            />
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={add}
+        >
+          Add Session
+        </button>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {plan.map((p) => (
+            <div key={p.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{p.focus}</div>
+                  <div className="mobile-record-sub">{p.day}</div>
+                </div>
+                <strong>{p.duration}</strong>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Day</th>
+                <th>Focus</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plan.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.day}</td>
+                  <td>{p.focus}</td>
+                  <td>{p.duration}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function AttendanceCorrectionPage({ attendanceData }) {
   const isMobile = useIsMobileLayout();
   const [requests, setRequests] = useState([]);
   const [note, setNote] = useState("");
-  const rows = (attendanceData || []).filter((x) => String(x.status).toLowerCase() !== "present");
+  const rows = (attendanceData || []).filter(
+    (x) => String(x.status).toLowerCase() !== "present",
+  );
   const submit = (row) => {
     if (!note.trim()) return;
-    setRequests((r) => [{ id: Date.now(), date: row.date, status: row.status, note, state: "pending" }, ...r]);
+    setRequests((r) => [
+      {
+        id: Date.now(),
+        date: row.date,
+        status: row.status,
+        note,
+        state: "pending",
+      },
+      ...r,
+    ]);
     setNote("");
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Attendance Correction Requests</div><div className="page-sub">Request review for absent/late records.</div></div><div className="card card-padded" style={{marginBottom:12}}><label className="form-label">Evidence/Reason</label><textarea className="form-control" rows={3} value={note} onChange={(e)=>setNote(e.target.value)} placeholder="Explain why this record should be corrected"/></div>{isMobile ? <><div className="mobile-record-list" style={{marginBottom:12}}>{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.date}</div><div className="mobile-record-sub">Current status: {r.status}</div></div><button className="btn btn-sm btn-outline" onClick={()=>submit(r)}>Request</button></div></div>)}{!rows.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No absent/late records to dispute.</div>}</div><div className="mobile-record-list">{requests.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.date}</div><div className="mobile-record-sub">Original: {r.status}</div></div><span className="badge badge-warning">{r.state}</span></div><div className="mobile-record-item"><label>Reason</label><span>{r.note}</span></div></div>)}{!requests.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No correction requests submitted yet.</div>}</div></> : <><div className="card table-wrap" style={{marginBottom:12}}><table><thead><tr><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.date}</td><td>{r.status}</td><td><button className="btn btn-sm btn-outline" onClick={()=>submit(r)}>Request Correction</button></td></tr>)}{!rows.length && <tr><td colSpan="3" style={{textAlign:"center",padding:18,color:"#64748b"}}>No absent/late records to dispute.</td></tr>}</tbody></table></div><div className="card table-wrap"><table><thead><tr><th>Date</th><th>Original Status</th><th>Reason</th><th>Request Status</th></tr></thead><tbody>{requests.map((r)=><tr key={r.id}><td>{r.date}</td><td>{r.status}</td><td>{r.note}</td><td><span className="badge badge-warning">{r.state}</span></td></tr>)}{!requests.length && <tr><td colSpan="4" style={{textAlign:"center",padding:18,color:"#64748b"}}>No correction requests submitted yet.</td></tr>}</tbody></table></div></>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Attendance Correction Requests</div>
+        <div className="page-sub">Request review for absent/late records.</div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <label className="form-label">Evidence/Reason</label>
+        <textarea
+          className="form-control"
+          rows={3}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Explain why this record should be corrected"
+        />
+      </div>
+      {isMobile ? (
+        <>
+          <div className="mobile-record-list" style={{ marginBottom: 12 }}>
+            {rows.map((r) => (
+              <div key={r.id} className="mobile-record-card">
+                <div className="mobile-record-head">
+                  <div>
+                    <div className="mobile-record-title">{r.date}</div>
+                    <div className="mobile-record-sub">
+                      Current status: {r.status}
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn-sm btn-outline"
+                    onClick={() => submit(r)}
+                  >
+                    Request
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!rows.length && (
+              <div
+                className="mobile-record-card"
+                style={{ textAlign: "center", color: "#64748b" }}
+              >
+                No absent/late records to dispute.
+              </div>
+            )}
+          </div>
+          <div className="mobile-record-list">
+            {requests.map((r) => (
+              <div key={r.id} className="mobile-record-card">
+                <div className="mobile-record-head">
+                  <div>
+                    <div className="mobile-record-title">{r.date}</div>
+                    <div className="mobile-record-sub">
+                      Original: {r.status}
+                    </div>
+                  </div>
+                  <span className="badge badge-warning">{r.state}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Reason</label>
+                  <span>{r.note}</span>
+                </div>
+              </div>
+            ))}
+            {!requests.length && (
+              <div
+                className="mobile-record-card"
+                style={{ textAlign: "center", color: "#64748b" }}
+              >
+                No correction requests submitted yet.
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="card table-wrap" style={{ marginBottom: 12 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.date}</td>
+                    <td>{r.status}</td>
+                    <td>
+                      <button
+                        className="btn btn-sm btn-outline"
+                        onClick={() => submit(r)}
+                      >
+                        Request Correction
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {!rows.length && (
+                  <tr>
+                    <td
+                      colSpan="3"
+                      style={{
+                        textAlign: "center",
+                        padding: 18,
+                        color: "#64748b",
+                      }}
+                    >
+                      No absent/late records to dispute.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="card table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Original Status</th>
+                  <th>Reason</th>
+                  <th>Request Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.date}</td>
+                    <td>{r.status}</td>
+                    <td>{r.note}</td>
+                    <td>
+                      <span className="badge badge-warning">{r.state}</span>
+                    </td>
+                  </tr>
+                ))}
+                {!requests.length && (
+                  <tr>
+                    <td
+                      colSpan="4"
+                      style={{
+                        textAlign: "center",
+                        padding: 18,
+                        color: "#64748b",
+                      }}
+                    >
+                      No correction requests submitted yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function StudentPaymentsPage({ feesData }) {
   const isMobile = useIsMobileLayout();
   const [payments, setPayments] = useState([]);
-  const [form, setForm] = useState({ term: (feesData?.[0]?.term || "First Term"), amount: "", method: "mobile-money" });
+  const [form, setForm] = useState({
+    term: feesData?.[0]?.term || "First Term",
+    amount: "",
+    method: "mobile-money",
+  });
   const pay = () => {
     if (!form.amount) return;
-    setPayments((p) => [{ id: Date.now(), ...form, receipt: `PAY-${String(Date.now()).slice(-6)}`, at: new Date().toISOString() }, ...p]);
+    setPayments((p) => [
+      {
+        id: Date.now(),
+        ...form,
+        receipt: `PAY-${String(Date.now()).slice(-6)}`,
+        at: new Date().toISOString(),
+      },
+      ...p,
+    ]);
     setForm((f) => ({ ...f, amount: "" }));
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Pay Fees</div><div className="page-sub">Initiate direct payments and get receipt references.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Term</label><select className="form-control" value={form.term} onChange={(e)=>setForm((f)=>({...f,term:e.target.value}))}>{(feesData||[]).map((x)=><option key={x.id}>{x.term}</option>)}</select></div><div className="form-group"><label className="form-label">Amount (GHS)</label><input type="number" className="form-control" value={form.amount} onChange={(e)=>setForm((f)=>({...f,amount:e.target.value}))} /></div><div className="form-group"><label className="form-label">Method</label><select className="form-control" value={form.method} onChange={(e)=>setForm((f)=>({...f,method:e.target.value}))}><option value="mobile-money">Mobile Money</option><option value="card">Card</option><option value="bank">Bank Transfer</option></select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={pay}>Pay Now</button></div>{isMobile ? <div className="mobile-record-list">{payments.map((p)=><div key={p.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{p.term}</div><div className="mobile-record-sub">{new Date(p.at).toLocaleString()}</div></div><strong>GHS {p.amount}</strong></div><div className="mobile-record-grid"><div className="mobile-record-item"><label>Method</label><span>{p.method}</span></div><div className="mobile-record-item"><label>Receipt</label><strong>{p.receipt}</strong></div></div></div>)}{!payments.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No payment attempts yet.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>When</th><th>Term</th><th>Amount</th><th>Method</th><th>Receipt</th></tr></thead><tbody>{payments.map((p)=><tr key={p.id}><td>{new Date(p.at).toLocaleString()}</td><td>{p.term}</td><td>GHS {p.amount}</td><td>{p.method}</td><td><strong>{p.receipt}</strong></td></tr>)}{!payments.length && <tr><td colSpan="5" style={{textAlign:"center",padding:18,color:"#64748b"}}>No payment attempts yet.</td></tr>}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Pay Fees</div>
+        <div className="page-sub">
+          Initiate direct payments and get receipt references.
+        </div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Term</label>
+            <select
+              className="form-control"
+              value={form.term}
+              onChange={(e) => setForm((f) => ({ ...f, term: e.target.value }))}
+            >
+              {(feesData || []).map((x) => (
+                <option key={x.id}>{x.term}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Amount (GHS)</label>
+            <input
+              type="number"
+              className="form-control"
+              value={form.amount}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, amount: e.target.value }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Method</label>
+            <select
+              className="form-control"
+              value={form.method}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, method: e.target.value }))
+              }
+            >
+              <option value="mobile-money">Mobile Money</option>
+              <option value="card">Card</option>
+              <option value="bank">Bank Transfer</option>
+            </select>
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={pay}
+        >
+          Pay Now
+        </button>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {payments.map((p) => (
+            <div key={p.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{p.term}</div>
+                  <div className="mobile-record-sub">
+                    {new Date(p.at).toLocaleString()}
+                  </div>
+                </div>
+                <strong>GHS {p.amount}</strong>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item">
+                  <label>Method</label>
+                  <span>{p.method}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Receipt</label>
+                  <strong>{p.receipt}</strong>
+                </div>
+              </div>
+            </div>
+          ))}
+          {!payments.length && (
+            <div
+              className="mobile-record-card"
+              style={{ textAlign: "center", color: "#64748b" }}
+            >
+              No payment attempts yet.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Term</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Receipt</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((p) => (
+                <tr key={p.id}>
+                  <td>{new Date(p.at).toLocaleString()}</td>
+                  <td>{p.term}</td>
+                  <td>GHS {p.amount}</td>
+                  <td>{p.method}</td>
+                  <td>
+                    <strong>{p.receipt}</strong>
+                  </td>
+                </tr>
+              ))}
+              {!payments.length && (
+                <tr>
+                  <td
+                    colSpan="5"
+                    style={{
+                      textAlign: "center",
+                      padding: 18,
+                      color: "#64748b",
+                    }}
+                  >
+                    No payment attempts yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function StudentPaymentPlansPage({ feesData }) {
-  const outstanding = (feesData || []).reduce((s, f) => s + Math.max(Number(f.amount || 0) - Number(f.paid || 0), 0), 0);
+  const outstanding = (feesData || []).reduce(
+    (s, f) => s + Math.max(Number(f.amount || 0) - Number(f.paid || 0), 0),
+    0,
+  );
   const [plan, setPlan] = useState(null);
   const [months, setMonths] = useState(3);
   const requestPlan = () => {
     if (!outstanding) return;
-    setPlan({ total: outstanding, months, installment: Math.ceil(outstanding / months), status: "requested" });
+    setPlan({
+      total: outstanding,
+      months,
+      installment: Math.ceil(outstanding / months),
+      status: "requested",
+    });
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Payment Plan Request</div><div className="page-sub">Apply for fee installment support.</div></div><div className="card card-padded"><div style={{marginBottom:10}}>Outstanding Balance: <strong>GHS {outstanding}</strong></div><div className="form-group form-group-slim"><label className="form-label">Installment Months</label><input type="number" className="form-control" min={2} max={12} value={months} onChange={(e)=>setMonths(Math.max(2, Math.min(12, Number(e.target.value || 2))))}/></div><button className="btn btn-blue" style={{marginTop:10}} onClick={requestPlan}>Request Plan</button>{plan && <div className="alert alert-info" style={{marginTop:12}}>Plan requested: {plan.months} months at GHS {plan.installment}/month ({plan.status}).</div>}</div></div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Payment Plan Request</div>
+        <div className="page-sub">Apply for fee installment support.</div>
+      </div>
+      <div className="card card-padded">
+        <div style={{ marginBottom: 10 }}>
+          Outstanding Balance: <strong>GHS {outstanding}</strong>
+        </div>
+        <div className="form-group form-group-slim">
+          <label className="form-label">Installment Months</label>
+          <input
+            type="number"
+            className="form-control"
+            min={2}
+            max={12}
+            value={months}
+            onChange={(e) =>
+              setMonths(Math.max(2, Math.min(12, Number(e.target.value || 2))))
+            }
+          />
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={requestPlan}
+        >
+          Request Plan
+        </button>
+        {plan && (
+          <div className="alert alert-info" style={{ marginTop: 12 }}>
+            Plan requested: {plan.months} months at GHS {plan.installment}/month
+            ({plan.status}).
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function PersonalizedAnnouncementsPage() {
   const [readIds, setReadIds] = useState([]);
-  const items = ANNOUNCEMENTS.map((a) => ({ ...a, audience: a.type === "urgent" ? "All Students" : a.type === "info" ? "JHS 3" : "My Class" }));
-  const markRead = (id) => setReadIds((r) => r.includes(id) ? r : [...r, id]);
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Personalized Announcements</div><div className="page-sub">Unread/read announcements targeted to your cohort.</div></div><div style={{display:"grid",gap:10}}>{items.map((a)=><div key={a.id} className="card card-padded" style={{borderLeft:`4px solid ${readIds.includes(a.id)?"#cbd5e1":"#1d4ed8"}`}}><div className="announcement-head"><div style={{fontWeight:700}}>{a.title}</div><span className={`badge ${readIds.includes(a.id)?"badge-gray":"badge-blue"}`}>{readIds.includes(a.id)?"read":"unread"}</span></div><div style={{fontSize:".84rem",color:"#64748b",marginTop:4}}>Audience: {a.audience}</div><div style={{marginTop:8}}>{a.body}</div><button className="btn btn-sm btn-outline" style={{marginTop:8}} onClick={()=>markRead(a.id)}>Mark Read</button></div>)}</div></div>;
+  const items = ANNOUNCEMENTS.map((a) => ({
+    ...a,
+    audience:
+      a.type === "urgent"
+        ? "All Students"
+        : a.type === "info"
+          ? "Current Cohort"
+          : "My Class",
+  }));
+  const markRead = (id) => setReadIds((r) => (r.includes(id) ? r : [...r, id]));
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Personalized Announcements</div>
+        <div className="page-sub">
+          Unread/read announcements targeted to your cohort.
+        </div>
+      </div>
+      <div style={{ display: "grid", gap: 10 }}>
+        {items.map((a) => (
+          <div
+            key={a.id}
+            className="card card-padded"
+            style={{
+              borderLeft: `4px solid ${readIds.includes(a.id) ? "#cbd5e1" : "#1d4ed8"}`,
+            }}
+          >
+            <div className="announcement-head">
+              <div style={{ fontWeight: 700 }}>{a.title}</div>
+              <span
+                className={`badge ${readIds.includes(a.id) ? "badge-gray" : "badge-blue"}`}
+              >
+                {readIds.includes(a.id) ? "read" : "unread"}
+              </span>
+            </div>
+            <div style={{ fontSize: ".84rem", color: "#64748b", marginTop: 4 }}>
+              Audience: {a.audience}
+            </div>
+            <div style={{ marginTop: 8 }}>{a.body}</div>
+            <button
+              className="btn btn-sm btn-outline"
+              style={{ marginTop: 8 }}
+              onClick={() => markRead(a.id)}
+            >
+              Mark Read
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function StudentUploadDocsPage() {
@@ -6767,21 +13452,132 @@ function StudentUploadDocsPage() {
   const onPick = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploads((u) => [{ id: Date.now(), docType, fileName: file.name, size: file.size, status: "submitted", at: new Date().toISOString() }, ...u]);
+    setUploads((u) => [
+      {
+        id: Date.now(),
+        docType,
+        fileName: file.name,
+        size: file.size,
+        status: "submitted",
+        at: new Date().toISOString(),
+      },
+      ...u,
+    ]);
     e.target.value = "";
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Upload Documents</div><div className="page-sub">Submit required files and track verification status.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-group form-group-narrow"><label className="form-label">Document Type</label><select className="form-control" value={docType} onChange={(e)=>setDocType(e.target.value)}><option>ID Document</option><option>Birth Certificate</option><option>Result Slip</option><option>Payment Proof</option></select></div><input type="file" onChange={onPick} /></div>{isMobile ? <div className="mobile-record-list">{uploads.map((u)=><div key={u.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{u.docType}</div><div className="mobile-record-sub">{new Date(u.at).toLocaleString()}</div></div><span className="badge badge-warning">{u.status}</span></div><div className="mobile-record-grid"><div className="mobile-record-item"><label>File</label><span>{u.fileName}</span></div></div></div>)}{!uploads.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No documents uploaded yet.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>When</th><th>Type</th><th>File</th><th>Status</th></tr></thead><tbody>{uploads.map((u)=><tr key={u.id}><td>{new Date(u.at).toLocaleString()}</td><td>{u.docType}</td><td>{u.fileName}</td><td><span className="badge badge-warning">{u.status}</span></td></tr>)}{!uploads.length && <tr><td colSpan="4" style={{textAlign:"center",padding:18,color:"#64748b"}}>No documents uploaded yet.</td></tr>}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Upload Documents</div>
+        <div className="page-sub">
+          Submit required files and track verification status.
+        </div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-group form-group-narrow">
+          <label className="form-label">Document Type</label>
+          <select
+            className="form-control"
+            value={docType}
+            onChange={(e) => setDocType(e.target.value)}
+          >
+            <option>ID Document</option>
+            <option>Birth Certificate</option>
+            <option>Result Slip</option>
+            <option>Payment Proof</option>
+          </select>
+        </div>
+        <input type="file" onChange={onPick} />
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {uploads.map((u) => (
+            <div key={u.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{u.docType}</div>
+                  <div className="mobile-record-sub">
+                    {new Date(u.at).toLocaleString()}
+                  </div>
+                </div>
+                <span className="badge badge-warning">{u.status}</span>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item">
+                  <label>File</label>
+                  <span>{u.fileName}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          {!uploads.length && (
+            <div
+              className="mobile-record-card"
+              style={{ textAlign: "center", color: "#64748b" }}
+            >
+              No documents uploaded yet.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Type</th>
+                <th>File</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {uploads.map((u) => (
+                <tr key={u.id}>
+                  <td>{new Date(u.at).toLocaleString()}</td>
+                  <td>{u.docType}</td>
+                  <td>{u.fileName}</td>
+                  <td>
+                    <span className="badge badge-warning">{u.status}</span>
+                  </td>
+                </tr>
+              ))}
+              {!uploads.length && (
+                <tr>
+                  <td
+                    colSpan="4"
+                    style={{
+                      textAlign: "center",
+                      padding: 18,
+                      color: "#64748b",
+                    }}
+                  >
+                    No documents uploaded yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function CalendarSyncPage() {
   const events = EVENTS_DATA.map((e) => ({ title: e.title, date: e.date }));
   const downloadIcs = () => {
-    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Campus Ghana//Student Calendar//EN"];
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Campus Ghana//Student Calendar//EN",
+    ];
     events.forEach((ev) => {
       const dt = String(ev.date || "").replaceAll("-", "") || "20260501";
       lines.push("BEGIN:VEVENT");
       lines.push(`UID:${dt}-${ev.title.replace(/\s+/g, "-")}@campusghana`);
-      lines.push(`DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}Z`);
+      lines.push(
+        `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}Z`,
+      );
       lines.push(`DTSTART;VALUE=DATE:${dt}`);
       lines.push(`SUMMARY:${ev.title}`);
       lines.push("END:VEVENT");
@@ -6795,7 +13591,24 @@ function CalendarSyncPage() {
     a.click();
     URL.revokeObjectURL(url);
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Calendar Sync</div><div className="page-sub">Download ICS and sync deadlines to your phone calendar.</div></div><div className="card card-padded"><button className="btn btn-blue" onClick={downloadIcs}>Download Calendar (.ics)</button><div style={{marginTop:12,fontSize:".84rem",color:"#64748b"}}>Import the .ics file into Google Calendar, Apple Calendar, or Outlook.</div></div></div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Calendar Sync</div>
+        <div className="page-sub">
+          Download ICS and sync deadlines to your phone calendar.
+        </div>
+      </div>
+      <div className="card card-padded">
+        <button className="btn btn-blue" onClick={downloadIcs}>
+          Download Calendar (.ics)
+        </button>
+        <div style={{ marginTop: 12, fontSize: ".84rem", color: "#64748b" }}>
+          Import the .ics file into Google Calendar, Apple Calendar, or Outlook.
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function StudentTicketsPage() {
@@ -6804,39 +13617,322 @@ function StudentTicketsPage() {
   const isMobile = useIsMobileLayout();
   const submit = () => {
     if (!form.subject || !form.message) return;
-    setTickets((t) => [{ id: Date.now(), ...form, status: "open", at: new Date().toISOString() }, ...t]);
+    setTickets((t) => [
+      { id: Date.now(), ...form, status: "open", at: new Date().toISOString() },
+      ...t,
+    ]);
     setForm({ subject: "", message: "" });
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Support Tickets</div><div className="page-sub">Create and track your support requests.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Subject</label><input className="form-control" value={form.subject} onChange={(e)=>setForm((f)=>({...f,subject:e.target.value}))}/></div><div className="form-group"><label className="form-label">Message</label><input className="form-control" value={form.message} onChange={(e)=>setForm((f)=>({...f,message:e.target.value}))}/></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={submit}>Submit Ticket</button></div>{isMobile ? <div className="mobile-record-list">{tickets.map((t)=><div key={t.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{t.subject}</div><div className="mobile-record-sub">{new Date(t.at).toLocaleString()}</div></div><span className="badge badge-warning">{t.status}</span></div><div className="mobile-record-item"><label>Message</label><span>{t.message}</span></div></div>)}{!tickets.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No support tickets submitted.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>When</th><th>Subject</th><th>Status</th></tr></thead><tbody>{tickets.map((t)=><tr key={t.id}><td>{new Date(t.at).toLocaleString()}</td><td>{t.subject}</td><td><span className="badge badge-warning">{t.status}</span></td></tr>)}{!tickets.length && <tr><td colSpan="3" style={{textAlign:"center",padding:18,color:"#64748b"}}>No support tickets submitted.</td></tr>}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Support Tickets</div>
+        <div className="page-sub">Create and track your support requests.</div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Subject</label>
+            <input
+              className="form-control"
+              value={form.subject}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, subject: e.target.value }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Message</label>
+            <input
+              className="form-control"
+              value={form.message}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, message: e.target.value }))
+              }
+            />
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={submit}
+        >
+          Submit Ticket
+        </button>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {tickets.map((t) => (
+            <div key={t.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{t.subject}</div>
+                  <div className="mobile-record-sub">
+                    {new Date(t.at).toLocaleString()}
+                  </div>
+                </div>
+                <span className="badge badge-warning">{t.status}</span>
+              </div>
+              <div className="mobile-record-item">
+                <label>Message</label>
+                <span>{t.message}</span>
+              </div>
+            </div>
+          ))}
+          {!tickets.length && (
+            <div
+              className="mobile-record-card"
+              style={{ textAlign: "center", color: "#64748b" }}
+            >
+              No support tickets submitted.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Subject</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tickets.map((t) => (
+                <tr key={t.id}>
+                  <td>{new Date(t.at).toLocaleString()}</td>
+                  <td>{t.subject}</td>
+                  <td>
+                    <span className="badge badge-warning">{t.status}</span>
+                  </td>
+                </tr>
+              ))}
+              {!tickets.length && (
+                <tr>
+                  <td
+                    colSpan="3"
+                    style={{
+                      textAlign: "center",
+                      padding: 18,
+                      color: "#64748b",
+                    }}
+                  >
+                    No support tickets submitted.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function StudentGoalsPage() {
-  const [goal, setGoal] = useState({ aggregateTarget: 8, attendanceTarget: 95 });
+  const [goal, setGoal] = useState({
+    aggregateTarget: 8,
+    attendanceTarget: 95,
+  });
   const progress = { aggregateNow: 12, attendanceNow: 88 };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Goals & Targets</div><div className="page-sub">Set academic and attendance targets.</div></div><div className="card card-padded"><div className="form-grid"><div className="form-group"><label className="form-label">Target Aggregate</label><input type="number" className="form-control" value={goal.aggregateTarget} onChange={(e)=>setGoal((g)=>({...g,aggregateTarget:Number(e.target.value||0)}))}/></div><div className="form-group"><label className="form-label">Target Attendance (%)</label><input type="number" className="form-control" value={goal.attendanceTarget} onChange={(e)=>setGoal((g)=>({...g,attendanceTarget:Number(e.target.value||0)}))}/></div></div><div style={{marginTop:12}}><div className="alert alert-info">Current Aggregate: {progress.aggregateNow} (Target {goal.aggregateTarget})</div><div className="alert alert-info">Current Attendance: {progress.attendanceNow}% (Target {goal.attendanceTarget}%)</div></div></div></div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Goals & Targets</div>
+        <div className="page-sub">Set academic and attendance targets.</div>
+      </div>
+      <div className="card card-padded">
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Target Aggregate</label>
+            <input
+              type="number"
+              className="form-control"
+              value={goal.aggregateTarget}
+              onChange={(e) =>
+                setGoal((g) => ({
+                  ...g,
+                  aggregateTarget: Number(e.target.value || 0),
+                }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Target Attendance (%)</label>
+            <input
+              type="number"
+              className="form-control"
+              value={goal.attendanceTarget}
+              onChange={(e) =>
+                setGoal((g) => ({
+                  ...g,
+                  attendanceTarget: Number(e.target.value || 0),
+                }))
+              }
+            />
+          </div>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <div className="alert alert-info">
+            Current Aggregate: {progress.aggregateNow} (Target{" "}
+            {goal.aggregateTarget})
+          </div>
+          <div className="alert alert-info">
+            Current Attendance: {progress.attendanceNow}% (Target{" "}
+            {goal.attendanceTarget}%)
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ScholarshipBoardPage() {
   const rows = [
-    { id: 1, title: "STEM Excellence Scholarship", deadline: "2026-06-01", eligibility: "Aggregate <= 10" },
-    { id: 2, title: "Girls in Science Fund", deadline: "2026-05-25", eligibility: "Female students in STEM" },
+    {
+      id: 1,
+      title: "STEM Excellence Scholarship",
+      deadline: "2026-06-01",
+      eligibility: "Aggregate <= 10",
+    },
+    {
+      id: 2,
+      title: "Girls in Science Fund",
+      deadline: "2026-05-25",
+      eligibility: "Female students in STEM",
+    },
   ];
   const isMobile = useIsMobileLayout();
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Scholarship Board</div><div className="page-sub">Discover opportunities and eligibility criteria.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.title}</div><div className="mobile-record-sub">Deadline: {r.deadline}</div></div></div><div className="mobile-record-item"><label>Eligibility</label><span>{r.eligibility}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Opportunity</th><th>Deadline</th><th>Eligibility</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.title}</td><td>{r.deadline}</td><td>{r.eligibility}</td></tr>)}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Scholarship Board</div>
+        <div className="page-sub">
+          Discover opportunities and eligibility criteria.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {rows.map((r) => (
+            <div key={r.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{r.title}</div>
+                  <div className="mobile-record-sub">
+                    Deadline: {r.deadline}
+                  </div>
+                </div>
+              </div>
+              <div className="mobile-record-item">
+                <label>Eligibility</label>
+                <span>{r.eligibility}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Opportunity</th>
+                <th>Deadline</th>
+                <th>Eligibility</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.title}</td>
+                  <td>{r.deadline}</td>
+                  <td>{r.eligibility}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function LearningResourcesPage() {
   const rows = [
-    { id: 1, subject: "Mathematics", title: "Past Questions Pack", type: "PDF" },
-    { id: 2, subject: "Integrated Science", title: "Revision Video Playlist", type: "Video" },
+    {
+      id: 1,
+      subject: "Mathematics",
+      title: "Past Questions Pack",
+      type: "PDF",
+    },
+    {
+      id: 2,
+      subject: "Integrated Science",
+      title: "Revision Video Playlist",
+      type: "Video",
+    },
     { id: 3, subject: "English", title: "Essay Writing Guide", type: "Guide" },
   ];
   const isMobile = useIsMobileLayout();
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Learning Resources</div><div className="page-sub">Access notes, past questions, and study materials.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.title}</div><div className="mobile-record-sub">{r.subject}</div></div><span className="badge badge-blue">{r.type}</span></div><div className="mobile-record-actions"><button className="btn btn-sm btn-outline">Open</button></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Subject</th><th>Resource</th><th>Type</th><th></th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.subject}</td><td>{r.title}</td><td>{r.type}</td><td><button className="btn btn-sm btn-outline">Open</button></td></tr>)}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Learning Resources</div>
+        <div className="page-sub">
+          Access notes, past questions, and study materials.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {rows.map((r) => (
+            <div key={r.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{r.title}</div>
+                  <div className="mobile-record-sub">{r.subject}</div>
+                </div>
+                <span className="badge badge-blue">{r.type}</span>
+              </div>
+              <div className="mobile-record-actions">
+                <button className="btn btn-sm btn-outline">Open</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Subject</th>
+                <th>Resource</th>
+                <th>Type</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.subject}</td>
+                  <td>{r.title}</td>
+                  <td>{r.type}</td>
+                  <td>
+                    <button className="btn btn-sm btn-outline">Open</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function AutomationRulesPage() {
-  const [rules, setRules] = useState([{ id: 1, trigger: "Fees overdue 30 days", action: "Send reminder + flag" }]);
+  const [rules, setRules] = useState([
+    { id: 1, trigger: "Fees overdue 30 days", action: "Send reminder + flag" },
+  ]);
   const [form, setForm] = useState({ trigger: "", action: "" });
   const isMobile = useIsMobileLayout();
   const add = () => {
@@ -6844,54 +13940,501 @@ function AutomationRulesPage() {
     setRules((r) => [{ id: Date.now(), ...form }, ...r]);
     setForm({ trigger: "", action: "" });
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Automation Rules</div><div className="page-sub">1. If-this-then-that workflow automation.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Trigger</label><input className="form-control" value={form.trigger} onChange={(e)=>setForm((f)=>({...f,trigger:e.target.value}))} /></div><div className="form-group"><label className="form-label">Action</label><input className="form-control" value={form.action} onChange={(e)=>setForm((f)=>({...f,action:e.target.value}))} /></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={add}>Add Rule</button></div>{isMobile ? <div className="mobile-record-list">{rules.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-item"><label>Trigger</label><span>{r.trigger}</span></div><div className="mobile-record-item"><label>Action</label><span>{r.action}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Trigger</th><th>Action</th></tr></thead><tbody>{rules.map((r)=><tr key={r.id}><td>{r.trigger}</td><td>{r.action}</td></tr>)}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Automation Rules</div>
+        <div className="page-sub">
+          1. If-this-then-that workflow automation.
+        </div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Trigger</label>
+            <input
+              className="form-control"
+              value={form.trigger}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, trigger: e.target.value }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Action</label>
+            <input
+              className="form-control"
+              value={form.action}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, action: e.target.value }))
+              }
+            />
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={add}
+        >
+          Add Rule
+        </button>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {rules.map((r) => (
+            <div key={r.id} className="mobile-record-card">
+              <div className="mobile-record-item">
+                <label>Trigger</label>
+                <span>{r.trigger}</span>
+              </div>
+              <div className="mobile-record-item">
+                <label>Action</label>
+                <span>{r.action}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Trigger</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rules.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.trigger}</td>
+                  <td>{r.action}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function AiAssistantPage() {
   const [q, setQ] = useState("");
-  const [a, setA] = useState("Ask an admin query to get a quick operational answer.");
+  const [a, setA] = useState(
+    "Ask an admin query to get a quick operational answer.",
+  );
   const ask = () => {
     if (!q.trim()) return;
     const query = q.toLowerCase();
-    if (query.includes("pending")) setA("Pending selections can be found in Admissions > Pending Selections.");
-    else if (query.includes("fees")) setA("Fee status can be reviewed in Student Services > Fees and Payments module.");
-    else if (query.includes("attendance")) setA("Attendance sync and reports are under Student Services > Attendance.");
-    else setA("No exact match found. Try including keywords like pending, fees, attendance, analytics, or reports.");
+    if (query.includes("pending"))
+      setA(
+        "Pending selections can be found in Admissions > Pending Selections.",
+      );
+    else if (query.includes("fees"))
+      setA(
+        "Fee status can be reviewed in Student Services > Fees and Payments module.",
+      );
+    else if (query.includes("attendance"))
+      setA(
+        "Attendance sync and reports are under Student Services > Attendance.",
+      );
+    else
+      setA(
+        "No exact match found. Try including keywords like pending, fees, attendance, analytics, or reports.",
+      );
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">AI Assistant</div><div className="page-sub">2. Natural-language assistant for admin operations.</div></div><div className="card card-padded"><div className="form-group"><label className="form-label">Ask</label><input className="form-control" value={q} onChange={(e)=>setQ(e.target.value)} placeholder="e.g. Show pending selections from Ashanti" /></div><button className="btn btn-blue" style={{marginTop:10}} onClick={ask}>Run Query</button><div className="alert alert-info" style={{marginTop:12}}>{a}</div></div></div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">AI Assistant</div>
+        <div className="page-sub">
+          2. Natural-language assistant for admin operations.
+        </div>
+      </div>
+      <div className="card card-padded">
+        <div className="form-group">
+          <label className="form-label">Ask</label>
+          <input
+            className="form-control"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="e.g. Show pending selections from Ashanti"
+          />
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={ask}
+        >
+          Run Query
+        </button>
+        <div className="alert alert-info" style={{ marginTop: 12 }}>
+          {a}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function StudentRiskPage() {
   const rows = STUDENTS_DATA.map((s) => ({
     ...s,
-    risk: Math.min(100, Math.max(5, Math.round((Number(s.aggregate || 0) * 4) + (s.status === "pending" ? 20 : 5)))),
+    risk: Math.min(
+      100,
+      Math.max(
+        5,
+        Math.round(
+          Number(s.aggregate || 0) * 4 + (s.status === "pending" ? 20 : 5),
+        ),
+      ),
+    ),
   }));
   const isMobile = useIsMobileLayout();
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Student Risk Scoring</div><div className="page-sub">3. Early warning scoring based on academics and status.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.full_name}</div><div className="mobile-record-sub">{r.index}</div></div><span className={`badge ${r.risk>=60?"badge-danger":r.risk>=35?"badge-warning":"badge-success"}`}>{r.risk}%</span></div><div className="mobile-record-grid"><div className="mobile-record-item"><label>Aggregate</label><span>{r.aggregate}</span></div><div className="mobile-record-item"><label>Status</label><span>{r.status}</span></div></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Student</th><th>Student ID</th><th>Aggregate</th><th>Status</th><th>Risk Score</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.full_name}</td><td>{r.index}</td><td>{r.aggregate}</td><td>{r.status}</td><td><span className={`badge ${r.risk>=60?"badge-danger":r.risk>=35?"badge-warning":"badge-success"}`}>{r.risk}%</span></td></tr>)}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Student Risk Scoring</div>
+        <div className="page-sub">
+          3. Early warning scoring based on academics and status.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {rows.map((r) => (
+            <div key={r.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{r.full_name}</div>
+                  <div className="mobile-record-sub">{r.index}</div>
+                </div>
+                <span
+                  className={`badge ${r.risk >= 60 ? "badge-danger" : r.risk >= 35 ? "badge-warning" : "badge-success"}`}
+                >
+                  {r.risk}%
+                </span>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item">
+                  <label>Aggregate</label>
+                  <span>{r.aggregate}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Status</label>
+                  <span>{r.status}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Student ID</th>
+                <th>Aggregate</th>
+                <th>Status</th>
+                <th>Risk Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.full_name}</td>
+                  <td>{r.index}</td>
+                  <td>{r.aggregate}</td>
+                  <td>{r.status}</td>
+                  <td>
+                    <span
+                      className={`badge ${r.risk >= 60 ? "badge-danger" : r.risk >= 35 ? "badge-warning" : "badge-success"}`}
+                    >
+                      {r.risk}%
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function TimetablePage() {
-  const [rows, setRows] = useState([{ id: 1, day: "Monday", period: "08:00", className: "JHS 3A", subject: "Math", teacher: "Mr. Kwesi" }]);
+  const [rows, setRows] = useState([
+    {
+      id: 1,
+      day: "Monday",
+      period: "08:00",
+      className: "",
+      subject: "Math",
+      teacher: "Mr. Kwesi",
+    },
+  ]);
   const isMobile = useIsMobileLayout();
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Timetable & Scheduling</div><div className="page-sub">4. Class schedule planning and conflict visibility.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{r.className}</div><div className="mobile-record-sub">{r.day} • {r.period}</div></div><strong>{r.subject}</strong></div><div className="mobile-record-item"><label>Teacher</label><span>{r.teacher}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Day</th><th>Time</th><th>Class</th><th>Subject</th><th>Teacher</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.day}</td><td>{r.period}</td><td>{r.className}</td><td>{r.subject}</td><td>{r.teacher}</td></tr>)}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Timetable & Scheduling</div>
+        <div className="page-sub">
+          4. Class schedule planning and conflict visibility.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {rows.map((r) => (
+            <div key={r.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{r.className}</div>
+                  <div className="mobile-record-sub">
+                    {r.day} • {r.period}
+                  </div>
+                </div>
+                <strong>{r.subject}</strong>
+              </div>
+              <div className="mobile-record-item">
+                <label>Teacher</label>
+                <span>{r.teacher}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Day</th>
+                <th>Time</th>
+                <th>Class</th>
+                <th>Subject</th>
+                <th>Teacher</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.day}</td>
+                  <td>{r.period}</td>
+                  <td>{r.className}</td>
+                  <td>{r.subject}</td>
+                  <td>{r.teacher}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ExamBuilderPage() {
-  const [exam, setExam] = useState({ title: "", className: "JHS 3A", total: 100 });
+  const { cfg } = useContext(SettingsContext);
+  const classOptions = resolveClassOptions(cfg);
+  const [exam, setExam] = useState({
+    title: "",
+    className: classOptions[0] || "",
+    total: 100,
+  });
   const [items, setItems] = useState([]);
   const isMobile = useIsMobileLayout();
+  useEffect(() => {
+    const nextClass = classOptions[0] || "";
+    if (!classOptions.includes(exam.className) && exam.className !== nextClass) {
+      setExam((current) => ({ ...current, className: nextClass }));
+    }
+  }, [classOptions.join("||"), exam.className]);
   const create = () => {
     if (!exam.title) return;
     setItems((x) => [{ id: Date.now(), ...exam }, ...x]);
-    setExam({ title: "", className: "JHS 3A", total: 100 });
+    setExam({ title: "", className: classOptions[0] || "", total: 100 });
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Exam Builder</div><div className="page-sub">5. Assessment creation and marking workflows.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Exam Title</label><input className="form-control" value={exam.title} onChange={(e)=>setExam((v)=>({...v,title:e.target.value}))} /></div><div className="form-group"><label className="form-label">Class</label><input className="form-control" value={exam.className} onChange={(e)=>setExam((v)=>({...v,className:e.target.value}))} /></div><div className="form-group"><label className="form-label">Total Score</label><input type="number" className="form-control" value={exam.total} onChange={(e)=>setExam((v)=>({...v,total:+e.target.value}))} /></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={create}>Create Exam</button></div>{isMobile ? <div className="mobile-record-list">{items.map((i)=><div key={i.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{i.title}</div><div className="mobile-record-sub">{i.className}</div></div><strong>{i.total}</strong></div></div>)}{!items.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No exams created yet.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>Title</th><th>Class</th><th>Total</th></tr></thead><tbody>{items.map((i)=><tr key={i.id}><td>{i.title}</td><td>{i.className}</td><td>{i.total}</td></tr>)}{!items.length && <tr><td colSpan="3" style={{textAlign:"center",padding:18,color:"#64748b"}}>No exams created yet.</td></tr>}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Exam Builder</div>
+        <div className="page-sub">
+          5. Assessment creation and marking workflows.
+        </div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Exam Title</label>
+            <input
+              className="form-control"
+              value={exam.title}
+              onChange={(e) =>
+                setExam((v) => ({ ...v, title: e.target.value }))
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Class</label>
+            <select
+              className="form-control"
+              value={exam.className}
+              onChange={(e) =>
+                setExam((v) => ({ ...v, className: e.target.value }))
+              }
+            >
+              {!classOptions.length && (
+                <option value="">No classes configured in Settings</option>
+              )}
+              {classOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Total Score</label>
+            <input
+              type="number"
+              className="form-control"
+              value={exam.total}
+              onChange={(e) =>
+                setExam((v) => ({ ...v, total: +e.target.value }))
+              }
+            />
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={create}
+        >
+          Create Exam
+        </button>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {items.map((i) => (
+            <div key={i.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{i.title}</div>
+                  <div className="mobile-record-sub">{i.className}</div>
+                </div>
+                <strong>{i.total}</strong>
+              </div>
+            </div>
+          ))}
+          {!items.length && (
+            <div
+              className="mobile-record-card"
+              style={{ textAlign: "center", color: "#64748b" }}
+            >
+              No exams created yet.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Class</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((i) => (
+                <tr key={i.id}>
+                  <td>{i.title}</td>
+                  <td>{i.className}</td>
+                  <td>{i.total}</td>
+                </tr>
+              ))}
+              {!items.length && (
+                <tr>
+                  <td
+                    colSpan="3"
+                    style={{
+                      textAlign: "center",
+                      padding: 18,
+                      color: "#64748b",
+                    }}
+                  >
+                    No exams created yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function InstallmentPlansPage() {
-  const [plans, setPlans] = useState([{ id: 1, student: "Kwame Asante", amount: 350, installments: 3, nextDue: "2026-05-05" }]);
+  const [plans, setPlans] = useState([
+    {
+      id: 1,
+      student: "Kwame Asante",
+      amount: 350,
+      installments: 3,
+      nextDue: "2026-05-05",
+    },
+  ]);
   const isMobile = useIsMobileLayout();
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Fee Installment Plans</div><div className="page-sub">6. Structured fee payment planning.</div></div>{isMobile ? <div className="mobile-record-list">{plans.map((p)=><div key={p.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{p.student}</div><div className="mobile-record-sub">Next due: {p.nextDue}</div></div><strong>GHS {p.amount}</strong></div><div className="mobile-record-item"><label>Installments</label><span>{p.installments}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Student</th><th>Total (GHS)</th><th>Installments</th><th>Next Due</th></tr></thead><tbody>{plans.map((p)=><tr key={p.id}><td>{p.student}</td><td>{p.amount}</td><td>{p.installments}</td><td>{p.nextDue}</td></tr>)}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Fee Installment Plans</div>
+        <div className="page-sub">6. Structured fee payment planning.</div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {plans.map((p) => (
+            <div key={p.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{p.student}</div>
+                  <div className="mobile-record-sub">Next due: {p.nextDue}</div>
+                </div>
+                <strong>GHS {p.amount}</strong>
+              </div>
+              <div className="mobile-record-item">
+                <label>Installments</label>
+                <span>{p.installments}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Total (GHS)</th>
+                <th>Installments</th>
+                <th>Next Due</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plans.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.student}</td>
+                  <td>{p.amount}</td>
+                  <td>{p.installments}</td>
+                  <td>{p.nextDue}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function MessagingCampaignsPage() {
@@ -6901,10 +14444,115 @@ function MessagingCampaignsPage() {
   const isMobile = useIsMobileLayout();
   const send = () => {
     if (!text.trim()) return;
-    setHistory((h) => [{ id: Date.now(), audience, text, at: new Date().toISOString() }, ...h]);
+    setHistory((h) => [
+      { id: Date.now(), audience, text, at: new Date().toISOString() },
+      ...h,
+    ]);
     setText("");
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Messaging Campaigns</div><div className="page-sub">7. Segmented broadcast communication.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Audience</label><select className="form-control" value={audience} onChange={(e)=>setAudience(e.target.value)}><option value="all-students">All Students</option><option value="pending-selection">Pending Selection</option><option value="fees-overdue">Fees Overdue</option><option value="high-risk">High Risk Students</option></select></div><div className="form-group"><label className="form-label">Message</label><input className="form-control" value={text} onChange={(e)=>setText(e.target.value)} /></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={send}>Launch Campaign</button></div>{isMobile ? <div className="mobile-record-list">{history.map((h)=><div key={h.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{h.audience}</div><div className="mobile-record-sub">{new Date(h.at).toLocaleString()}</div></div></div><div className="mobile-record-item"><label>Message</label><span>{h.text}</span></div></div>)}{!history.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No campaigns launched yet.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>When</th><th>Audience</th><th>Message</th></tr></thead><tbody>{history.map((h)=><tr key={h.id}><td>{new Date(h.at).toLocaleString()}</td><td>{h.audience}</td><td>{h.text}</td></tr>)}{!history.length && <tr><td colSpan="3" style={{textAlign:"center",padding:18,color:"#64748b"}}>No campaigns launched yet.</td></tr>}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Messaging Campaigns</div>
+        <div className="page-sub">7. Segmented broadcast communication.</div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Audience</label>
+            <select
+              className="form-control"
+              value={audience}
+              onChange={(e) => setAudience(e.target.value)}
+            >
+              <option value="all-students">All Students</option>
+              <option value="pending-selection">Pending Selection</option>
+              <option value="fees-overdue">Fees Overdue</option>
+              <option value="high-risk">High Risk Students</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Message</label>
+            <input
+              className="form-control"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={send}
+        >
+          Launch Campaign
+        </button>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {history.map((h) => (
+            <div key={h.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{h.audience}</div>
+                  <div className="mobile-record-sub">
+                    {new Date(h.at).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+              <div className="mobile-record-item">
+                <label>Message</label>
+                <span>{h.text}</span>
+              </div>
+            </div>
+          ))}
+          {!history.length && (
+            <div
+              className="mobile-record-card"
+              style={{ textAlign: "center", color: "#64748b" }}
+            >
+              No campaigns launched yet.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Audience</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((h) => (
+                <tr key={h.id}>
+                  <td>{new Date(h.at).toLocaleString()}</td>
+                  <td>{h.audience}</td>
+                  <td>{h.text}</td>
+                </tr>
+              ))}
+              {!history.length && (
+                <tr>
+                  <td
+                    colSpan="3"
+                    style={{
+                      textAlign: "center",
+                      padding: 18,
+                      color: "#64748b",
+                    }}
+                  >
+                    No campaigns launched yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function RecommendationEnginePage() {
@@ -6914,51 +14562,483 @@ function RecommendationEnginePage() {
   const isMobile = useIsMobileLayout();
   const run = () => {
     const score = Number(agg || 99);
-    const filtered = SCHOOLS_DATA.filter((s) => region === "All Regions" || s.region === region).sort((a, b) => a.cutoff - b.cutoff);
+    const filtered = SCHOOLS_DATA.filter(
+      (s) => region === "All Regions" || s.region === region,
+    ).sort((a, b) => a.cutoff - b.cutoff);
     setList(filtered.filter((s) => score <= s.cutoff + 4).slice(0, 6));
   };
-  return <div className="fade-in"><div className="page-header"><div className="page-title">School Recommendation Engine</div><div className="page-sub">8. Suggest schools from aggregate and region preference.</div></div><div className="card card-padded" style={{marginBottom:12}}><div className="form-grid"><div className="form-group"><label className="form-label">Aggregate</label><input type="number" className="form-control" value={agg} onChange={(e)=>setAgg(e.target.value)} /></div><div className="form-group"><label className="form-label">Preferred Region</label><select className="form-control" value={region} onChange={(e)=>setRegion(e.target.value)}><option>All Regions</option>{GHANA_REGIONS.map((r)=><option key={r}>{r}</option>)}</select></div></div><button className="btn btn-blue" style={{marginTop:10}} onClick={run}>Recommend</button></div>{isMobile ? <div className="mobile-record-list">{list.map((s)=><div key={s.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{s.name}</div><div className="mobile-record-sub">{s.region}</div></div><span className="badge badge-blue">{s.category}</span></div><div className="mobile-record-item"><label>Cutoff</label><span>{s.cutoff}</span></div></div>)}{!list.length && <div className="mobile-record-card" style={{textAlign:"center",color:"#64748b"}}>No recommendations yet.</div>}</div> : <div className="card table-wrap"><table><thead><tr><th>School</th><th>Region</th><th>Category</th><th>Cutoff</th></tr></thead><tbody>{list.map((s)=><tr key={s.id}><td>{s.name}</td><td>{s.region}</td><td>{s.category}</td><td>{s.cutoff}</td></tr>)}{!list.length && <tr><td colSpan="4" style={{textAlign:"center",padding:18,color:"#64748b"}}>No recommendations yet.</td></tr>}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">School Recommendation Engine</div>
+        <div className="page-sub">
+          8. Suggest schools from aggregate and region preference.
+        </div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Aggregate</label>
+            <input
+              type="number"
+              className="form-control"
+              value={agg}
+              onChange={(e) => setAgg(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Preferred Region</label>
+            <select
+              className="form-control"
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+            >
+              <option>All Regions</option>
+              {GHANA_REGIONS.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <button
+          className="btn btn-blue"
+          style={{ marginTop: 10 }}
+          onClick={run}
+        >
+          Recommend
+        </button>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {list.map((s) => (
+            <div key={s.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{s.name}</div>
+                  <div className="mobile-record-sub">{s.region}</div>
+                </div>
+                <span className="badge badge-blue">{s.category}</span>
+              </div>
+              <div className="mobile-record-item">
+                <label>Cutoff</label>
+                <span>{s.cutoff}</span>
+              </div>
+            </div>
+          ))}
+          {!list.length && (
+            <div
+              className="mobile-record-card"
+              style={{ textAlign: "center", color: "#64748b" }}
+            >
+              No recommendations yet.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>School</th>
+                <th>Region</th>
+                <th>Category</th>
+                <th>Cutoff</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.name}</td>
+                  <td>{s.region}</td>
+                  <td>{s.category}</td>
+                  <td>{s.cutoff}</td>
+                </tr>
+              ))}
+              {!list.length && (
+                <tr>
+                  <td
+                    colSpan="4"
+                    style={{
+                      textAlign: "center",
+                      padding: 18,
+                      color: "#64748b",
+                    }}
+                  >
+                    No recommendations yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function DigitalIdPage() {
   const [query, setQuery] = useState("");
-  const students = STUDENTS_DATA.filter((s) => s.full_name.toLowerCase().includes(query.toLowerCase()) || String(s.index).includes(query));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Digital ID & QR Profiles</div><div className="page-sub">9. Quick profile retrieval for check-in and verification.</div></div><input className="form-control search-input-compact" placeholder="Search by name or index" value={query} onChange={(e)=>setQuery(e.target.value)} /><div className="card-grid-auto">{students.map((s)=><div key={s.id} className="card card-padded"><div style={{fontWeight:800,marginBottom:4}}>{s.full_name}</div><div style={{fontSize:".82rem",color:"#64748b",marginBottom:8}}>Index: {s.index}</div><div style={{height:92,borderRadius:10,background:"repeating-linear-gradient(45deg,#1e3a8a,#1e3a8a 4px,#dbeafe 4px,#dbeafe 8px)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700}}>QR-{s.index}</div></div>)}</div></div>;
+  const students = STUDENTS_DATA.filter(
+    (s) =>
+      s.full_name.toLowerCase().includes(query.toLowerCase()) ||
+      String(s.index).includes(query),
+  );
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Digital ID & QR Profiles</div>
+        <div className="page-sub">
+          9. Quick profile retrieval for check-in and verification.
+        </div>
+      </div>
+      <input
+        className="form-control search-input-compact"
+        placeholder="Search by name or index"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div className="card-grid-auto">
+        {students.map((s) => (
+          <div key={s.id} className="card card-padded">
+            <div style={{ fontWeight: 800, marginBottom: 4 }}>
+              {s.full_name}
+            </div>
+            <div
+              style={{ fontSize: ".82rem", color: "#64748b", marginBottom: 8 }}
+            >
+              Index: {s.index}
+            </div>
+            <div
+              style={{
+                height: 92,
+                borderRadius: 10,
+                background:
+                  "repeating-linear-gradient(45deg,#1e3a8a,#1e3a8a 4px,#dbeafe 4px,#dbeafe 8px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontWeight: 700,
+              }}
+            >
+              QR-{s.index}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function PublicStatusPage() {
   const [items, setItems] = useState([
-    { id: 1, title: "Admission Update", status: "published", at: new Date().toISOString() },
-    { id: 2, title: "Term Reopening Notice", status: "draft", at: new Date(Date.now() - 86400000).toISOString() },
+    {
+      id: 1,
+      title: "Admission Update",
+      status: "published",
+      at: new Date().toISOString(),
+    },
+    {
+      id: 2,
+      title: "Term Reopening Notice",
+      status: "draft",
+      at: new Date(Date.now() - 86400000).toISOString(),
+    },
   ]);
   const isMobile = useIsMobileLayout();
-  const toggle = (id) => setItems((x) => x.map((i) => i.id === id ? { ...i, status: i.status === "published" ? "draft" : "published" } : i));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Public Status Portal</div><div className="page-sub">10. Publish read-only public notices and status updates.</div></div>{isMobile ? <div className="mobile-record-list">{items.map((i)=><div key={i.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{i.title}</div><div className="mobile-record-sub">{new Date(i.at).toLocaleString()}</div></div><span className={`badge ${i.status === "published" ? "badge-success" : "badge-gray"}`}>{i.status}</span></div><div className="mobile-record-actions"><button className="btn btn-sm btn-outline" onClick={()=>toggle(i.id)}>{i.status === "published" ? "Unpublish" : "Publish"}</button></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Post</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead><tbody>{items.map((i)=><tr key={i.id}><td>{i.title}</td><td><span className={`badge ${i.status === "published" ? "badge-success" : "badge-gray"}`}>{i.status}</span></td><td>{new Date(i.at).toLocaleString()}</td><td><button className="btn btn-sm btn-outline" onClick={()=>toggle(i.id)}>{i.status === "published" ? "Unpublish" : "Publish"}</button></td></tr>)}</tbody></table></div>}</div>;
+  const toggle = (id) =>
+    setItems((x) =>
+      x.map((i) =>
+        i.id === id
+          ? { ...i, status: i.status === "published" ? "draft" : "published" }
+          : i,
+      ),
+    );
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Public Status Portal</div>
+        <div className="page-sub">
+          10. Publish read-only public notices and status updates.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {items.map((i) => (
+            <div key={i.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{i.title}</div>
+                  <div className="mobile-record-sub">
+                    {new Date(i.at).toLocaleString()}
+                  </div>
+                </div>
+                <span
+                  className={`badge ${i.status === "published" ? "badge-success" : "badge-gray"}`}
+                >
+                  {i.status}
+                </span>
+              </div>
+              <div className="mobile-record-actions">
+                <button
+                  className="btn btn-sm btn-outline"
+                  onClick={() => toggle(i.id)}
+                >
+                  {i.status === "published" ? "Unpublish" : "Publish"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Post</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((i) => (
+                <tr key={i.id}>
+                  <td>{i.title}</td>
+                  <td>
+                    <span
+                      className={`badge ${i.status === "published" ? "badge-success" : "badge-gray"}`}
+                    >
+                      {i.status}
+                    </span>
+                  </td>
+                  <td>{new Date(i.at).toLocaleString()}</td>
+                  <td>
+                    <button
+                      className="btn btn-sm btn-outline"
+                      onClick={() => toggle(i.id)}
+                    >
+                      {i.status === "published" ? "Unpublish" : "Publish"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function IntegrationsPage() {
-  const [hooks, setHooks] = useState([{ id: 1, name: "Payment Webhook", url: "https://example.com/payment", enabled: true }]);
+  const [hooks, setHooks] = useState([
+    {
+      id: 1,
+      name: "Payment Webhook",
+      url: "https://example.com/payment",
+      enabled: true,
+    },
+  ]);
   const isMobile = useIsMobileLayout();
-  const toggle = (id) => setHooks((h) => h.map((x) => x.id === id ? { ...x, enabled: !x.enabled } : x));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">API & Webhook Integrations</div><div className="page-sub">11. Connect external services and webhooks.</div></div>{isMobile ? <div className="mobile-record-list">{hooks.map((h)=><div key={h.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{h.name}</div><div className="mobile-record-sub">{h.url}</div></div><input type="checkbox" checked={h.enabled} onChange={()=>toggle(h.id)} /></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Name</th><th>Endpoint</th><th>Enabled</th></tr></thead><tbody>{hooks.map((h)=><tr key={h.id}><td>{h.name}</td><td>{h.url}</td><td><input type="checkbox" checked={h.enabled} onChange={()=>toggle(h.id)} /></td></tr>)}</tbody></table></div>}</div>;
+  const toggle = (id) =>
+    setHooks((h) =>
+      h.map((x) => (x.id === id ? { ...x, enabled: !x.enabled } : x)),
+    );
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">API & Webhook Integrations</div>
+        <div className="page-sub">
+          11. Connect external services and webhooks.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {hooks.map((h) => (
+            <div key={h.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{h.name}</div>
+                  <div className="mobile-record-sub">{h.url}</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={h.enabled}
+                  onChange={() => toggle(h.id)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Endpoint</th>
+                <th>Enabled</th>
+              </tr>
+            </thead>
+            <tbody>
+              {hooks.map((h) => (
+                <tr key={h.id}>
+                  <td>{h.name}</td>
+                  <td>{h.url}</td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={h.enabled}
+                      onChange={() => toggle(h.id)}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function MultiTenantPage() {
-  const [schools, setSchools] = useState([{ id: 1, name: "Campus Ghana - Main", tenant: "main", activeUsers: 92 }]);
+  const [schools, setSchools] = useState([
+    { id: 1, name: "Campus Ghana - Main", tenant: "main", activeUsers: 92 },
+  ]);
   const isMobile = useIsMobileLayout();
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Multi-School Tenants</div><div className="page-sub">12. Manage separate school tenants at scale.</div></div>{isMobile ? <div className="mobile-record-list">{schools.map((s)=><div key={s.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{s.name}</div><div className="mobile-record-sub">Tenant: {s.tenant}</div></div><strong>{s.activeUsers}</strong></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>School</th><th>Tenant Key</th><th>Active Users</th></tr></thead><tbody>{schools.map((s)=><tr key={s.id}><td>{s.name}</td><td>{s.tenant}</td><td>{s.activeUsers}</td></tr>)}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Multi-School Tenants</div>
+        <div className="page-sub">
+          12. Manage separate school tenants at scale.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {schools.map((s) => (
+            <div key={s.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{s.name}</div>
+                  <div className="mobile-record-sub">Tenant: {s.tenant}</div>
+                </div>
+                <strong>{s.activeUsers}</strong>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>School</th>
+                <th>Tenant Key</th>
+                <th>Active Users</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schools.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.name}</td>
+                  <td>{s.tenant}</td>
+                  <td>{s.activeUsers}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function DataQualityPage() {
-  const missingIndex = STUDENTS_DATA.filter((s) => !String(s.index || "").trim()).length;
-  const duplicateIndexes = new Set(STUDENTS_DATA.map((s) => s.index)).size !== STUDENTS_DATA.length;
+  const missingIndex = STUDENTS_DATA.filter(
+    (s) => !String(s.index || "").trim(),
+  ).length;
+  const duplicateIndexes =
+    new Set(STUDENTS_DATA.map((s) => s.index)).size !== STUDENTS_DATA.length;
   const issues = [
-    { name: "Missing Index Numbers", value: missingIndex, status: missingIndex ? "warning" : "ok" },
-    { name: "Duplicate Index Numbers", value: duplicateIndexes ? 1 : 0, status: duplicateIndexes ? "warning" : "ok" },
-    { name: "Incomplete Regions", value: STUDENTS_DATA.filter((s) => !s.region).length, status: "ok" },
+    {
+      name: "Missing Index Numbers",
+      value: missingIndex,
+      status: missingIndex ? "warning" : "ok",
+    },
+    {
+      name: "Duplicate Index Numbers",
+      value: duplicateIndexes ? 1 : 0,
+      status: duplicateIndexes ? "warning" : "ok",
+    },
+    {
+      name: "Incomplete Regions",
+      value: STUDENTS_DATA.filter((s) => !s.region).length,
+      status: "ok",
+    },
   ];
   const isMobile = useIsMobileLayout();
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Data Quality Monitor</div><div className="page-sub">13. Detect missing/duplicate/inconsistent records.</div></div>{isMobile ? <div className="mobile-record-list">{issues.map((i)=><div key={i.name} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{i.name}</div></div><span className={`badge ${i.status === "warning" ? "badge-warning" : "badge-success"}`}>{i.status}</span></div><div className="mobile-record-item"><label>Count</label><span>{i.value}</span></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Check</th><th>Count</th><th>Status</th></tr></thead><tbody>{issues.map((i)=><tr key={i.name}><td>{i.name}</td><td>{i.value}</td><td><span className={`badge ${i.status === "warning" ? "badge-warning" : "badge-success"}`}>{i.status}</span></td></tr>)}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Data Quality Monitor</div>
+        <div className="page-sub">
+          13. Detect missing/duplicate/inconsistent records.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {issues.map((i) => (
+            <div key={i.name} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{i.name}</div>
+                </div>
+                <span
+                  className={`badge ${i.status === "warning" ? "badge-warning" : "badge-success"}`}
+                >
+                  {i.status}
+                </span>
+              </div>
+              <div className="mobile-record-item">
+                <label>Count</label>
+                <span>{i.value}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Count</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {issues.map((i) => (
+                <tr key={i.name}>
+                  <td>{i.name}</td>
+                  <td>{i.value}</td>
+                  <td>
+                    <span
+                      className={`badge ${i.status === "warning" ? "badge-warning" : "badge-success"}`}
+                    >
+                      {i.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ApprovalSlaPage() {
@@ -6967,7 +15047,62 @@ function ApprovalSlaPage() {
     { id: 2, queue: "Document Review", under24: 12, under72: 5, over72: 1 },
   ]);
   const isMobile = useIsMobileLayout();
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Approval SLA Dashboard</div><div className="page-sub">14. Aging and turnaround performance tracking.</div></div>{isMobile ? <div className="mobile-record-list">{rows.map((r)=><div key={r.id} className="mobile-record-card"><div className="mobile-record-title">{r.queue}</div><div className="mobile-record-grid"><div className="mobile-record-item"><label>&lt;24h</label><span>{r.under24}</span></div><div className="mobile-record-item"><label>24-72h</label><span>{r.under72}</span></div><div className="mobile-record-item"><label>&gt;72h</label><span>{r.over72}</span></div></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Queue</th><th>&lt;24h</th><th>24-72h</th><th>&gt;72h</th></tr></thead><tbody>{rows.map((r)=><tr key={r.id}><td>{r.queue}</td><td>{r.under24}</td><td>{r.under72}</td><td>{r.over72}</td></tr>)}</tbody></table></div>}</div>;
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Approval SLA Dashboard</div>
+        <div className="page-sub">
+          14. Aging and turnaround performance tracking.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {rows.map((r) => (
+            <div key={r.id} className="mobile-record-card">
+              <div className="mobile-record-title">{r.queue}</div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item">
+                  <label>&lt;24h</label>
+                  <span>{r.under24}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>24-72h</label>
+                  <span>{r.under72}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>&gt;72h</label>
+                  <span>{r.over72}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Queue</th>
+                <th>&lt;24h</th>
+                <th>24-72h</th>
+                <th>&gt;72h</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.queue}</td>
+                  <td>{r.under24}</td>
+                  <td>{r.under72}</td>
+                  <td>{r.over72}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function FeatureFlagsPage() {
@@ -6976,50 +15111,197 @@ function FeatureFlagsPage() {
     { id: 2, key: "advanced-risk-model", stage: "beta", enabled: false },
   ]);
   const isMobile = useIsMobileLayout();
-  const toggle = (id) => setFlags((f) => f.map((x) => x.id === id ? { ...x, enabled: !x.enabled } : x));
-  return <div className="fade-in"><div className="page-header"><div className="page-title">Feature Flags & Rollout</div><div className="page-sub">15. Controlled release by stage and audience.</div></div>{isMobile ? <div className="mobile-record-list">{flags.map((x)=><div key={x.id} className="mobile-record-card"><div className="mobile-record-head"><div><div className="mobile-record-title">{x.key}</div><div className="mobile-record-sub">{x.stage}</div></div><input type="checkbox" checked={x.enabled} onChange={()=>toggle(x.id)} /></div></div>)}</div> : <div className="card table-wrap"><table><thead><tr><th>Flag</th><th>Stage</th><th>Enabled</th></tr></thead><tbody>{flags.map((x)=><tr key={x.id}><td>{x.key}</td><td>{x.stage}</td><td><input type="checkbox" checked={x.enabled} onChange={()=>toggle(x.id)} /></td></tr>)}</tbody></table></div>}</div>;
+  const toggle = (id) =>
+    setFlags((f) =>
+      f.map((x) => (x.id === id ? { ...x, enabled: !x.enabled } : x)),
+    );
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Feature Flags & Rollout</div>
+        <div className="page-sub">
+          15. Controlled release by stage and audience.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {flags.map((x) => (
+            <div key={x.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{x.key}</div>
+                  <div className="mobile-record-sub">{x.stage}</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={x.enabled}
+                  onChange={() => toggle(x.id)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Flag</th>
+                <th>Stage</th>
+                <th>Enabled</th>
+              </tr>
+            </thead>
+            <tbody>
+              {flags.map((x) => (
+                <tr key={x.id}>
+                  <td>{x.key}</td>
+                  <td>{x.stage}</td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={x.enabled}
+                      onChange={() => toggle(x.id)}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ADMIN NAV
 const ADMIN_NAV = [
-  {section:"Overview"},{key:"dashboard",icon:"dashboard",label:"Dashboard",color:"#6366f1"},
-  {section:"Admissions & Mock Placement"},{key:"students",icon:"students",label:"Students",color:"#3b82f6"},{key:"enroll",icon:"enroll",label:"Enroll Student",color:"#0ea5e9"},{key:"schools",icon:"schools",label:"Schools",color:"#06b6d4"},{key:"pending",icon:"pending",label:"Pending Selections",badge:true,color:"#ef4444"},{key:"confirmed",icon:"confirmed",label:"Confirmed",color:"#16a34a"},
-  {section:"Academic Management"},{key:"scores",icon:"scores",label:"Test Scores",color:"#f43f5e"},{key:"academic-scores",icon:"grading",label:"Academic Scores",color:"#0ea5e9"},{key:"results",icon:"results",label:"Results",color:"#f97316"},{key:"grading",icon:"grading",label:"Grade Report",color:"#ec4899"},{key:"analytics",icon:"analytics",label:"Analytics",color:"#7c3aed"},
-  {section:"Student Services"},{key:"attendance",icon:"attendance",label:"Attendance",color:"#14b8a6"},{key:"fees",icon:"fees",label:"Fees",color:"#22c55e"},{key:"teachers",icon:"teachers",label:"Teachers",color:"#8b5cf6"},
-  {section:"Communication"},{key:"chat",icon:"chat",label:"Chat",color:"#10b981"},{key:"events",icon:"events",label:"Events",color:"#f59e0b"},
-  {section:"Administration"},{key:"finance",icon:"finance",label:"Finance",color:"#d97706"},{key:"settings",icon:"settings",label:"Settings",color:"#64748b"},
-  {key:"registered-schools",icon:"schools",label:"Registered Schools",color:"#0f766e"},
-  {section:"Platform Suite"},
-  {key:"permissions",icon:"lock",label:"Permissions",color:"#1d4ed8"},
-  {key:"audit",icon:"docs",label:"Audit Trail",color:"#0f766e"},
-  {key:"notify",icon:"bell",label:"Notifications",color:"#b45309"},
-  {key:"payments",icon:"fees",label:"Payments",color:"#15803d"},
-  {key:"documents",icon:"docs",label:"Documents",color:"#7c2d12"},
-  {key:"reports",icon:"results",label:"Reports",color:"#7c3aed"},
-  {key:"insights",icon:"analytics",label:"Advanced Insights",color:"#4338ca"},
-  {key:"bulk",icon:"students",label:"Bulk Operations",color:"#334155"},
-  {key:"offline",icon:"attendance",label:"Offline Sync",color:"#0369a1"},
-  {key:"calendar",icon:"events",label:"Academic Calendar",color:"#d97706"},
-  {key:"helpdesk",icon:"support",label:"Helpdesk",color:"#0f766e"},
-  {key:"privacy",icon:"lock",label:"Privacy",color:"#991b1b"},
-  {key:"recovery",icon:"finance",label:"Recovery",color:"#1e40af"},
-  {key:"mobile",icon:"profile",label:"Mobile & PWA",color:"#7c3aed"},
-  {section:"Expansion Features"},
-  {key:"auto-rules",icon:"settings",label:"Automation Rules",color:"#1d4ed8"},
-  {key:"ai-assist",icon:"chat",label:"AI Assistant",color:"#0f766e"},
-  {key:"risk-score",icon:"analytics",label:"Risk Scoring",color:"#dc2626"},
-  {key:"timetable",icon:"events",label:"Timetable",color:"#0369a1"},
-  {key:"exam-builder",icon:"docs",label:"Exam Builder",color:"#7c3aed"},
-  {key:"installments",icon:"fees",label:"Installments",color:"#15803d"},
-  {key:"campaigns",icon:"bell",label:"Campaigns",color:"#b45309"},
-  {key:"recommend",icon:"schools",label:"Recommendations",color:"#1e40af"},
-  {key:"digital-id",icon:"profile",label:"Digital ID",color:"#4338ca"},
-  {key:"public-status",icon:"results",label:"Public Status",color:"#0f766e"},
-  {key:"integrations",icon:"settings",label:"Integrations",color:"#7c2d12"},
-  {key:"tenants",icon:"students",label:"Multi-Tenant",color:"#334155"},
-  {key:"quality",icon:"docs",label:"Data Quality",color:"#991b1b"},
-  {key:"sla",icon:"pending",label:"Approval SLA",color:"#d97706"},
-  {key:"flags",icon:"lock",label:"Feature Flags",color:"#475569"},
+  { section: "Overview" },
+  { key: "dashboard", icon: "dashboard", label: "Dashboard", color: "#6366f1" },
+  { section: "Admissions & Mock Placement" },
+  { key: "students", icon: "students", label: "Students", color: "#3b82f6" },
+  { key: "enroll", icon: "enroll", label: "Enroll Student", color: "#0ea5e9" },
+  { key: "schools", icon: "schools", label: "Schools", color: "#06b6d4" },
+  {
+    key: "pending",
+    icon: "pending",
+    label: "Pending Selections",
+    badge: true,
+    color: "#ef4444",
+  },
+  { key: "confirmed", icon: "confirmed", label: "Confirmed", color: "#16a34a" },
+  { section: "Academic Management" },
+  { key: "scores", icon: "scores", label: "Test Scores", color: "#f43f5e" },
+  {
+    key: "academic-scores",
+    icon: "grading",
+    label: "Academic Scores",
+    color: "#0ea5e9",
+  },
+  { key: "results", icon: "results", label: "Results", color: "#f97316" },
+  { key: "grading", icon: "grading", label: "Grade Report", color: "#ec4899" },
+  { key: "analytics", icon: "analytics", label: "Analytics", color: "#7c3aed" },
+  { section: "Student Services" },
+  {
+    key: "attendance",
+    icon: "attendance",
+    label: "Attendance",
+    color: "#14b8a6",
+  },
+  { key: "fees", icon: "fees", label: "Fees", color: "#22c55e" },
+  { key: "teachers", icon: "teachers", label: "Teachers", color: "#8b5cf6" },
+  { section: "Communication" },
+  { key: "chat", icon: "chat", label: "Chat", color: "#10b981" },
+  { key: "events", icon: "events", label: "Events", color: "#f59e0b" },
+  { section: "Administration" },
+  { key: "finance", icon: "finance", label: "Finance", color: "#d97706" },
+  { key: "settings", icon: "settings", label: "Settings", color: "#64748b" },
+  {
+    key: "registered-schools",
+    icon: "schools",
+    label: "Registered Schools",
+    color: "#0f766e",
+  },
+  { section: "Platform Suite" },
+  { key: "permissions", icon: "lock", label: "Permissions", color: "#1d4ed8" },
+  { key: "audit", icon: "docs", label: "Audit Trail", color: "#0f766e" },
+  { key: "notify", icon: "bell", label: "Notifications", color: "#b45309" },
+  { key: "payments", icon: "fees", label: "Payments", color: "#15803d" },
+  { key: "documents", icon: "docs", label: "Documents", color: "#7c2d12" },
+  { key: "reports", icon: "results", label: "Reports", color: "#7c3aed" },
+  {
+    key: "insights",
+    icon: "analytics",
+    label: "Advanced Insights",
+    color: "#4338ca",
+  },
+  { key: "bulk", icon: "students", label: "Bulk Operations", color: "#334155" },
+  {
+    key: "offline",
+    icon: "attendance",
+    label: "Offline Sync",
+    color: "#0369a1",
+  },
+  {
+    key: "calendar",
+    icon: "events",
+    label: "Academic Calendar",
+    color: "#d97706",
+  },
+  { key: "helpdesk", icon: "support", label: "Helpdesk", color: "#0f766e" },
+  { key: "privacy", icon: "lock", label: "Privacy", color: "#991b1b" },
+  { key: "recovery", icon: "finance", label: "Recovery", color: "#1e40af" },
+  { key: "mobile", icon: "profile", label: "Mobile & PWA", color: "#7c3aed" },
+  { section: "Expansion Features" },
+  {
+    key: "auto-rules",
+    icon: "settings",
+    label: "Automation Rules",
+    color: "#1d4ed8",
+  },
+  { key: "ai-assist", icon: "chat", label: "AI Assistant", color: "#0f766e" },
+  {
+    key: "risk-score",
+    icon: "analytics",
+    label: "Risk Scoring",
+    color: "#dc2626",
+  },
+  { key: "timetable", icon: "events", label: "Timetable", color: "#0369a1" },
+  {
+    key: "exam-builder",
+    icon: "docs",
+    label: "Exam Builder",
+    color: "#7c3aed",
+  },
+  {
+    key: "installments",
+    icon: "fees",
+    label: "Installments",
+    color: "#15803d",
+  },
+  { key: "campaigns", icon: "bell", label: "Campaigns", color: "#b45309" },
+  {
+    key: "recommend",
+    icon: "schools",
+    label: "Recommendations",
+    color: "#1e40af",
+  },
+  { key: "digital-id", icon: "profile", label: "Digital ID", color: "#4338ca" },
+  {
+    key: "public-status",
+    icon: "results",
+    label: "Public Status",
+    color: "#0f766e",
+  },
+  {
+    key: "integrations",
+    icon: "settings",
+    label: "Integrations",
+    color: "#7c2d12",
+  },
+  { key: "tenants", icon: "students", label: "Multi-Tenant", color: "#334155" },
+  { key: "quality", icon: "docs", label: "Data Quality", color: "#991b1b" },
+  { key: "sla", icon: "pending", label: "Approval SLA", color: "#d97706" },
+  { key: "flags", icon: "lock", label: "Feature Flags", color: "#475569" },
 ];
 
 const ADMIN_SUBPAGE_MAP = {
@@ -7053,12 +15335,30 @@ const dedupeSubpageKeys = (keys) => {
   });
 };
 
-const SCHOOL_ADMIN_EXCLUDED_KEYS = new Set(["settings", "registered-schools", "school-register", "permissions", "audit", "privacy", "recovery", "mobile", "integrations", "tenants", "flags", "auto-rules"]);
+const SCHOOL_ADMIN_EXCLUDED_KEYS = new Set([
+  "settings",
+  "registered-schools",
+  "school-register",
+  "permissions",
+  "audit",
+  "privacy",
+  "recovery",
+  "mobile",
+  "integrations",
+  "tenants",
+  "flags",
+  "auto-rules",
+]);
 const SCHOOL_ADMIN_SUBPAGE_MAP = Object.fromEntries(
   Object.entries(ADMIN_SUBPAGE_MAP)
     .filter(([parent]) => !SCHOOL_ADMIN_EXCLUDED_KEYS.has(parent))
-    .map(([parent, children]) => [parent, dedupeSubpageKeys(children.filter((child) => !SCHOOL_ADMIN_EXCLUDED_KEYS.has(child)))])
-    .filter(([, children]) => children.length > 0)
+    .map(([parent, children]) => [
+      parent,
+      dedupeSubpageKeys(
+        children.filter((child) => !SCHOOL_ADMIN_EXCLUDED_KEYS.has(child)),
+      ),
+    ])
+    .filter(([, children]) => children.length > 0),
 );
 const SCHOOL_ADMIN_NAV = (() => {
   const items = [];
@@ -7075,49 +15375,136 @@ const SCHOOL_ADMIN_NAV = (() => {
     }
     items.push(entry);
     if (entry.key === "finance") {
-      items.push({ key: "school-profile", icon: "schools", label: "Managed School", color: "#0f766e" });
+      items.push({
+        key: "school-profile",
+        icon: "schools",
+        label: "Managed School",
+        color: "#0f766e",
+      });
     }
   });
   return dedupeNavEntries(items);
 })();
 
 const STUDENT_NAV = [
-  {section:"Overview"},
-  {key:"dashboard",icon:"dashboard",label:"Dashboard",color:"#6366f1"},
-  {key:"profile",icon:"profile",label:"Profile",color:"#3b82f6"},
-  {section:"Academics"},
-  {key:"results",icon:"results",label:"Results",color:"#f97316"},
-  {key:"analytics-student",icon:"analytics",label:"Analytics",color:"#7c3aed"},
-  {key:"report-card",icon:"results",label:"Report Card",color:"#7c3aed"},
-  {key:"subject-progress",icon:"analytics",label:"Subject Progress",color:"#4338ca"},
-  {key:"study-planner",icon:"calendar",label:"Study Planner",color:"#0f766e"},
-  {key:"exam-schedule",icon:"events",label:"Exam Schedule",color:"#0369a1"},
-  {key:"goals",icon:"grading",label:"Goals",color:"#8b5cf6"},
-  {section:"Mock Placement"},
-  {key:"selection",icon:"selection",label:"Select Schools",color:"#06b6d4"},
-  {key:"my-selection",icon:"confirmed",label:"My Selection",color:"#16a34a"},
-  {key:"predictor",icon:"analytics",label:"Predictor",color:"#7c3aed"},
-  {key:"scholarships",icon:"teachers",label:"Scholarships",color:"#d97706"},
-  {section:"Student Services"},
-  {key:"attendance",icon:"attendance",label:"Attendance",color:"#14b8a6"},
-  {key:"attendance-corrections",icon:"attendance",label:"Attendance Corrections",color:"#b45309"},
-  {key:"fees",icon:"fees",label:"Fees",color:"#22c55e"},
-  {key:"pay-fees",icon:"fees",label:"Pay Fees",color:"#15803d"},
-  {key:"payment-plan",icon:"finance",label:"Payment Plan",color:"#166534"},
-  {section:"Communication & Resources"},
-  {key:"announcements",icon:"bell",label:"Updates",color:"#ef4444"},
-  {key:"announcements-pro",icon:"bell",label:"Personalized Updates",color:"#dc2626"},
-  {key:"support-tickets",icon:"support",label:"Support Tickets",color:"#0f766e"},
-  {key:"chat",icon:"chat",label:"Chat",color:"#10b981"},
-  {key:"docs",icon:"docs",label:"Documents",color:"#f97316"},
-  {key:"upload-docs",icon:"enroll",label:"Upload Documents",color:"#7c2d12"},
-  {key:"resources",icon:"docs",label:"Resources",color:"#475569"},
-  {key:"assignments",icon:"docs",label:"Assignments",color:"#1d4ed8"},
-  {key:"calendar-sync",icon:"events",label:"Calendar Sync",color:"#1e40af"},
+  { section: "Overview" },
+  { key: "dashboard", icon: "dashboard", label: "Dashboard", color: "#6366f1" },
+  { key: "profile", icon: "profile", label: "Profile", color: "#3b82f6" },
+  { section: "Academics" },
+  { key: "results", icon: "results", label: "Results", color: "#f97316" },
+  {
+    key: "analytics-student",
+    icon: "analytics",
+    label: "Analytics",
+    color: "#7c3aed",
+  },
+  {
+    key: "report-card",
+    icon: "results",
+    label: "Report Card",
+    color: "#7c3aed",
+  },
+  {
+    key: "subject-progress",
+    icon: "analytics",
+    label: "Subject Progress",
+    color: "#4338ca",
+  },
+  {
+    key: "study-planner",
+    icon: "calendar",
+    label: "Study Planner",
+    color: "#0f766e",
+  },
+  {
+    key: "exam-schedule",
+    icon: "events",
+    label: "Exam Schedule",
+    color: "#0369a1",
+  },
+  { key: "goals", icon: "grading", label: "Goals", color: "#8b5cf6" },
+  { section: "Mock Placement" },
+  {
+    key: "selection",
+    icon: "selection",
+    label: "Select Schools",
+    color: "#06b6d4",
+  },
+  {
+    key: "my-selection",
+    icon: "confirmed",
+    label: "My Selection",
+    color: "#16a34a",
+  },
+  { key: "predictor", icon: "analytics", label: "Predictor", color: "#7c3aed" },
+  {
+    key: "scholarships",
+    icon: "teachers",
+    label: "Scholarships",
+    color: "#d97706",
+  },
+  { section: "Student Services" },
+  {
+    key: "attendance",
+    icon: "attendance",
+    label: "Attendance",
+    color: "#14b8a6",
+  },
+  {
+    key: "attendance-corrections",
+    icon: "attendance",
+    label: "Attendance Corrections",
+    color: "#b45309",
+  },
+  { key: "fees", icon: "fees", label: "Fees", color: "#22c55e" },
+  { key: "pay-fees", icon: "fees", label: "Pay Fees", color: "#15803d" },
+  {
+    key: "payment-plan",
+    icon: "finance",
+    label: "Payment Plan",
+    color: "#166534",
+  },
+  { section: "Communication & Resources" },
+  { key: "announcements", icon: "bell", label: "Updates", color: "#ef4444" },
+  {
+    key: "announcements-pro",
+    icon: "bell",
+    label: "Personalized Updates",
+    color: "#dc2626",
+  },
+  {
+    key: "support-tickets",
+    icon: "support",
+    label: "Support Tickets",
+    color: "#0f766e",
+  },
+  { key: "chat", icon: "chat", label: "Chat", color: "#10b981" },
+  { key: "docs", icon: "docs", label: "Documents", color: "#f97316" },
+  {
+    key: "upload-docs",
+    icon: "enroll",
+    label: "Upload Documents",
+    color: "#7c2d12",
+  },
+  { key: "resources", icon: "docs", label: "Resources", color: "#475569" },
+  { key: "assignments", icon: "docs", label: "Assignments", color: "#1d4ed8" },
+  {
+    key: "calendar-sync",
+    icon: "events",
+    label: "Calendar Sync",
+    color: "#1e40af",
+  },
 ];
 
 const STUDENT_SUBPAGE_MAP = {
-  results: ["analytics-student", "report-card", "subject-progress", "study-planner", "exam-schedule", "goals"],
+  results: [
+    "analytics-student",
+    "report-card",
+    "subject-progress",
+    "study-planner",
+    "exam-schedule",
+    "goals",
+  ],
   selection: ["my-selection", "predictor", "scholarships"],
   attendance: ["attendance-corrections"],
   fees: ["pay-fees", "payment-plan"],
@@ -7128,21 +15515,30 @@ const STUDENT_SUBPAGE_MAP = {
 // ADMIN PORTAL
 function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const { cfg: appCfg } = useContext(SettingsContext);
+  const adminFeesPortalEnabled = appCfg.adminFeesPortalEnabled !== false;
   const childToParent = useMemo(() => {
     const map = {};
     Object.entries(ADMIN_SUBPAGE_MAP).forEach(([parent, children]) => {
-      children.forEach((key) => { map[key] = parent; });
+      children.forEach((key) => {
+        map[key] = parent;
+      });
     });
     return map;
   }, []);
   const [expandedGroups, setExpandedGroups] = useState(() =>
-    Object.fromEntries(Object.keys(ADMIN_SUBPAGE_MAP).map((k) => [k, false]))
+    Object.fromEntries(Object.keys(ADMIN_SUBPAGE_MAP).map((k) => [k, false])),
   );
-  const [tab, setTab] = useState(() => readStoredTab(ADMIN_TAB_KEY, "dashboard"));
+  const [tab, setTab] = useState(() =>
+    readStoredTab(ADMIN_TAB_KEY, "dashboard"),
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
-  const [adminStudents, setAdminStudents] = useState(() => (supabase ? [] : sortStudentsByIndex(STUDENTS_DATA)));
-  const [adminSchools, setAdminSchools] = useState(() => (supabase ? [] : SCHOOLS_DATA));
+  const [adminStudents, setAdminStudents] = useState(() =>
+    supabase ? [] : sortStudentsByIndex(STUDENTS_DATA),
+  );
+  const [adminSchools, setAdminSchools] = useState(() =>
+    supabase ? [] : SCHOOLS_DATA,
+  );
   const [registeredSchools, setRegisteredSchools] = useState([]);
   const [schoolAdmins, setSchoolAdmins] = useState([]);
   const [registrySetupError, setRegistrySetupError] = useState("");
@@ -7167,19 +15563,42 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   });
   const [loadingPlacements, setLoadingPlacements] = useState(false);
   const [chatUsers, setChatUsers] = useState([
-    {id:1, name:"Support Team", avatar:"S", unread:0, status:"active"},
-    {id:2, name:"Ms. Ama Owusu", avatar:"A", unread:0, status:"online"},
-    {id:3, name:"Mr. Kwesi Adjei", avatar:"K", unread:0, status:"away"},
-    {id:4, name:"Admissions Office", avatar:"O", unread:0, status:"active"},
-    {id:5, name:"Dr. Yaw Mensah", avatar:"Y", unread:0, status:"online"},
-    {id:6, name:"Accra Campus", avatar:"C", unread:0, status:"active"},
-    {id:7, name:"Kumasi Branch", avatar:"B", unread:0, status:"away"},
-    {id:8, name:"Finance Dept", avatar:"F", unread:0, status:"online"},
-    {id:9, name:"IT Support", avatar:"I", unread:0, status:"active"},
-    {id:10, name:"Student Affairs", avatar:"E", unread:0, status:"online"},
+    { id: 1, name: "Support Team", avatar: "S", unread: 0, status: "active" },
+    { id: 2, name: "Ms. Ama Owusu", avatar: "A", unread: 0, status: "online" },
+    { id: 3, name: "Mr. Kwesi Adjei", avatar: "K", unread: 0, status: "away" },
+    {
+      id: 4,
+      name: "Admissions Office",
+      avatar: "O",
+      unread: 0,
+      status: "active",
+    },
+    { id: 5, name: "Dr. Yaw Mensah", avatar: "Y", unread: 0, status: "online" },
+    { id: 6, name: "Accra Campus", avatar: "C", unread: 0, status: "active" },
+    { id: 7, name: "Kumasi Branch", avatar: "B", unread: 0, status: "away" },
+    { id: 8, name: "Finance Dept", avatar: "F", unread: 0, status: "online" },
+    { id: 9, name: "IT Support", avatar: "I", unread: 0, status: "active" },
+    {
+      id: 10,
+      name: "Student Affairs",
+      avatar: "E",
+      unread: 0,
+      status: "online",
+    },
   ]);
   const totalChatUnread = chatUsers.reduce((sum, u) => sum + u.unread, 0);
-  const BOTTOM = ["dashboard","students","pending","analytics","settings"];
+  const BOTTOM = ["dashboard", "students", "pending", "analytics", "settings"];
+  const blockedAdminFeeKeys = useMemo(
+    () => (adminFeesPortalEnabled ? [] : ["fees", "payments", "installments"]),
+    [adminFeesPortalEnabled],
+  );
+  const filteredAdminNav = useMemo(
+    () =>
+      ADMIN_NAV.filter((item) =>
+        item.section ? true : !blockedAdminFeeKeys.includes(item.key),
+      ),
+    [blockedAdminFeeKeys],
+  );
 
   const goTab = (key, closeSidebar = true) => {
     setTab(key);
@@ -7190,8 +15609,15 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const financeSummary = {
     income: feesData.reduce((sum, fee) => sum + Number(fee.paid || 0), 0),
     expenses: FINANCE_DATA.expenses,
-    fees_collected: feesData.reduce((sum, fee) => sum + Number(fee.paid || 0), 0),
-    outstanding: feesData.reduce((sum, fee) => sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0), 0),
+    fees_collected: feesData.reduce(
+      (sum, fee) => sum + Number(fee.paid || 0),
+      0,
+    ),
+    outstanding: feesData.reduce(
+      (sum, fee) =>
+        sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0),
+      0,
+    ),
   };
 
   const registerSchool = async (schoolForm) => {
@@ -7202,16 +15628,27 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       category: schoolForm.category,
       type: schoolForm.type,
       active: !!schoolForm.active,
-      tenant_key: `${String(schoolForm.name || "school").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "school"}-${Date.now().toString().slice(-5)}`,
+      tenant_key: `${
+        String(schoolForm.name || "school")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "") || "school"
+      }-${Date.now().toString().slice(-5)}`,
     };
 
     let insertedRow = { id: Date.now(), ...payload };
 
     if (supabase) {
-      const { data, error } = await supabase.from("registered_schools").insert(payload).select("*").single();
+      const { data, error } = await supabase
+        .from("registered_schools")
+        .insert(payload)
+        .select("*")
+        .single();
       if (error) {
         if (isMissingTableError(error, "registered_schools")) {
-          throw new Error("Registered school setup is not available yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql in Supabase, then refresh.");
+          throw new Error(
+            "Registered school setup is not available yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql in Supabase, then refresh.",
+          );
         }
         throw error;
       }
@@ -7219,12 +15656,15 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     }
 
     const normalized = normalizeSchoolRow(insertedRow);
-    setRegisteredSchools((current) => sortSchoolsByCategory([...(current || []), normalized]));
+    setRegisteredSchools((current) =>
+      sortSchoolsByCategory([...(current || []), normalized]),
+    );
     return normalized;
   };
 
   const createSchoolAdmin = async (school, adminForm) => {
-    const assignedRole = normalizeRoleKey(adminForm.role || "school_admin") || "school_admin";
+    const assignedRole =
+      normalizeRoleKey(adminForm.role || "school_admin") || "school_admin";
     const payload = {
       registered_school_id: school.id,
       full_name: adminForm.full_name.trim(),
@@ -7238,18 +15678,35 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     let insertedAdmin = { id: `local-${Date.now()}`, ...payload };
 
     if (supabase) {
-      let adminResponse = await supabase.from("school_admins").insert(payload).select("*").single();
-      if (adminResponse.error && isMissingColumnError(adminResponse.error) && Object.prototype.hasOwnProperty.call(payload, "role")) {
+      let adminResponse = await supabase
+        .from("school_admins")
+        .insert(payload)
+        .select("*")
+        .single();
+      if (
+        adminResponse.error &&
+        isMissingColumnError(adminResponse.error) &&
+        Object.prototype.hasOwnProperty.call(payload, "role")
+      ) {
         const { role, ...fallbackPayload } = payload;
-        adminResponse = await supabase.from("school_admins").insert(fallbackPayload).select("*").single();
+        adminResponse = await supabase
+          .from("school_admins")
+          .insert(fallbackPayload)
+          .select("*")
+          .single();
       }
       if (adminResponse.error) {
         if (isMissingTableError(adminResponse.error, "school_admins")) {
-          throw new Error("School admin setup is not available yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql in Supabase, then refresh.");
+          throw new Error(
+            "School admin setup is not available yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql in Supabase, then refresh.",
+          );
         }
         throw adminResponse.error;
       }
-      insertedAdmin = { ...(adminResponse.data || insertedAdmin), role: (adminResponse.data?.role || assignedRole) };
+      insertedAdmin = {
+        ...(adminResponse.data || insertedAdmin),
+        role: adminResponse.data?.role || assignedRole,
+      };
 
       const { error: userError } = await supabase.from("users").insert({
         email: payload.email,
@@ -7267,72 +15724,172 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   };
 
   const saveAdminStudent = async (existingStudent, draft) => {
+    const normalizedRegisteredSchoolId =
+      draft.registered_school_id == null ||
+      String(draft.registered_school_id).trim() === ""
+        ? null
+        : Number(draft.registered_school_id);
+    const hasValidRegisteredSchoolId =
+      normalizedRegisteredSchoolId == null ||
+      Number.isFinite(normalizedRegisteredSchoolId);
+    if (!hasValidRegisteredSchoolId) {
+      throw new Error(
+        "Invalid registered school selected. Please choose a valid school and try again.",
+      );
+    }
+
     const payload = {
       full_name: draft.full_name.trim(),
       index: draft.index.trim(),
       class: draft.class,
       region: draft.region,
+      parent_contact: draft.parent_contact?.trim() || null,
+      registered_school_id: normalizedRegisteredSchoolId,
       aggregate: Number(draft.aggregate || 0),
       status: draft.status || "pending",
       photo_url: draft.photo_url?.trim() || null,
     };
 
-    let savedRow = normalizeStudentRecord({ id: existingStudent?.id || Date.now(), ...payload });
+    let savedRow = normalizeStudentRecord({
+      id: existingStudent?.id || Date.now(),
+      ...payload,
+    });
 
     if (supabase) {
       const updateStudentRow = async (nextPayload) => {
         if (!existingStudent) {
-          return supabase.from("students").insert(nextPayload).select("*").maybeSingle();
+          return supabase
+            .from("students")
+            .insert(nextPayload)
+            .select("*")
+            .maybeSingle();
         }
 
-        if (existingStudent.id != null && !String(existingStudent.id).startsWith("local-")) {
-          const byId = await supabase.from("students").update(nextPayload).eq("id", existingStudent.id).select("*").maybeSingle();
+        if (
+          existingStudent.id != null &&
+          !String(existingStudent.id).startsWith("local-")
+        ) {
+          const byId = await supabase
+            .from("students")
+            .update(nextPayload)
+            .eq("id", existingStudent.id)
+            .select("*")
+            .maybeSingle();
           if (!byId.error && byId.data) return byId;
         }
 
         const studentIndex = String(existingStudent.index || "").trim();
         if (studentIndex) {
-          const byIndex = await supabase.from("students").update(nextPayload).eq("index", studentIndex).select("*").maybeSingle();
+          const byIndex = await supabase
+            .from("students")
+            .update(nextPayload)
+            .eq("index", studentIndex)
+            .select("*")
+            .maybeSingle();
           if (!byIndex.error && byIndex.data) return byIndex;
-          const byIndexNumber = await supabase.from("students").update(nextPayload).eq("index_number", studentIndex).select("*").maybeSingle();
+          const byIndexNumber = await supabase
+            .from("students")
+            .update(nextPayload)
+            .eq("index_number", studentIndex)
+            .select("*")
+            .maybeSingle();
           if (!byIndexNumber.error && byIndexNumber.data) return byIndexNumber;
         }
 
         const lookupChecks = [];
-        if (existingStudent.id != null && !String(existingStudent.id).startsWith("local-")) {
-          lookupChecks.push(supabase.from("students").select("id").eq("id", existingStudent.id).limit(1));
+        if (
+          existingStudent.id != null &&
+          !String(existingStudent.id).startsWith("local-")
+        ) {
+          lookupChecks.push(
+            supabase
+              .from("students")
+              .select("id")
+              .eq("id", existingStudent.id)
+              .limit(1),
+          );
         }
         const lookupStudentIndex = String(existingStudent.index || "").trim();
         if (lookupStudentIndex) {
-          lookupChecks.push(supabase.from("students").select("id").eq("index", lookupStudentIndex).limit(1));
-          lookupChecks.push(supabase.from("students").select("id").eq("index_number", lookupStudentIndex).limit(1));
+          lookupChecks.push(
+            supabase
+              .from("students")
+              .select("id")
+              .eq("index", lookupStudentIndex)
+              .limit(1),
+          );
+          lookupChecks.push(
+            supabase
+              .from("students")
+              .select("id")
+              .eq("index_number", lookupStudentIndex)
+              .limit(1),
+          );
         }
         const lookupResults = await Promise.all(lookupChecks);
-        const visibleRowExists = lookupResults.some((result) => Array.isArray(result.data) && result.data.length > 0);
+        const visibleRowExists = lookupResults.some(
+          (result) => Array.isArray(result.data) && result.data.length > 0,
+        );
 
         if (visibleRowExists) {
-          return { data: null, error: new Error("Student exists but update is blocked by Supabase permissions (RLS). Add/adjust an UPDATE policy for public.students.") };
+          return {
+            data: null,
+            error: new Error(
+              "Student exists but update is blocked by Supabase permissions (RLS). Add/adjust an UPDATE policy for public.students.",
+            ),
+          };
         }
 
-        return { data: null, error: new Error("Could not find this student in Supabase to update. The row key may have changed (id/index/index_number).") };
+        return {
+          data: null,
+          error: new Error(
+            "Could not find this student in Supabase to update. The row key may have changed (id/index/index_number).",
+          ),
+        };
       };
 
       let response = await updateStudentRow(payload);
 
-      if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "photo_url")) {
+      if (
+        response.error &&
+        isMissingColumnError(response.error) &&
+        Object.prototype.hasOwnProperty.call(payload, "registered_school_id")
+      ) {
+        if (payload.registered_school_id != null) {
+          throw new Error(
+            "School assignment requires backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.",
+          );
+        }
+        const { registered_school_id, ...fallbackPayload } = payload;
+        response = await updateStudentRow(fallbackPayload);
+      }
+
+      if (
+        response.error &&
+        isMissingColumnError(response.error) &&
+        Object.prototype.hasOwnProperty.call(payload, "photo_url")
+      ) {
         const { photo_url, ...fallbackPayload } = payload;
         response = await updateStudentRow(fallbackPayload);
       }
 
       if (response.error) throw response.error;
-      savedRow = normalizeStudentRecord(response.data || { id: existingStudent?.id || Date.now(), ...payload });
+      savedRow = normalizeStudentRecord(
+        response.data || { id: existingStudent?.id || Date.now(), ...payload },
+      );
     }
 
-    setAdminStudents((current) => sortStudentsByIndex(
-      existingStudent
-        ? current.map((student) => String(student.id) === String(existingStudent.id) ? { ...student, ...savedRow } : student)
-        : [...current, savedRow]
-    ));
+    setAdminStudents((current) =>
+      sortStudentsByIndex(
+        existingStudent
+          ? current.map((student) =>
+              String(student.id) === String(existingStudent.id)
+                ? { ...student, ...savedRow }
+                : student,
+            )
+          : [...current, savedRow],
+      ),
+    );
 
     return savedRow;
   };
@@ -7352,14 +15909,24 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       date_of_birth: draft.date_of_birth || null,
       hire_date: draft.hire_date || null,
       address: draft.address.trim() || null,
-      ...(scopedSchoolId != null ? { registered_school_id: scopedSchoolId } : {}),
+      ...(scopedSchoolId != null
+        ? { registered_school_id: scopedSchoolId }
+        : {}),
     };
 
-    let savedRow = normalizeTeacherRow({ id: existingTeacher?.id || Date.now(), ...payload });
+    let savedRow = normalizeTeacherRow({
+      id: existingTeacher?.id || Date.now(),
+      ...payload,
+    });
 
     if (supabase) {
       let response = existingTeacher?.id
-        ? await supabase.from("teachers").update(payload).eq("id", existingTeacher.id).select("*").single()
+        ? await supabase
+            .from("teachers")
+            .update(payload)
+            .eq("id", existingTeacher.id)
+            .select("*")
+            .single()
         : await supabase.from("teachers").insert(payload).select("*").single();
 
       if (response.error && isMissingColumnError(response.error)) {
@@ -7368,30 +15935,68 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
           delete fallbackPayload[key];
         });
         response = existingTeacher?.id
-          ? await supabase.from("teachers").update(fallbackPayload).eq("id", existingTeacher.id).select("*").single()
-          : await supabase.from("teachers").insert(fallbackPayload).select("*").single();
+          ? await supabase
+              .from("teachers")
+              .update(fallbackPayload)
+              .eq("id", existingTeacher.id)
+              .select("*")
+              .single()
+          : await supabase
+              .from("teachers")
+              .insert(fallbackPayload)
+              .select("*")
+              .single();
       }
 
-      if (response.error && isMissingColumnError(response.error) && scopedSchoolId != null) {
-        throw new Error("School-scoped teacher updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.");
+      if (
+        response.error &&
+        isMissingColumnError(response.error) &&
+        scopedSchoolId != null
+      ) {
+        throw new Error(
+          "School-scoped teacher updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.",
+        );
       }
 
-      if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "role")) {
+      if (
+        response.error &&
+        isMissingColumnError(response.error) &&
+        Object.prototype.hasOwnProperty.call(payload, "role")
+      ) {
         const { role, ...fallbackPayload } = payload;
         response = existingTeacher?.id
-          ? await supabase.from("teachers").update(fallbackPayload).eq("id", existingTeacher.id).select("*").single()
-          : await supabase.from("teachers").insert(fallbackPayload).select("*").single();
+          ? await supabase
+              .from("teachers")
+              .update(fallbackPayload)
+              .eq("id", existingTeacher.id)
+              .select("*")
+              .single()
+          : await supabase
+              .from("teachers")
+              .insert(fallbackPayload)
+              .select("*")
+              .single();
       }
 
       if (response.error) throw response.error;
-      savedRow = normalizeTeacherRow(response.data || { id: existingTeacher?.id || Date.now(), ...payload });
+      savedRow = normalizeTeacherRow(
+        response.data || { id: existingTeacher?.id || Date.now(), ...payload },
+      );
     }
 
     setTeachersData((current) => {
       const nextRows = existingTeacher
-        ? current.map((teacher) => String(teacher.id) === String(existingTeacher.id) ? { ...teacher, ...savedRow } : teacher)
+        ? current.map((teacher) =>
+            String(teacher.id) === String(existingTeacher.id)
+              ? { ...teacher, ...savedRow }
+              : teacher,
+          )
         : [savedRow, ...current];
-      return nextRows.slice().sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      return nextRows
+        .slice()
+        .sort((a, b) =>
+          String(a.name || "").localeCompare(String(b.name || "")),
+        );
     });
 
     return savedRow;
@@ -7402,55 +16007,88 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       setExpandedGroups((prev) => ({ ...prev, [parent]: true }));
     }
   }, [tab, childToParent]);
+  useEffect(() => {
+    if (blockedAdminFeeKeys.includes(tab)) {
+      setTab("dashboard");
+      writeStoredTab(ADMIN_TAB_KEY, "dashboard");
+    }
+  }, [blockedAdminFeeKeys, tab]);
 
   const loadAdminPortalData = useCallback(async () => {
-      if (!supabase) {
-        setLoadingAdminData(false);
-        return;
-      }
+    if (!supabase) {
+      setLoadingAdminData(false);
+      return;
+    }
 
-      const { data: students } = await supabase.from("students").select("*").order("id", { ascending: true });
-      const normalizedStudents = Array.isArray(students) && students.length
+    const { data: students } = await supabase
+      .from("students")
+      .select("*")
+      .order("id", { ascending: true });
+    const normalizedStudents =
+      Array.isArray(students) && students.length
         ? students.map((s, i) => ({
             id: s.id ?? i + 1,
             full_name: s.full_name || s.name || "Unnamed Student",
             index: s.index || s.index_number || s.index_no || `AUTO${i + 1}`,
-            class: s.class || s.class_name || "JHS 3A",
+            class: s.class || s.class_name || "",
             region: s.region || "Unknown",
             aggregate: Number(s.aggregate ?? 0),
             status: s.status || "pending",
             email: s.email || null,
-            parent_contact: s.parent_contact || s.parent_phone || s.guardian_phone || s.guardian_contact || "",
+            parent_contact:
+              s.parent_contact ||
+              s.parent_phone ||
+              s.guardian_phone ||
+              s.guardian_contact ||
+              "",
             photo_url: resolveStudentPhotoUrl(s),
+            registered_school_id: s.registered_school_id ?? null,
             created_at: s.created_at || null,
             updated_at: s.updated_at || null,
           }))
         : [];
-      setAdminStudents(sortStudentsByIndex(normalizedStudents));
+    setAdminStudents(sortStudentsByIndex(normalizedStudents));
 
-      const { data: schools } = await supabase.from("schools").select("*").order("name", { ascending: true });
-      const normalizedSchools = Array.isArray(schools) && schools.length
+    const { data: schools } = await supabase
+      .from("schools")
+      .select("*")
+      .order("name", { ascending: true });
+    const normalizedSchools =
+      Array.isArray(schools) && schools.length
         ? sortSchoolsByCategory(schools.map(normalizeSchoolRow))
         : SCHOOLS_DATA;
-      setAdminSchools(normalizedSchools);
+    setAdminSchools(normalizedSchools);
 
-      const { data: regSchools, error: regSchoolsError } = await supabase.from("registered_schools").select("*").order("name", { ascending: true });
-      if (isMissingTableError(regSchoolsError, "registered_schools")) {
-        setRegistrySetupError("Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
-        setRegisteredSchools([]);
-      } else if (!regSchoolsError && Array.isArray(regSchools)) {
-        setRegisteredSchools(sortSchoolsByCategory(regSchools.map(normalizeSchoolRow)));
-      }
+    const { data: regSchools, error: regSchoolsError } = await supabase
+      .from("registered_schools")
+      .select("*")
+      .order("name", { ascending: true });
+    if (isMissingTableError(regSchoolsError, "registered_schools")) {
+      setRegistrySetupError(
+        "Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.",
+      );
+      setRegisteredSchools([]);
+    } else if (!regSchoolsError && Array.isArray(regSchools)) {
+      setRegisteredSchools(
+        sortSchoolsByCategory(regSchools.map(normalizeSchoolRow)),
+      );
+    }
 
-      const { data: regAdmins, error: regAdminsError } = await supabase.from("school_admins").select("*").order("created_at", { ascending: false });
-      if (isMissingTableError(regAdminsError, "school_admins")) {
-        setRegistrySetupError("Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
-        setSchoolAdmins([]);
-      } else if (!regAdminsError && Array.isArray(regAdmins)) {
-        setSchoolAdmins(regAdmins);
-      }
+    const { data: regAdmins, error: regAdminsError } = await supabase
+      .from("school_admins")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (isMissingTableError(regAdminsError, "school_admins")) {
+      setRegistrySetupError(
+        "Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.",
+      );
+      setSchoolAdmins([]);
+    } else if (!regAdminsError && Array.isArray(regAdmins)) {
+      setSchoolAdmins(regAdmins);
+    }
 
-      const tableEntries = await Promise.all([
+    const tableEntries = await Promise.all(
+      [
         "users",
         "students",
         "schools",
@@ -7464,66 +16102,115 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
         "scores",
         "results",
       ].map(async (tableName) => {
-        const { data, error } = await supabase.from(tableName).select("*").limit(25);
-        return [tableName, { rows: Array.isArray(data) ? data : [], error: error?.message || "" }];
-      }));
-      setDatabaseTables(Object.fromEntries(tableEntries));
-
-      const { data: fees } = await supabase.from("fees").select("*").order("id", { ascending: false });
-      if (Array.isArray(fees) && fees.length) {
-        setFeesData(fees.map(normalizeFeeRow));
-      }
-
-      const { data: teachers } = await supabase.from("teachers").select("*").order("name", { ascending: true });
-      if (Array.isArray(teachers) && teachers.length) {
-        setTeachersData(teachers.map(normalizeTeacherRow));
-      }
-
-      setLoadingPlacements(true);
-      const loadSelectionRows = async () => {
-        const attempts = [
-          () => supabase.from("school_selections").select("*").order("created_at", { ascending: false }),
-          () => supabase.from("school_selections").select("*").order("updated_at", { ascending: false }),
-          () => supabase.from("school_selections").select("*").order("id", { ascending: false }),
-          () => supabase.from("school_selections").select("*"),
+        const { data, error } = await supabase
+          .from(tableName)
+          .select("*")
+          .limit(25);
+        return [
+          tableName,
+          {
+            rows: Array.isArray(data) ? data : [],
+            error: error?.message || "",
+          },
         ];
-        for (const run of attempts) {
-          const { data, error } = await run();
-          if (!error && Array.isArray(data)) return data;
-        }
-        return [];
-      };
-      const selectionRows = await loadSelectionRows();
-      const studentsMap = new Map();
-      normalizedStudents.forEach((student) => {
-        studentsMap.set(String(student.id), student);
-        studentsMap.set(String(student.index), student);
-      });
-      if (Array.isArray(selectionRows) && selectionRows.length) {
-        const summarized = selectionRows.map((row) => summarizeSelectionRecord(row, studentsMap));
-        setPendingSelections(sortRecordsByStudentIndex(summarized.filter((row) => !row.approved && row.status !== "confirmed")));
-        setConfirmedSelections(sortRecordsByStudentIndex(summarized.filter((row) => row.approved || row.status === "confirmed")));
-      } else {
-        setPendingSelections([]);
-        setConfirmedSelections([]);
+      }),
+    );
+    setDatabaseTables(Object.fromEntries(tableEntries));
+
+    const { data: fees } = await supabase
+      .from("fees")
+      .select("*")
+      .order("id", { ascending: false });
+    if (Array.isArray(fees) && fees.length) {
+      setFeesData(fees.map(normalizeFeeRow));
+    }
+
+    const { data: teachers } = await supabase
+      .from("teachers")
+      .select("*")
+      .order("name", { ascending: true });
+    if (Array.isArray(teachers) && teachers.length) {
+      setTeachersData(teachers.map(normalizeTeacherRow));
+    }
+
+    setLoadingPlacements(true);
+    const loadSelectionRows = async () => {
+      const attempts = [
+        () =>
+          supabase
+            .from("school_selections")
+            .select("*")
+            .order("created_at", { ascending: false }),
+        () =>
+          supabase
+            .from("school_selections")
+            .select("*")
+            .order("updated_at", { ascending: false }),
+        () =>
+          supabase
+            .from("school_selections")
+            .select("*")
+            .order("id", { ascending: false }),
+        () => supabase.from("school_selections").select("*"),
+      ];
+      for (const run of attempts) {
+        const { data, error } = await run();
+        if (!error && Array.isArray(data)) return data;
       }
-      setLoadingPlacements(false);
-      setLoadingAdminData(false);
-    }, [supabase]);
+      return [];
+    };
+    const selectionRows = await loadSelectionRows();
+    const studentsMap = new Map();
+    normalizedStudents.forEach((student) => {
+      studentsMap.set(String(student.id), student);
+      studentsMap.set(String(student.index), student);
+    });
+    if (Array.isArray(selectionRows) && selectionRows.length) {
+      const summarized = selectionRows.map((row) =>
+        summarizeSelectionRecord(row, studentsMap),
+      );
+      setPendingSelections(
+        sortRecordsByStudentIndex(
+          summarized.filter(
+            (row) => !row.approved && row.status !== "confirmed",
+          ),
+        ),
+      );
+      setConfirmedSelections(
+        sortRecordsByStudentIndex(
+          summarized.filter(
+            (row) => row.approved || row.status === "confirmed",
+          ),
+        ),
+      );
+    } else {
+      setPendingSelections([]);
+      setConfirmedSelections([]);
+    }
+    setLoadingPlacements(false);
+    setLoadingAdminData(false);
+  }, [supabase]);
 
   useEffect(() => {
     loadAdminPortalData();
   }, [loadAdminPortalData]);
 
   const approveSelection = async (id) => {
-    const target = pendingSelections.find((item) => String(item.id) === String(id));
+    const target = pendingSelections.find(
+      (item) => String(item.id) === String(id),
+    );
     if (!target) return;
 
     if (supabase) {
       const reviewedAt = new Date().toISOString();
       const reviewedBy = user?.name || "Admin";
       const payloads = [
-        { status: "confirmed", approved: true, reviewed_at: reviewedAt, reviewed_by: reviewedBy },
+        {
+          status: "confirmed",
+          approved: true,
+          reviewed_at: reviewedAt,
+          reviewed_by: reviewedBy,
+        },
         { status: "confirmed", approved: true, reviewed_at: reviewedAt },
         { status: "confirmed", approved: true },
         { status: "confirmed" },
@@ -7532,14 +16219,20 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
 
       let persisted = false;
       for (const payload of payloads) {
-        const { error } = await supabase.from("school_selections").update(payload).eq("id", id);
+        const { error } = await supabase
+          .from("school_selections")
+          .update(payload)
+          .eq("id", id);
         if (!error) {
           persisted = true;
           break;
         }
 
         const msg = String(error.message || "").toLowerCase();
-        const isColumnIssue = error.code === "PGRST204" || error.code === "42703" || msg.includes("column");
+        const isColumnIssue =
+          error.code === "PGRST204" ||
+          error.code === "42703" ||
+          msg.includes("column");
         if (!isColumnIssue) {
           alert(error.message || "Failed to approve selection.");
           return;
@@ -7547,14 +16240,27 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       }
 
       if (!persisted) {
-        alert("Could not persist approval to Supabase. Please check the school_selections table columns.");
+        alert(
+          "Could not persist approval to Supabase. Please check the school_selections table columns.",
+        );
         return;
       }
     }
 
-    const approvedRow = { ...target, approved: true, status: "confirmed", reviewedAt: new Date().toISOString() };
-    setPendingSelections((items) => sortRecordsByStudentIndex(items.filter((item) => String(item.id) !== String(id))));
-    setConfirmedSelections((items) => sortRecordsByStudentIndex([approvedRow, ...items]));
+    const approvedRow = {
+      ...target,
+      approved: true,
+      status: "confirmed",
+      reviewedAt: new Date().toISOString(),
+    };
+    setPendingSelections((items) =>
+      sortRecordsByStudentIndex(
+        items.filter((item) => String(item.id) !== String(id)),
+      ),
+    );
+    setConfirmedSelections((items) =>
+      sortRecordsByStudentIndex([approvedRow, ...items]),
+    );
   };
 
   useEffect(() => {
@@ -7567,12 +16273,22 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     setNotificationCount(0);
     goTab("events");
   };
-  const recentActivity = useMemo(() => buildRecentActivity({
-    students: adminStudents,
-    selections: [...pendingSelections, ...confirmedSelections],
-    fees: feesData,
-    events: databaseTables.events?.rows,
-  }), [adminStudents, pendingSelections, confirmedSelections, feesData, databaseTables.events?.rows]);
+  const recentActivity = useMemo(
+    () =>
+      buildRecentActivity({
+        students: adminStudents,
+        selections: [...pendingSelections, ...confirmedSelections],
+        fees: feesData,
+        events: databaseTables.events?.rows,
+      }),
+    [
+      adminStudents,
+      pendingSelections,
+      confirmedSelections,
+      feesData,
+      databaseTables.events?.rows,
+    ],
+  );
   const handleMainBlankClick = (event) => {
     if (!sidebarOpen) return;
     if (event.target === event.currentTarget) {
@@ -7581,59 +16297,300 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   };
 
   const renderPage = () => {
-    if (tab==="enroll") return <EnrollPage onBack={()=>goTab("students")}/>;
+    if (tab === "enroll")
+      return (
+        <EnrollPage
+          onEnrolled={loadAdminPortalData}
+          onBack={() => {
+            goTab("students");
+            loadAdminPortalData();
+          }}
+        />
+      );
     const pages = {
-      dashboard:<AdminDashboard studentsData={adminStudents} schoolsData={adminSchools} pendingRows={pendingSelections} confirmedRows={confirmedSelections} financeSummary={financeSummary} recentActivity={recentActivity} isLoading={loadingAdminData}/>, students:<StudentsPage onEnroll={()=>goTab("enroll")} onEditStudent={saveAdminStudent} studentsData={adminStudents} onReloadStudents={loadAdminPortalData}/> ,
-      scores:<ScoresPage studentsData={adminStudents} tableInfo={databaseTables.scores}/>,
-      "academic-scores":<AcademicScores/>,
-      analytics:<AnalyticsPage studentsData={adminStudents} schoolsData={adminSchools} selectionsData={[...pendingSelections, ...confirmedSelections]} scoreTableInfo={databaseTables.scores}/>, results:<ResultsPage studentsData={adminStudents} tableInfo={databaseTables.results}/>, grading:<GradingPage/>,
-      attendance:<AttendancePage studentsData={adminStudents} tableInfo={databaseTables.attendance}/>, fees:<FeesAdmin studentsData={adminStudents} feesData={feesData} tableInfo={databaseTables.fees}/>, teachers:<TeachersPage teachersData={teachersData} tableInfo={databaseTables.teachers} onCreateTeacher={(draft) => saveAdminTeacher(null, draft)} onUpdateTeacher={saveAdminTeacher} currentUser={user}/>, events:<EventsPage eventsData={databaseTables.events?.rows} tableInfo={databaseTables.events}/> ,
-      schools:<SchoolsPage schoolsData={adminSchools}/>, "registered-schools":<RegisteredSchoolsPage schools={registeredSchools} admins={schoolAdmins} onRegisterNew={()=>goTab("school-register")} onCreateSchoolAdmin={createSchoolAdmin} setupError={registrySetupError} currentUser={user}/>, "school-register":<SchoolRegistrationPage onBack={()=>goTab("registered-schools")} onRegisterSchool={registerSchool} setupError={registrySetupError}/>, pending:<PendingSelections rows={pendingSelections} loading={loadingPlacements} onApprove={approveSelection}/>, confirmed:<ConfirmedPlacements rows={confirmedSelections} loading={loadingPlacements}/>,
-      finance:<FinancePage financeSummary={financeSummary} tableInfo={databaseTables.fees}/>, chat:<ChatPage chatUsers={chatUsers} onChatUsersChange={setChatUsers}/>, settings:<SettingsPage/>,
-      permissions:<PermissionsMatrixPage currentUser={user}/>, audit:<AuditTrailPage/>, notify:<NotificationCenterPage/>, payments:<PaymentsReceiptsPage/>,
-      documents:<DocumentWorkflowPage/>, reports:<ReportsExportsPage/>, insights:<AdvancedAnalyticsPage/>, bulk:<BulkOperationsPage/>,
-      offline:<OfflineSyncPage/>, calendar:<AcademicCalendarPage/>, helpdesk:<HelpdeskPage/>, privacy:<PrivacyCompliancePage/>,
-      recovery:<DisasterRecoveryPage/>, mobile:<MobilePwaPage/>,
-      "auto-rules":<AutomationRulesPage/>, "ai-assist":<AiAssistantPage/>, "risk-score":<StudentRiskPage/>,
-      timetable:<TimetablePage/>, "exam-builder":<ExamBuilderPage/>, installments:<InstallmentPlansPage/>,
-      campaigns:<MessagingCampaignsPage/>, recommend:<RecommendationEnginePage/>, "digital-id":<DigitalIdPage/>,
-      "public-status":<PublicStatusPage/>, integrations:<IntegrationsPage/>, tenants:<MultiTenantPage/>,
-      quality:<DataQualityPage/>, sla:<ApprovalSlaPage/>, flags:<FeatureFlagsPage/>,
+      dashboard: (
+        <AdminDashboard
+          studentsData={adminStudents}
+          schoolsData={adminSchools}
+          pendingRows={pendingSelections}
+          confirmedRows={confirmedSelections}
+          financeSummary={financeSummary}
+          recentActivity={recentActivity}
+          isLoading={loadingAdminData}
+        />
+      ),
+      students: (
+        <StudentsPage
+          onEnroll={() => goTab("enroll")}
+          onEditStudent={saveAdminStudent}
+          studentsData={adminStudents}
+          onReloadStudents={loadAdminPortalData}
+          registeredSchools={registeredSchools}
+          canAssignRegisteredSchool={
+            normalizeRoleKey(user?.role || "") === "super_admin"
+          }
+        />
+      ),
+      scores: (
+        <ScoresPage
+          studentsData={adminStudents}
+          tableInfo={databaseTables.scores}
+        />
+      ),
+      "academic-scores": <AcademicScores />,
+      analytics: (
+        <AnalyticsPage
+          studentsData={adminStudents}
+          schoolsData={adminSchools}
+          selectionsData={[...pendingSelections, ...confirmedSelections]}
+          scoreTableInfo={databaseTables.scores}
+        />
+      ),
+      results: (
+        <ResultsPage
+          studentsData={adminStudents}
+          tableInfo={databaseTables.results}
+        />
+      ),
+      grading: <GradingPage />,
+      attendance: (
+        <AttendancePage
+          studentsData={adminStudents}
+          tableInfo={databaseTables.attendance}
+        />
+      ),
+      fees: (
+        <FeesAdmin
+          studentsData={adminStudents}
+          feesData={feesData}
+          tableInfo={databaseTables.fees}
+        />
+      ),
+      teachers: (
+        <TeachersPage
+          teachersData={teachersData}
+          tableInfo={databaseTables.teachers}
+          onCreateTeacher={(draft) => saveAdminTeacher(null, draft)}
+          onUpdateTeacher={saveAdminTeacher}
+          currentUser={user}
+        />
+      ),
+      events: (
+        <EventsPage
+          eventsData={databaseTables.events?.rows}
+          tableInfo={databaseTables.events}
+        />
+      ),
+      schools: <SchoolsPage schoolsData={adminSchools} />,
+      "registered-schools": (
+        <RegisteredSchoolsPage
+          schools={registeredSchools}
+          admins={schoolAdmins}
+          onRegisterNew={() => goTab("school-register")}
+          onCreateSchoolAdmin={createSchoolAdmin}
+          setupError={registrySetupError}
+          currentUser={user}
+        />
+      ),
+      "school-register": (
+        <SchoolRegistrationPage
+          onBack={() => goTab("registered-schools")}
+          onRegisterSchool={registerSchool}
+          setupError={registrySetupError}
+        />
+      ),
+      pending: (
+        <PendingSelections
+          rows={pendingSelections}
+          loading={loadingPlacements}
+          onApprove={approveSelection}
+        />
+      ),
+      confirmed: (
+        <ConfirmedPlacements
+          rows={confirmedSelections}
+          loading={loadingPlacements}
+        />
+      ),
+      finance: (
+        <FinancePage
+          financeSummary={financeSummary}
+          tableInfo={databaseTables.fees}
+        />
+      ),
+      chat: <ChatPage chatUsers={chatUsers} onChatUsersChange={setChatUsers} />,
+      settings: <SettingsPage />,
+      permissions: <PermissionsMatrixPage currentUser={user} />,
+      audit: <AuditTrailPage />,
+      notify: <NotificationCenterPage />,
+      payments: <PaymentsReceiptsPage />,
+      documents: <DocumentWorkflowPage />,
+      reports: <ReportsExportsPage />,
+      insights: <AdvancedAnalyticsPage />,
+      bulk: <BulkOperationsPage />,
+      offline: <OfflineSyncPage />,
+      calendar: <AcademicCalendarPage />,
+      helpdesk: <HelpdeskPage />,
+      privacy: <PrivacyCompliancePage />,
+      recovery: <DisasterRecoveryPage />,
+      mobile: <MobilePwaPage />,
+      "auto-rules": <AutomationRulesPage />,
+      "ai-assist": <AiAssistantPage />,
+      "risk-score": <StudentRiskPage />,
+      timetable: <TimetablePage />,
+      "exam-builder": <ExamBuilderPage />,
+      installments: <InstallmentPlansPage />,
+      campaigns: <MessagingCampaignsPage />,
+      recommend: <RecommendationEnginePage />,
+      "digital-id": <DigitalIdPage />,
+      "public-status": <PublicStatusPage />,
+      integrations: <IntegrationsPage />,
+      tenants: <MultiTenantPage />,
+      quality: <DataQualityPage />,
+      sla: <ApprovalSlaPage />,
+      flags: <FeatureFlagsPage />,
     };
-    return pages[tab] || <div className="card card-padded" style={{textAlign:"center",padding:48}}><div style={{fontWeight:700}}>Coming Soon</div></div>;
+    return (
+      pages[tab] || (
+        <div
+          className="card card-padded"
+          style={{ textAlign: "center", padding: 48 }}
+        >
+          <div style={{ fontWeight: 700 }}>Coming Soon</div>
+        </div>
+      )
+    );
   };
 
   return (
     <div className="app">
-      <Topbar user={user} onLogout={onLogout} onMenuClick={()=>setSidebarOpen(o=>!o)} darkMode={darkMode} onToggleDark={onToggleDark} onOpenNotifications={openNotifications} onOpenProfile={() => goTab("settings")} onReloadApp={reloadApp} notificationCount={notificationCount} chatUnread={totalChatUnread} onOpenChat={() => goTab("chat")} systemName={appCfg.systemName}/>
+      <Topbar
+        user={user}
+        onLogout={onLogout}
+        onMenuClick={() => setSidebarOpen((o) => !o)}
+        darkMode={darkMode}
+        onToggleDark={onToggleDark}
+        onOpenNotifications={openNotifications}
+        onOpenProfile={() => goTab("settings")}
+        onReloadApp={reloadApp}
+        notificationCount={notificationCount}
+        chatUnread={totalChatUnread}
+        onOpenChat={() => goTab("chat")}
+        systemName={appCfg.systemName}
+      />
       <div className="shell">
-        {sidebarOpen && <div className="sidebar-overlay" onClick={()=>setSidebarOpen(false)}/>}
-        <nav className={`sidebar ${sidebarOpen?"":"closed"}`}>
-          <button className="sidebar-brand brand-btn" onClick={reloadApp} title="Reload app"><img src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png" alt="Campus Ghana"/></button>
+        {sidebarOpen && (
+          <div
+            className="sidebar-overlay"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        <nav className={`sidebar ${sidebarOpen ? "" : "closed"}`}>
+          <button
+            className="sidebar-brand brand-btn"
+            onClick={reloadApp}
+            title="Reload app"
+          >
+            <img
+              src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png"
+              alt="Campus Ghana"
+            />
+          </button>
           {/* Pending Selections Sidebar Preview */}
           {pendingSelections.length > 0 && (
-            <div className="sidebar-section" style={{marginBottom:12}}>
-              <div style={{fontWeight:700, color:'#1d4ed8', marginBottom:4}}>Pending Selections</div>
-              <div style={{fontSize:'.82rem', color:'#64748b', marginBottom:6}}>Awaiting review:</div>
-              <div style={{display:'grid', gap:6, marginBottom:6}}>
-                {pendingSelections.slice(0,3).map((s) => {
+            <div className="sidebar-section" style={{ marginBottom: 12 }}>
+              <div
+                style={{ fontWeight: 700, color: "#1d4ed8", marginBottom: 4 }}
+              >
+                Pending Selections
+              </div>
+              <div
+                style={{
+                  fontSize: ".82rem",
+                  color: "#64748b",
+                  marginBottom: 6,
+                }}
+              >
+                Awaiting review:
+              </div>
+              <div style={{ display: "grid", gap: 6, marginBottom: 6 }}>
+                {pendingSelections.slice(0, 3).map((s) => {
                   const picks = normalizeSelectionList(s.rawRow || s);
                   return (
-                    <div key={s.id} style={{background:'#eef2ff',borderRadius:8,padding:'6px 8px',display:'flex',flexDirection:'column',gap:2}}>
-                      <span style={{fontWeight:700, color:'#0f172a', fontSize:'.93em'}}>{String(s.user_email).split("@")[0].replace(/\./g, " ")}</span>
-                      <span style={{fontSize:'.75em', color:'#64748b'}}>{s.user_email}</span>
-                      <span style={{fontSize:'.78em', color:'#334155',marginTop:2}}>
-                        {picks.length > 0 ? picks.map((pick, idx) => <span key={pick.id || idx} style={{marginRight:4}}>{pick.rank ? `${pick.rank}${pick.rank === 1 ? 'st' : pick.rank === 2 ? 'nd' : pick.rank === 3 ? 'rd' : 'th'}: ` : ''}{pick.name}</span>) : <span>No selections</span>}
+                    <div
+                      key={s.id}
+                      style={{
+                        background: "#eef2ff",
+                        borderRadius: 8,
+                        padding: "6px 8px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: "#0f172a",
+                          fontSize: ".93em",
+                        }}
+                      >
+                        {String(s.user_email).split("@")[0].replace(/\./g, " ")}
+                      </span>
+                      <span style={{ fontSize: ".75em", color: "#64748b" }}>
+                        {s.user_email}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: ".78em",
+                          color: "#334155",
+                          marginTop: 2,
+                        }}
+                      >
+                        {picks.length > 0 ? (
+                          picks.map((pick, idx) => (
+                            <span
+                              key={pick.id || idx}
+                              style={{ marginRight: 4 }}
+                            >
+                              {pick.rank
+                                ? `${pick.rank}${pick.rank === 1 ? "st" : pick.rank === 2 ? "nd" : pick.rank === 3 ? "rd" : "th"}: `
+                                : ""}
+                              {pick.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span>No selections</span>
+                        )}
                       </span>
                     </div>
                   );
                 })}
               </div>
-              <button className="btn btn-sm btn-blue" style={{width:'100%',marginTop:2}} onClick={()=>goTab('pending')}>View All ({pendingSelections.length})</button>
+              <button
+                className="btn btn-sm btn-blue"
+                style={{ width: "100%", marginTop: 2 }}
+                onClick={() => goTab("pending")}
+              >
+                View All ({pendingSelections.length})
+              </button>
             </div>
           )}
-          {ADMIN_NAV.map((item,i)=> {
-            if (item.section) return <div key={i} className="sidebar-section" style={item.section === "Admissions & Mock Placement" ? { textAlign: "center" } : undefined}>{item.section}</div>;
+          {filteredAdminNav.map((item, i) => {
+            if (item.section)
+              return (
+                <div
+                  key={i}
+                  className="sidebar-section"
+                  style={
+                    item.section === "Admissions & Mock Placement"
+                      ? { textAlign: "center" }
+                      : undefined
+                  }
+                >
+                  {item.section}
+                </div>
+              );
             if (childToParent[item.key]) return null;
 
             const childrenKeys = ADMIN_SUBPAGE_MAP[item.key] || [];
@@ -7643,50 +16600,126 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
             return (
               <div key={item.key}>
                 <button
-                  className={`nav-item ${activeParent?"active":""}`}
+                  className={`nav-item ${activeParent ? "active" : ""}`}
                   onClick={() => {
                     goTab(item.key, !hasChildren);
                     if (hasChildren) {
-                      setExpandedGroups((prev) => ({ ...prev, [item.key]: !prev[item.key] }));
+                      setExpandedGroups((prev) => ({
+                        ...prev,
+                        [item.key]: !prev[item.key],
+                      }));
                     }
                   }}
                 >
-                  <Ico name={item.icon} size={26} color={item.color} className="nav-item-icon" style={{strokeWidth:2.6,filter:"saturate(1.08) contrast(1.05)"}}/>
-                  <span className="nav-item-label" style={{color:item.color,fontWeight:700}}>{item.label}</span>
-                  {item.badge && pendingSelections.length > 0 && <span className="nav-item-badge">{pendingSelections.length}</span>}
-                  {hasChildren && <span style={{marginLeft:"auto",fontWeight:700,color:"#64748b"}}>{expandedGroups[item.key] ? "▾" : "▸"}</span>}
+                  <Ico
+                    name={item.icon}
+                    size={26}
+                    color={item.color}
+                    className="nav-item-icon"
+                    style={{
+                      strokeWidth: 2.6,
+                      filter: "saturate(1.08) contrast(1.05)",
+                    }}
+                  />
+                  <span
+                    className="nav-item-label"
+                    style={{ color: item.color, fontWeight: 700 }}
+                  >
+                    {item.label}
+                  </span>
+                  {item.badge && pendingSelections.length > 0 && (
+                    <span className="nav-item-badge">
+                      {pendingSelections.length}
+                    </span>
+                  )}
+                  {hasChildren && (
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontWeight: 700,
+                        color: "#64748b",
+                      }}
+                    >
+                      {expandedGroups[item.key] ? "▾" : "▸"}
+                    </span>
+                  )}
                 </button>
 
-                {hasChildren && expandedGroups[item.key] && childrenKeys.map((childKey) => {
-                  const child = ADMIN_NAV.find((n) => n.key === childKey);
-                  if (!child) return null;
-                  return (
-                    <button
-                      key={child.key}
-                      className={`nav-item ${tab===child.key?"active":""}`}
-                      onClick={()=>goTab(child.key)}
-                      style={{paddingLeft:36, marginTop:2, marginBottom:2}}
-                    >
-                      <Ico name={child.icon} size={20} color={child.color} className="nav-item-icon" />
-                      <span className="nav-item-label" style={{color:child.color,fontWeight:600,fontSize:".84rem"}}>{child.label}</span>
-                    </button>
-                  );
-                })}
+                {hasChildren &&
+                  expandedGroups[item.key] &&
+                  childrenKeys.map((childKey) => {
+                    const child = filteredAdminNav.find((n) => n.key === childKey);
+                    if (!child) return null;
+                    return (
+                      <button
+                        key={child.key}
+                        className={`nav-item ${tab === child.key ? "active" : ""}`}
+                        onClick={() => goTab(child.key)}
+                        style={{
+                          paddingLeft: 36,
+                          marginTop: 2,
+                          marginBottom: 2,
+                        }}
+                      >
+                        <Ico
+                          name={child.icon}
+                          size={20}
+                          color={child.color}
+                          className="nav-item-icon"
+                        />
+                        <span
+                          className="nav-item-label"
+                          style={{
+                            color: child.color,
+                            fontWeight: 600,
+                            fontSize: ".84rem",
+                          }}
+                        >
+                          {child.label}
+                        </span>
+                      </button>
+                    );
+                  })}
               </div>
             );
           })}
         </nav>
-        <main className={`main ${sidebarOpen?"":"full"}`} onClick={handleMainBlankClick}>
-          {appCfg.maintenanceMode && <div className="alert alert-warning" style={{margin:"16px 16px 0",fontWeight:700,borderRadius:8}}>⚠️ Maintenance Mode is ON — the system is currently in maintenance. Student access may be restricted.</div>}
+        <main
+          className={`main ${sidebarOpen ? "" : "full"}`}
+          onClick={handleMainBlankClick}
+        >
+          {appCfg.maintenanceMode && (
+            <div
+              className="alert alert-warning"
+              style={{
+                margin: "16px 16px 0",
+                fontWeight: 700,
+                borderRadius: 8,
+              }}
+            >
+              ⚠️ Maintenance Mode is ON — the system is currently in
+              maintenance. Student access may be restricted.
+            </div>
+          )}
           {renderPage()}
         </main>
         <div className="bottom-nav">
-          <div className="bottom-nav-grid" style={{gridTemplateColumns:`repeat(${BOTTOM.length},1fr)`}}>
-            {BOTTOM.map(k=>{
-              const item = ADMIN_NAV.find(n=>n.key===k);
-              return <button key={k} className={`bottom-nav-item ${tab===k?"active":""}`} onClick={()=>goTab(k)}>
-                <Ico name={item.icon} size={30} color={item.color}/><span>{item.label}</span>
-              </button>;
+          <div
+            className="bottom-nav-grid"
+            style={{ gridTemplateColumns: `repeat(${BOTTOM.length},1fr)` }}
+          >
+            {BOTTOM.map((k) => {
+              const item = ADMIN_NAV.find((n) => n.key === k);
+              return (
+                <button
+                  key={k}
+                  className={`bottom-nav-item ${tab === k ? "active" : ""}`}
+                  onClick={() => goTab(k)}
+                >
+                  <Ico name={item.icon} size={30} color={item.color} />
+                  <span>{item.label}</span>
+                </button>
+              );
             })}
           </div>
         </div>
@@ -7697,17 +16730,24 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
 
 function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const { cfg: appCfg } = useContext(SettingsContext);
+  const adminFeesPortalEnabled = appCfg.adminFeesPortalEnabled !== false;
   const childToParent = useMemo(() => {
     const map = {};
     Object.entries(SCHOOL_ADMIN_SUBPAGE_MAP).forEach(([parent, children]) => {
-      children.forEach((key) => { map[key] = parent; });
+      children.forEach((key) => {
+        map[key] = parent;
+      });
     });
     return map;
   }, []);
   const [expandedGroups, setExpandedGroups] = useState(() =>
-    Object.fromEntries(Object.keys(SCHOOL_ADMIN_SUBPAGE_MAP).map((key) => [key, false]))
+    Object.fromEntries(
+      Object.keys(SCHOOL_ADMIN_SUBPAGE_MAP).map((key) => [key, false]),
+    ),
   );
-  const [tab, setTab] = useState(() => readStoredTab(SCHOOL_ADMIN_TAB_KEY, "dashboard"));
+  const [tab, setTab] = useState(() =>
+    readStoredTab(SCHOOL_ADMIN_TAB_KEY, "dashboard"),
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [school, setSchool] = useState(null);
@@ -7716,9 +16756,18 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const [schoolTeachers, setSchoolTeachers] = useState([]);
   const [schoolFeesData, setSchoolFeesData] = useState([]);
   const [schoolChoiceSchools, setSchoolChoiceSchools] = useState(SCHOOLS_DATA);
-  const [schoolScoresInfo, setSchoolScoresInfo] = useState({ rows: [], error: "" });
-  const [schoolEventsInfo, setSchoolEventsInfo] = useState({ rows: [], error: "" });
-  const [schoolResultsInfo, setSchoolResultsInfo] = useState({ rows: [], error: "" });
+  const [schoolScoresInfo, setSchoolScoresInfo] = useState({
+    rows: [],
+    error: "",
+  });
+  const [schoolEventsInfo, setSchoolEventsInfo] = useState({
+    rows: [],
+    error: "",
+  });
+  const [schoolResultsInfo, setSchoolResultsInfo] = useState({
+    rows: [],
+    error: "",
+  });
   const [schoolTableInfo, setSchoolTableInfo] = useState({
     attendance: { rows: [], error: "" },
     fees: { rows: [], error: "" },
@@ -7731,13 +16780,37 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const [loadingSchoolData, setLoadingSchoolData] = useState(!!supabase);
   const [schoolRegistryError, setSchoolRegistryError] = useState("");
   const [schoolScopeError, setSchoolScopeError] = useState("");
+  const [reloadCounter, setReloadCounter] = useState(0);
   const [chatUsers, setChatUsers] = useState([
-    {id:1, name:"Admissions Desk", avatar:"A", unread:0, status:"active"},
-    {id:2, name:"Registrar", avatar:"R", unread:0, status:"online"},
-    {id:3, name:"Support Team", avatar:"S", unread:0, status:"away"},
+    {
+      id: 1,
+      name: "Admissions Desk",
+      avatar: "A",
+      unread: 0,
+      status: "active",
+    },
+    { id: 2, name: "Registrar", avatar: "R", unread: 0, status: "online" },
+    { id: 3, name: "Support Team", avatar: "S", unread: 0, status: "away" },
   ]);
   const totalChatUnread = chatUsers.reduce((sum, item) => sum + item.unread, 0);
-  const BOTTOM = ["dashboard", "students", "analytics", "pending", "school-profile"];
+  const BOTTOM = [
+    "dashboard",
+    "students",
+    "analytics",
+    "pending",
+    "school-profile",
+  ];
+  const blockedAdminFeeKeys = useMemo(
+    () => (adminFeesPortalEnabled ? [] : ["fees", "payments", "installments"]),
+    [adminFeesPortalEnabled],
+  );
+  const filteredSchoolAdminNav = useMemo(
+    () =>
+      SCHOOL_ADMIN_NAV.filter((item) =>
+        item.section ? true : !blockedAdminFeeKeys.includes(item.key),
+      ),
+    [blockedAdminFeeKeys],
+  );
 
   const goTab = (key, closeSidebar = true) => {
     setTab(key);
@@ -7748,9 +16821,19 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const reloadApp = () => window.location.reload();
   const schoolFinanceSummary = {
     income: schoolFeesData.reduce((sum, fee) => sum + Number(fee.paid || 0), 0),
-    expenses: Math.round(schoolFeesData.reduce((sum, fee) => sum + Number(fee.paid || 0), 0) * 0.42),
-    fees_collected: schoolFeesData.reduce((sum, fee) => sum + Number(fee.paid || 0), 0),
-    outstanding: schoolFeesData.reduce((sum, fee) => sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0), 0),
+    expenses: Math.round(
+      schoolFeesData.reduce((sum, fee) => sum + Number(fee.paid || 0), 0) *
+        0.42,
+    ),
+    fees_collected: schoolFeesData.reduce(
+      (sum, fee) => sum + Number(fee.paid || 0),
+      0,
+    ),
+    outstanding: schoolFeesData.reduce(
+      (sum, fee) =>
+        sum + Math.max(Number(fee.amount || 0) - Number(fee.paid || 0), 0),
+      0,
+    ),
   };
 
   useEffect(() => {
@@ -7759,9 +16842,17 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       setExpandedGroups((prev) => ({ ...prev, [parent]: true }));
     }
   }, [tab, childToParent]);
+  useEffect(() => {
+    if (blockedAdminFeeKeys.includes(tab)) {
+      setTab("dashboard");
+      writeStoredTab(SCHOOL_ADMIN_TAB_KEY, "dashboard");
+    }
+  }, [blockedAdminFeeKeys, tab]);
 
   const saveManagedSchoolProfile = async () => {
-    throw new Error("School registry profile cannot be updated from the school admin portal. Contact a platform administrator.");
+    throw new Error(
+      "School registry profile cannot be updated from the school admin portal. Contact a platform administrator.",
+    );
   };
 
   const saveSchoolStudent = async (existingStudent, draft) => {
@@ -7771,76 +16862,157 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       index: draft.index.trim(),
       class: draft.class,
       region: draft.region,
+      parent_contact: draft.parent_contact?.trim() || null,
       aggregate: Number(draft.aggregate || 0),
       status: draft.status || "pending",
       photo_url: draft.photo_url?.trim() || null,
-      ...(scopedSchoolId != null ? { registered_school_id: scopedSchoolId } : {}),
+      ...(scopedSchoolId != null
+        ? { registered_school_id: scopedSchoolId }
+        : {}),
     };
 
     if (supabase && !existingStudent?.id && scopedSchoolId == null) {
-      throw new Error("This admin account is not linked to a registered school yet, so new students cannot be created.");
+      throw new Error(
+        "This admin account is not linked to a registered school yet, so new students cannot be created.",
+      );
     }
 
-    let savedRow = normalizeStudentRecord({ id: existingStudent?.id || Date.now(), ...payload });
+    let savedRow = normalizeStudentRecord({
+      id: existingStudent?.id || Date.now(),
+      ...payload,
+    });
 
     if (supabase) {
       const updateStudentRow = async (nextPayload) => {
         if (!existingStudent) {
-          return supabase.from("students").insert(nextPayload).select("*").maybeSingle();
+          return supabase
+            .from("students")
+            .insert(nextPayload)
+            .select("*")
+            .maybeSingle();
         }
 
-        if (existingStudent.id != null && !String(existingStudent.id).startsWith("local-")) {
-          const byId = await supabase.from("students").update(nextPayload).eq("id", existingStudent.id).select("*").maybeSingle();
+        if (
+          existingStudent.id != null &&
+          !String(existingStudent.id).startsWith("local-")
+        ) {
+          const byId = await supabase
+            .from("students")
+            .update(nextPayload)
+            .eq("id", existingStudent.id)
+            .select("*")
+            .maybeSingle();
           if (!byId.error && byId.data) return byId;
         }
 
         const studentIndex = String(existingStudent.index || "").trim();
         if (studentIndex) {
-          const byIndex = await supabase.from("students").update(nextPayload).eq("index", studentIndex).select("*").maybeSingle();
+          const byIndex = await supabase
+            .from("students")
+            .update(nextPayload)
+            .eq("index", studentIndex)
+            .select("*")
+            .maybeSingle();
           if (!byIndex.error && byIndex.data) return byIndex;
-          const byIndexNumber = await supabase.from("students").update(nextPayload).eq("index_number", studentIndex).select("*").maybeSingle();
+          const byIndexNumber = await supabase
+            .from("students")
+            .update(nextPayload)
+            .eq("index_number", studentIndex)
+            .select("*")
+            .maybeSingle();
           if (!byIndexNumber.error && byIndexNumber.data) return byIndexNumber;
         }
 
         const lookupChecks = [];
-        if (existingStudent.id != null && !String(existingStudent.id).startsWith("local-")) {
-          lookupChecks.push(supabase.from("students").select("id").eq("id", existingStudent.id).limit(1));
+        if (
+          existingStudent.id != null &&
+          !String(existingStudent.id).startsWith("local-")
+        ) {
+          lookupChecks.push(
+            supabase
+              .from("students")
+              .select("id")
+              .eq("id", existingStudent.id)
+              .limit(1),
+          );
         }
         const lookupStudentIndex = String(existingStudent.index || "").trim();
         if (lookupStudentIndex) {
-          lookupChecks.push(supabase.from("students").select("id").eq("index", lookupStudentIndex).limit(1));
-          lookupChecks.push(supabase.from("students").select("id").eq("index_number", lookupStudentIndex).limit(1));
+          lookupChecks.push(
+            supabase
+              .from("students")
+              .select("id")
+              .eq("index", lookupStudentIndex)
+              .limit(1),
+          );
+          lookupChecks.push(
+            supabase
+              .from("students")
+              .select("id")
+              .eq("index_number", lookupStudentIndex)
+              .limit(1),
+          );
         }
         const lookupResults = await Promise.all(lookupChecks);
-        const visibleRowExists = lookupResults.some((result) => Array.isArray(result.data) && result.data.length > 0);
+        const visibleRowExists = lookupResults.some(
+          (result) => Array.isArray(result.data) && result.data.length > 0,
+        );
 
         if (visibleRowExists) {
-          return { data: null, error: new Error("Student exists but update is blocked by Supabase permissions (RLS). Add/adjust an UPDATE policy for public.students.") };
+          return {
+            data: null,
+            error: new Error(
+              "Student exists but update is blocked by Supabase permissions (RLS). Add/adjust an UPDATE policy for public.students.",
+            ),
+          };
         }
 
-        return { data: null, error: new Error("Could not find this student in Supabase to update. The row key may have changed (id/index/index_number).") };
+        return {
+          data: null,
+          error: new Error(
+            "Could not find this student in Supabase to update. The row key may have changed (id/index/index_number).",
+          ),
+        };
       };
 
       let response = await updateStudentRow(payload);
 
-      if (response.error && isMissingColumnError(response.error) && scopedSchoolId != null) {
-        throw new Error("School-scoped student updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.");
+      if (
+        response.error &&
+        isMissingColumnError(response.error) &&
+        scopedSchoolId != null
+      ) {
+        throw new Error(
+          "School-scoped student updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.",
+        );
       }
 
-      if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "photo_url")) {
+      if (
+        response.error &&
+        isMissingColumnError(response.error) &&
+        Object.prototype.hasOwnProperty.call(payload, "photo_url")
+      ) {
         const { photo_url, ...fallbackPayload } = payload;
         response = await updateStudentRow(fallbackPayload);
       }
 
       if (response.error) throw response.error;
-      savedRow = normalizeStudentRecord(response.data || { id: existingStudent?.id || Date.now(), ...payload });
+      savedRow = normalizeStudentRecord(
+        response.data || { id: existingStudent?.id || Date.now(), ...payload },
+      );
     }
 
-    setSchoolStudents((current) => sortStudentsByIndex(
-      existingStudent
-        ? current.map((student) => String(student.id) === String(existingStudent.id) ? { ...student, ...savedRow } : student)
-        : [...current, savedRow]
-    ));
+    setSchoolStudents((current) =>
+      sortStudentsByIndex(
+        existingStudent
+          ? current.map((student) =>
+              String(student.id) === String(existingStudent.id)
+                ? { ...student, ...savedRow }
+                : student,
+            )
+          : [...current, savedRow],
+      ),
+    );
 
     return savedRow;
   };
@@ -7860,18 +17032,30 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       date_of_birth: draft.date_of_birth || null,
       hire_date: draft.hire_date || null,
       address: draft.address.trim() || null,
-      ...(scopedSchoolId != null ? { registered_school_id: scopedSchoolId } : {}),
+      ...(scopedSchoolId != null
+        ? { registered_school_id: scopedSchoolId }
+        : {}),
     };
 
     if (supabase && !existingTeacher?.id && scopedSchoolId == null) {
-      throw new Error("This admin account is not linked to a registered school yet, so new teachers cannot be created.");
+      throw new Error(
+        "This admin account is not linked to a registered school yet, so new teachers cannot be created.",
+      );
     }
 
-    let savedRow = normalizeTeacherRow({ id: existingTeacher?.id || Date.now(), ...payload });
+    let savedRow = normalizeTeacherRow({
+      id: existingTeacher?.id || Date.now(),
+      ...payload,
+    });
 
     if (supabase) {
       let response = existingTeacher?.id
-        ? await supabase.from("teachers").update(payload).eq("id", existingTeacher.id).select("*").single()
+        ? await supabase
+            .from("teachers")
+            .update(payload)
+            .eq("id", existingTeacher.id)
+            .select("*")
+            .single()
         : await supabase.from("teachers").insert(payload).select("*").single();
 
       if (response.error && isMissingColumnError(response.error)) {
@@ -7880,30 +17064,68 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
           delete fallbackPayload[key];
         });
         response = existingTeacher?.id
-          ? await supabase.from("teachers").update(fallbackPayload).eq("id", existingTeacher.id).select("*").single()
-          : await supabase.from("teachers").insert(fallbackPayload).select("*").single();
+          ? await supabase
+              .from("teachers")
+              .update(fallbackPayload)
+              .eq("id", existingTeacher.id)
+              .select("*")
+              .single()
+          : await supabase
+              .from("teachers")
+              .insert(fallbackPayload)
+              .select("*")
+              .single();
       }
 
-      if (response.error && isMissingColumnError(response.error) && scopedSchoolId != null) {
-        throw new Error("School-scoped teacher updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.");
+      if (
+        response.error &&
+        isMissingColumnError(response.error) &&
+        scopedSchoolId != null
+      ) {
+        throw new Error(
+          "School-scoped teacher updates require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh.",
+        );
       }
 
-      if (response.error && isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(payload, "role")) {
+      if (
+        response.error &&
+        isMissingColumnError(response.error) &&
+        Object.prototype.hasOwnProperty.call(payload, "role")
+      ) {
         const { role, ...fallbackPayload } = payload;
         response = existingTeacher?.id
-          ? await supabase.from("teachers").update(fallbackPayload).eq("id", existingTeacher.id).select("*").single()
-          : await supabase.from("teachers").insert(fallbackPayload).select("*").single();
+          ? await supabase
+              .from("teachers")
+              .update(fallbackPayload)
+              .eq("id", existingTeacher.id)
+              .select("*")
+              .single()
+          : await supabase
+              .from("teachers")
+              .insert(fallbackPayload)
+              .select("*")
+              .single();
       }
 
       if (response.error) throw response.error;
-      savedRow = normalizeTeacherRow(response.data || { id: existingTeacher?.id || Date.now(), ...payload });
+      savedRow = normalizeTeacherRow(
+        response.data || { id: existingTeacher?.id || Date.now(), ...payload },
+      );
     }
 
     setSchoolTeachers((current) => {
       const nextRows = existingTeacher
-        ? current.map((teacher) => String(teacher.id) === String(existingTeacher.id) ? { ...teacher, ...savedRow } : teacher)
+        ? current.map((teacher) =>
+            String(teacher.id) === String(existingTeacher.id)
+              ? { ...teacher, ...savedRow }
+              : teacher,
+          )
         : [savedRow, ...current];
-      return nextRows.slice().sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      return nextRows
+        .slice()
+        .sort((a, b) =>
+          String(a.name || "").localeCompare(String(b.name || "")),
+        );
     });
 
     return savedRow;
@@ -7913,54 +17135,105 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     const loadSchoolAdminData = async () => {
       const scopedSchoolName = user?.managed_school_name || "";
       const scopedSchoolId = user?.registered_school_id;
-      const scopeColumnMessage = "School-scoped data columns are not installed in Supabase yet. Run backend/supabase/migrations/004_add_registered_school_scope.sql, then refresh.";
+      const scopeColumnMessage =
+        "School-scoped data columns are not installed in Supabase yet. Run backend/supabase/migrations/004_add_registered_school_scope.sql, then refresh.";
       setSchoolScopeError("");
 
       if (!supabase) {
-        setSchool(scopedSchoolName ? normalizeSchoolRow({ name: scopedSchoolName, region: "Unknown", category: "C" }) : null);
+        setSchool(
+          scopedSchoolName
+            ? normalizeSchoolRow({
+                name: scopedSchoolName,
+                region: "Unknown",
+                category: "C",
+              })
+            : null,
+        );
         setLoadingSchoolData(false);
         return;
       }
 
       let schoolRow = null;
       if (scopedSchoolId != null) {
-        const { data, error } = await supabase.from("registered_schools").select("*").eq("id", scopedSchoolId).maybeSingle();
+        const { data, error } = await supabase
+          .from("registered_schools")
+          .select("*")
+          .eq("id", scopedSchoolId)
+          .maybeSingle();
         if (isMissingTableError(error, "registered_schools")) {
-          setSchoolRegistryError("Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
+          setSchoolRegistryError(
+            "Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.",
+          );
         }
         schoolRow = data || null;
       }
 
       if (!schoolRow && scopedSchoolName) {
-        const { data, error } = await supabase.from("registered_schools").select("*").eq("name", scopedSchoolName).maybeSingle();
+        const { data, error } = await supabase
+          .from("registered_schools")
+          .select("*")
+          .eq("name", scopedSchoolName)
+          .maybeSingle();
         if (isMissingTableError(error, "registered_schools")) {
-          setSchoolRegistryError("Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
+          setSchoolRegistryError(
+            "Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.",
+          );
         }
         schoolRow = data || null;
       }
 
       const normalizedSchool = schoolRow
-        ? { ...normalizeSchoolRow(schoolRow), tenant_key: schoolRow.tenant_key || "" }
-        : (scopedSchoolName ? normalizeSchoolRow({ name: scopedSchoolName, region: "Unknown", category: "C" }) : null);
+        ? {
+            ...normalizeSchoolRow(schoolRow),
+            tenant_key: schoolRow.tenant_key || "",
+          }
+        : scopedSchoolName
+          ? normalizeSchoolRow({
+              name: scopedSchoolName,
+              region: "Unknown",
+              category: "C",
+            })
+          : null;
       setSchool(normalizedSchool);
 
       if (!schoolRow?.id) {
-        setSchoolScopeError("This school admin account is not linked to a registered school record yet, so teacher rows cannot be loaded. Link the account to a row in registered_schools, then refresh.");
+        setSchoolScopeError(
+          "This school admin account is not linked to a registered school record yet, so teacher rows cannot be loaded. Link the account to a row in registered_schools, then refresh.",
+        );
       }
 
       if (schoolRow?.id != null) {
-        const { data: admins, error: adminsError } = await supabase.from("school_admins").select("*").eq("registered_school_id", schoolRow.id).order("created_at", { ascending: false });
+        const { data: admins, error: adminsError } = await supabase
+          .from("school_admins")
+          .select("*")
+          .eq("registered_school_id", schoolRow.id)
+          .order("created_at", { ascending: false });
         if (isMissingTableError(adminsError, "school_admins")) {
-          setSchoolRegistryError("Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.");
+          setSchoolRegistryError(
+            "Registered school tables are not installed in Supabase yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql, then refresh.",
+          );
         }
         if (Array.isArray(admins)) setSchoolAdmins(admins);
       } else {
-        setSchoolAdmins([{ id: user?.id || "self", full_name: user?.name || "School Admin", email: user?.email || "", phone: "", status: "active" }]);
+        setSchoolAdmins([
+          {
+            id: user?.id || "self",
+            full_name: user?.name || "School Admin",
+            email: user?.email || "",
+            phone: "",
+            status: "active",
+          },
+        ]);
       }
 
       let normalizedScopedStudents = [];
       if (schoolRow?.id != null) {
-        const { data: scopedStudentsData, error: studentsError } = await supabase.from("students").select("*").eq("registered_school_id", schoolRow.id).order("id", { ascending: true });
+        const { data: scopedStudentsData, error: studentsError } =
+          await supabase
+            .from("students")
+            .select("*")
+            .eq("registered_school_id", schoolRow.id)
+            .order("id", { ascending: true });
         if (isMissingColumnError(studentsError)) {
           setSchoolScopeError(scopeColumnMessage);
           setSchoolTableInfo((current) => ({
@@ -7975,12 +17248,17 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
             id: s.id ?? i + 1,
             full_name: s.full_name || s.name || "Unnamed Student",
             index: s.index || s.index_number || s.index_no || `AUTO${i + 1}`,
-            class: s.class || s.class_name || "JHS 3A",
+            class: s.class || s.class_name || "",
             region: s.region || "Unknown",
             aggregate: Number(s.aggregate ?? 0),
             status: s.status || "pending",
             email: s.email || null,
-            parent_contact: s.parent_contact || s.parent_phone || s.guardian_phone || s.guardian_contact || "",
+            parent_contact:
+              s.parent_contact ||
+              s.parent_phone ||
+              s.guardian_phone ||
+              s.guardian_contact ||
+              "",
             photo_url: resolveStudentPhotoUrl(s),
           }));
         }
@@ -7988,61 +17266,161 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       setSchoolStudents(sortStudentsByIndex(normalizedScopedStudents));
 
       if (schoolRow?.id != null) {
-        const [teachersResponse, feesResponse, resultsResponse, scoresResponse, eventsResponse, schoolsResponse] = await Promise.all([
-          supabase.from("teachers").select("*").eq("registered_school_id", schoolRow.id).order("name", { ascending: true }),
-          supabase.from("fees").select("*").eq("registered_school_id", schoolRow.id).order("id", { ascending: false }),
-          supabase.from("results").select("*").eq("registered_school_id", schoolRow.id).order("created_at", { ascending: false }),
-          supabase.from("scores").select("*").eq("registered_school_id", schoolRow.id).order("created_at", { ascending: false }),
-          supabase.from("events").select("*").eq("registered_school_id", schoolRow.id).order("event_date", { ascending: true }),
-          supabase.from("schools").select("*").order("name", { ascending: true }),
+        const [
+          teachersResponse,
+          feesResponse,
+          resultsResponse,
+          scoresResponse,
+          eventsResponse,
+          schoolsResponse,
+        ] = await Promise.all([
+          supabase
+            .from("teachers")
+            .select("*")
+            .eq("registered_school_id", schoolRow.id)
+            .order("name", { ascending: true }),
+          supabase
+            .from("fees")
+            .select("*")
+            .eq("registered_school_id", schoolRow.id)
+            .order("id", { ascending: false }),
+          supabase
+            .from("results")
+            .select("*")
+            .eq("registered_school_id", schoolRow.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("scores")
+            .select("*")
+            .eq("registered_school_id", schoolRow.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("events")
+            .select("*")
+            .eq("registered_school_id", schoolRow.id)
+            .order("event_date", { ascending: true }),
+          supabase
+            .from("schools")
+            .select("*")
+            .order("name", { ascending: true }),
         ]);
 
-        if (isMissingColumnError(teachersResponse.error) || isMissingColumnError(feesResponse.error) || isMissingColumnError(resultsResponse.error) || isMissingColumnError(scoresResponse.error) || isMissingColumnError(eventsResponse.error)) {
+        if (
+          isMissingColumnError(teachersResponse.error) ||
+          isMissingColumnError(feesResponse.error) ||
+          isMissingColumnError(resultsResponse.error) ||
+          isMissingColumnError(scoresResponse.error) ||
+          isMissingColumnError(eventsResponse.error)
+        ) {
           setSchoolScopeError(scopeColumnMessage);
         }
 
-        setSchoolTeachers(Array.isArray(teachersResponse.data) ? teachersResponse.data.map(normalizeTeacherRow) : []);
-        setSchoolFeesData(Array.isArray(feesResponse.data) ? feesResponse.data.map(normalizeFeeRow) : []);
-        setSchoolScoresInfo({ rows: Array.isArray(scoresResponse.data) ? scoresResponse.data : [], error: scoresResponse.error?.message || "" });
-        setSchoolEventsInfo({ rows: Array.isArray(eventsResponse.data) ? eventsResponse.data : [], error: eventsResponse.error?.message || "" });
-        setSchoolResultsInfo({ rows: Array.isArray(resultsResponse.data) ? resultsResponse.data : [], error: resultsResponse.error?.message || "" });
-        setSchoolChoiceSchools(Array.isArray(schoolsResponse.data) && schoolsResponse.data.length ? sortSchoolsByCategory(schoolsResponse.data.map(normalizeSchoolRow)) : SCHOOLS_DATA);
+        setSchoolTeachers(
+          Array.isArray(teachersResponse.data)
+            ? teachersResponse.data.map(normalizeTeacherRow)
+            : [],
+        );
+        setSchoolFeesData(
+          Array.isArray(feesResponse.data)
+            ? feesResponse.data.map(normalizeFeeRow)
+            : [],
+        );
+        setSchoolScoresInfo({
+          rows: Array.isArray(scoresResponse.data) ? scoresResponse.data : [],
+          error: scoresResponse.error?.message || "",
+        });
+        setSchoolEventsInfo({
+          rows: Array.isArray(eventsResponse.data) ? eventsResponse.data : [],
+          error: eventsResponse.error?.message || "",
+        });
+        setSchoolResultsInfo({
+          rows: Array.isArray(resultsResponse.data) ? resultsResponse.data : [],
+          error: resultsResponse.error?.message || "",
+        });
+        setSchoolChoiceSchools(
+          Array.isArray(schoolsResponse.data) && schoolsResponse.data.length
+            ? sortSchoolsByCategory(
+                schoolsResponse.data.map(normalizeSchoolRow),
+              )
+            : SCHOOLS_DATA,
+        );
 
-        if (!teachersResponse.error && Array.isArray(teachersResponse.data) && !teachersResponse.data.length) {
-          const { data: legacyTeacherRows, error: legacyTeacherError } = await supabase
-            .from("teachers")
-            .select("id")
-            .is("registered_school_id", null)
-            .limit(1);
+        if (
+          !teachersResponse.error &&
+          Array.isArray(teachersResponse.data) &&
+          !teachersResponse.data.length
+        ) {
+          const { data: legacyTeacherRows, error: legacyTeacherError } =
+            await supabase
+              .from("teachers")
+              .select("id")
+              .is("registered_school_id", null)
+              .limit(1);
 
-          if (!legacyTeacherError && Array.isArray(legacyTeacherRows) && legacyTeacherRows.length) {
-            setSchoolScopeError("Teacher records exist in Supabase, but they are not linked to this school with registered_school_id, so they will not appear here. Re-save the teachers from this school workspace or backfill registered_school_id in Supabase.");
+          if (
+            !legacyTeacherError &&
+            Array.isArray(legacyTeacherRows) &&
+            legacyTeacherRows.length
+          ) {
+            setSchoolScopeError(
+              "Teacher records exist in Supabase, but they are not linked to this school with registered_school_id, so they will not appear here. Re-save the teachers from this school workspace or backfill registered_school_id in Supabase.",
+            );
           }
         }
 
         setSchoolTableInfo({
-          attendance: { rows: [], error: isMissingColumnError(teachersResponse.error) || isMissingColumnError(feesResponse.error) || isMissingColumnError(resultsResponse.error) || isMissingColumnError(scoresResponse.error) || isMissingColumnError(eventsResponse.error) ? scopeColumnMessage : "" },
-          fees: { rows: Array.isArray(feesResponse.data) ? feesResponse.data : [], error: feesResponse.error?.message || "" },
-          teachers: { rows: Array.isArray(teachersResponse.data) ? teachersResponse.data : [], error: teachersResponse.error?.message || "" },
-          events: { rows: Array.isArray(eventsResponse.data) ? eventsResponse.data : [], error: eventsResponse.error?.message || "" },
-          results: { rows: Array.isArray(resultsResponse.data) ? resultsResponse.data : [], error: resultsResponse.error?.message || "" },
+          attendance: {
+            rows: [],
+            error:
+              isMissingColumnError(teachersResponse.error) ||
+              isMissingColumnError(feesResponse.error) ||
+              isMissingColumnError(resultsResponse.error) ||
+              isMissingColumnError(scoresResponse.error) ||
+              isMissingColumnError(eventsResponse.error)
+                ? scopeColumnMessage
+                : "",
+          },
+          fees: {
+            rows: Array.isArray(feesResponse.data) ? feesResponse.data : [],
+            error: feesResponse.error?.message || "",
+          },
+          teachers: {
+            rows: Array.isArray(teachersResponse.data)
+              ? teachersResponse.data
+              : [],
+            error: teachersResponse.error?.message || "",
+          },
+          events: {
+            rows: Array.isArray(eventsResponse.data) ? eventsResponse.data : [],
+            error: eventsResponse.error?.message || "",
+          },
+          results: {
+            rows: Array.isArray(resultsResponse.data)
+              ? resultsResponse.data
+              : [],
+            error: resultsResponse.error?.message || "",
+          },
         });
       }
 
-      const { data: students } = await supabase.from("students").select("*").order("id", { ascending: true });
-      const normalizedStudents = Array.isArray(students) && students.length
-        ? students.map((s, i) => ({
-            id: s.id ?? i + 1,
-            full_name: s.full_name || s.name || "Unnamed Student",
-            index: s.index || s.index_number || s.index_no || `AUTO${i + 1}`,
-            class: s.class || s.class_name || "JHS 3A",
-            region: s.region || "Unknown",
-            aggregate: Number(s.aggregate ?? 0),
-            status: s.status || "pending",
-            email: s.email || null,
-            photo_url: resolveStudentPhotoUrl(s),
-          }))
-        : [];
+      const { data: students } = await supabase
+        .from("students")
+        .select("*")
+        .order("id", { ascending: true });
+      const normalizedStudents =
+        Array.isArray(students) && students.length
+          ? students.map((s, i) => ({
+              id: s.id ?? i + 1,
+              full_name: s.full_name || s.name || "Unnamed Student",
+              index: s.index || s.index_number || s.index_no || `AUTO${i + 1}`,
+              class: s.class || s.class_name || "",
+              region: s.region || "Unknown",
+              aggregate: Number(s.aggregate ?? 0),
+              status: s.status || "pending",
+              email: s.email || null,
+              photo_url: resolveStudentPhotoUrl(s),
+            }))
+          : [];
       const studentsMap = new Map();
       normalizedStudents.forEach((student) => {
         studentsMap.set(String(student.id), student);
@@ -8051,9 +17429,21 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
 
       const loadSelectionRows = async () => {
         const attempts = [
-          () => supabase.from("school_selections").select("*").order("created_at", { ascending: false }),
-          () => supabase.from("school_selections").select("*").order("updated_at", { ascending: false }),
-          () => supabase.from("school_selections").select("*").order("id", { ascending: false }),
+          () =>
+            supabase
+              .from("school_selections")
+              .select("*")
+              .order("created_at", { ascending: false }),
+          () =>
+            supabase
+              .from("school_selections")
+              .select("*")
+              .order("updated_at", { ascending: false }),
+          () =>
+            supabase
+              .from("school_selections")
+              .select("*")
+              .order("id", { ascending: false }),
           () => supabase.from("school_selections").select("*"),
         ];
         for (const run of attempts) {
@@ -8063,15 +17453,35 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
         return [];
       };
       const selectionRows = await loadSelectionRows();
-      const matchingRows = (selectionRows || []).filter((row) => normalizeSelectionList(row).some((pick) => normalizeSchoolIdentity(pick.name) === normalizeSchoolIdentity(normalizedSchool?.name || scopedSchoolName)));
-      const summarized = matchingRows.map((row) => summarizeSelectionRecord(row, studentsMap));
-      setPendingSelections(sortRecordsByStudentIndex(summarized.filter((row) => !row.approved && row.status !== "confirmed")));
-      setConfirmedSelections(sortRecordsByStudentIndex(summarized.filter((row) => row.approved || row.status === "confirmed")));
+      const matchingRows = (selectionRows || []).filter((row) =>
+        normalizeSelectionList(row).some(
+          (pick) =>
+            normalizeSchoolIdentity(pick.name) ===
+            normalizeSchoolIdentity(normalizedSchool?.name || scopedSchoolName),
+        ),
+      );
+      const summarized = matchingRows.map((row) =>
+        summarizeSelectionRecord(row, studentsMap),
+      );
+      setPendingSelections(
+        sortRecordsByStudentIndex(
+          summarized.filter(
+            (row) => !row.approved && row.status !== "confirmed",
+          ),
+        ),
+      );
+      setConfirmedSelections(
+        sortRecordsByStudentIndex(
+          summarized.filter(
+            (row) => row.approved || row.status === "confirmed",
+          ),
+        ),
+      );
       setLoadingSchoolData(false);
     };
 
     loadSchoolAdminData();
-  }, [user]);
+  }, [user, reloadCounter]);
 
   const handleMainBlankClick = (event) => {
     if (!sidebarOpen) return;
@@ -8080,22 +17490,128 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
 
   const renderPage = () => {
     const pages = {
-      dashboard: <SchoolAdminDashboardPage user={user} school={school} admins={schoolAdmins} pendingRows={pendingSelections} confirmedRows={confirmedSelections} studentsData={schoolStudents} teachersData={schoolTeachers} feesData={schoolFeesData} loading={loadingSchoolData} />,
-      students: <StudentsPage onEnroll={()=>goTab("enroll")} onEditStudent={saveSchoolStudent} studentsData={schoolStudents} showEnrollAction={true} heroKicker="School Registry" heroTitle="Students linked to this school" heroSub="Review only the student records currently assigned to this school workspace." heroNote="Search, review, and manage the student list that belongs to this school." directoryTitle="School student registry" directorySub="Search by student name or ID within this school only." emptyRemoteMessage="No students are currently linked to this school." />,
-      enroll: <EnrollPage onBack={()=>goTab("students")} registeredSchoolId={school?.id || user?.registered_school_id || null} />,
-      scores: <ScoresPage studentsData={schoolStudents} tableInfo={schoolScoresInfo} />,
-      analytics: <AnalyticsPage studentsData={schoolStudents} schoolsData={schoolChoiceSchools} selectionsData={[...pendingSelections, ...confirmedSelections]} scoreTableInfo={schoolScoresInfo} />,
-      attendance: <AttendancePage studentsData={schoolStudents} tableInfo={schoolTableInfo.attendance} registeredSchoolId={school?.id || null} />,
-      fees: <FeesAdmin studentsData={schoolStudents} feesData={schoolFeesData} tableInfo={schoolTableInfo.fees} />,
-      teachers: <TeachersPage teachersData={schoolTeachers} tableInfo={schoolTableInfo.teachers} onCreateTeacher={(draft) => saveSchoolTeacher(null, draft)} onUpdateTeacher={saveSchoolTeacher} currentUser={user} emptyRemoteMessage="No teachers are currently linked to this school. If teacher records already exist in Supabase, they may still be missing registered_school_id and need to be re-saved from this school workspace or backfilled in Supabase." />,
+      dashboard: (
+        <SchoolAdminDashboardPage
+          user={user}
+          school={school}
+          admins={schoolAdmins}
+          pendingRows={pendingSelections}
+          confirmedRows={confirmedSelections}
+          studentsData={schoolStudents}
+          teachersData={schoolTeachers}
+          feesData={schoolFeesData}
+          loading={loadingSchoolData}
+        />
+      ),
+      students: (
+        <StudentsPage
+          onEnroll={() => goTab("enroll")}
+          onEditStudent={saveSchoolStudent}
+          studentsData={schoolStudents}
+          showEnrollAction={true}
+          heroKicker="School Registry"
+          heroTitle="Students linked to this school"
+          heroSub="Review only the student records currently assigned to this school workspace."
+          heroNote="Search, review, and manage the student list that belongs to this school."
+          directoryTitle="School student registry"
+          directorySub="Search by student name or ID within this school only."
+          emptyRemoteMessage="No students are currently linked to this school."
+        />
+      ),
+      enroll: (
+        <EnrollPage
+          onEnrolled={() => setReloadCounter((c) => c + 1)}
+          onBack={() => {
+            goTab("students");
+            setReloadCounter((c) => c + 1);
+          }}
+          registeredSchoolId={school?.id || user?.registered_school_id || null}
+        />
+      ),
+      scores: (
+        <ScoresPage
+          studentsData={schoolStudents}
+          tableInfo={schoolScoresInfo}
+        />
+      ),
+      analytics: (
+        <AnalyticsPage
+          studentsData={schoolStudents}
+          schoolsData={schoolChoiceSchools}
+          selectionsData={[...pendingSelections, ...confirmedSelections]}
+          scoreTableInfo={schoolScoresInfo}
+        />
+      ),
+      attendance: (
+        <AttendancePage
+          studentsData={schoolStudents}
+          tableInfo={schoolTableInfo.attendance}
+          registeredSchoolId={school?.id || null}
+        />
+      ),
+      fees: (
+        <FeesAdmin
+          studentsData={schoolStudents}
+          feesData={schoolFeesData}
+          tableInfo={schoolTableInfo.fees}
+        />
+      ),
+      teachers: (
+        <TeachersPage
+          teachersData={schoolTeachers}
+          tableInfo={schoolTableInfo.teachers}
+          onCreateTeacher={(draft) => saveSchoolTeacher(null, draft)}
+          onUpdateTeacher={saveSchoolTeacher}
+          currentUser={user}
+          emptyRemoteMessage="No teachers are currently linked to this school. If teacher records already exist in Supabase, they may still be missing registered_school_id and need to be re-saved from this school workspace or backfilled in Supabase."
+        />
+      ),
       schools: <SchoolsPage schoolsData={schoolChoiceSchools} />,
-      results: <ResultsPage studentsData={schoolStudents} tableInfo={schoolResultsInfo} />,
+      results: (
+        <ResultsPage
+          studentsData={schoolStudents}
+          tableInfo={schoolResultsInfo}
+        />
+      ),
       grading: <GradingPage />,
-      events: <EventsPage eventsData={schoolEventsInfo.rows} tableInfo={schoolTableInfo.events} registeredSchoolId={school?.id || null} />,
-      finance: <FinancePage financeSummary={schoolFinanceSummary} tableInfo={schoolTableInfo.fees} />,
-      "school-profile": <ManagedSchoolPage school={school} admins={schoolAdmins} user={user} onSaveProfile={saveManagedSchoolProfile} allowProfileEdit={false} />,
-      pending: <PendingSelections rows={pendingSelections} loading={loadingSchoolData} readOnly pageTitle="Candidate Reviews" pageSub="Selections that currently mention this school." emptyMessage="No candidate reviews are currently in scope for this school." />,
-      confirmed: <ConfirmedPlacements rows={confirmedSelections} loading={loadingSchoolData} />,
+      events: (
+        <EventsPage
+          eventsData={schoolEventsInfo.rows}
+          tableInfo={schoolTableInfo.events}
+          registeredSchoolId={school?.id || null}
+        />
+      ),
+      finance: (
+        <FinancePage
+          financeSummary={schoolFinanceSummary}
+          tableInfo={schoolTableInfo.fees}
+        />
+      ),
+      "school-profile": (
+        <ManagedSchoolPage
+          school={school}
+          admins={schoolAdmins}
+          user={user}
+          onSaveProfile={saveManagedSchoolProfile}
+          allowProfileEdit={false}
+        />
+      ),
+      pending: (
+        <PendingSelections
+          rows={pendingSelections}
+          loading={loadingSchoolData}
+          readOnly
+          pageTitle="Candidate Reviews"
+          pageSub="Selections that currently mention this school."
+          emptyMessage="No candidate reviews are currently in scope for this school."
+        />
+      ),
+      confirmed: (
+        <ConfirmedPlacements
+          rows={confirmedSelections}
+          loading={loadingSchoolData}
+        />
+      ),
       chat: <ChatPage chatUsers={chatUsers} onChatUsersChange={setChatUsers} />,
       notify: <NotificationCenterPage />,
       payments: <PaymentsReceiptsPage />,
@@ -8122,13 +17638,53 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
 
   return (
     <div className="app">
-      <Topbar user={user} onLogout={onLogout} onMenuClick={()=>setSidebarOpen(o=>!o)} darkMode={darkMode} onToggleDark={onToggleDark} onOpenNotifications={() => setNotificationCount(0)} onOpenProfile={() => goTab("school-profile")} onReloadApp={reloadApp} notificationCount={notificationCount} chatUnread={totalChatUnread} onOpenChat={() => goTab("chat")} systemName={school?.name || appCfg.systemName}/>
+      <Topbar
+        user={user}
+        onLogout={onLogout}
+        onMenuClick={() => setSidebarOpen((o) => !o)}
+        darkMode={darkMode}
+        onToggleDark={onToggleDark}
+        onOpenNotifications={() => setNotificationCount(0)}
+        onOpenProfile={() => goTab("school-profile")}
+        onReloadApp={reloadApp}
+        notificationCount={notificationCount}
+        chatUnread={totalChatUnread}
+        onOpenChat={() => goTab("chat")}
+        systemName={school?.name || appCfg.systemName}
+      />
       <div className="shell">
-        {sidebarOpen && <div className="sidebar-overlay" onClick={()=>setSidebarOpen(false)}/>}
-        <nav className={`sidebar ${sidebarOpen?"":"closed"}`}>
-          <button className="sidebar-brand brand-btn" onClick={reloadApp} title="Reload app"><img src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png" alt="Campus Ghana"/></button>
-          {SCHOOL_ADMIN_NAV.map((item, i) => {
-            if (item.section) return <div key={i} className="sidebar-section" style={item.section === "Admissions & Mock Placement" ? { textAlign: "center" } : undefined}>{item.section}</div>;
+        {sidebarOpen && (
+          <div
+            className="sidebar-overlay"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        <nav className={`sidebar ${sidebarOpen ? "" : "closed"}`}>
+          <button
+            className="sidebar-brand brand-btn"
+            onClick={reloadApp}
+            title="Reload app"
+          >
+            <img
+              src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png"
+              alt="Campus Ghana"
+            />
+          </button>
+          {filteredSchoolAdminNav.map((item, i) => {
+            if (item.section)
+              return (
+                <div
+                  key={i}
+                  className="sidebar-section"
+                  style={
+                    item.section === "Admissions & Mock Placement"
+                      ? { textAlign: "center" }
+                      : undefined
+                  }
+                >
+                  {item.section}
+                </div>
+              );
             if (childToParent[item.key]) return null;
 
             const childrenKeys = SCHOOL_ADMIN_SUBPAGE_MAP[item.key] || [];
@@ -8138,47 +17694,143 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
             return (
               <div key={item.key}>
                 <button
-                  className={`nav-item ${activeParent?"active":""}`}
+                  className={`nav-item ${activeParent ? "active" : ""}`}
                   onClick={() => {
                     goTab(item.key, !hasChildren);
                     if (hasChildren) {
-                      setExpandedGroups((prev) => ({ ...prev, [item.key]: !prev[item.key] }));
+                      setExpandedGroups((prev) => ({
+                        ...prev,
+                        [item.key]: !prev[item.key],
+                      }));
                     }
                   }}
                 >
-                  <Ico name={item.icon} size={26} color={item.color} className="nav-item-icon" style={{strokeWidth:2.6,filter:"saturate(1.08) contrast(1.05)"}}/>
-                  <span className="nav-item-label" style={{color:item.color,fontWeight:700}}>{item.label}</span>
-                  {item.key === "pending" && pendingSelections.length > 0 && <span className="nav-item-badge">{pendingSelections.length}</span>}
-                  {hasChildren && <span style={{marginLeft:"auto",fontWeight:700,color:"#64748b"}}>{expandedGroups[item.key] ? "▾" : "▸"}</span>}
+                  <Ico
+                    name={item.icon}
+                    size={26}
+                    color={item.color}
+                    className="nav-item-icon"
+                    style={{
+                      strokeWidth: 2.6,
+                      filter: "saturate(1.08) contrast(1.05)",
+                    }}
+                  />
+                  <span
+                    className="nav-item-label"
+                    style={{ color: item.color, fontWeight: 700 }}
+                  >
+                    {item.label}
+                  </span>
+                  {item.key === "pending" && pendingSelections.length > 0 && (
+                    <span className="nav-item-badge">
+                      {pendingSelections.length}
+                    </span>
+                  )}
+                  {hasChildren && (
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontWeight: 700,
+                        color: "#64748b",
+                      }}
+                    >
+                      {expandedGroups[item.key] ? "▾" : "▸"}
+                    </span>
+                  )}
                 </button>
 
-                {hasChildren && expandedGroups[item.key] && childrenKeys.map((childKey) => {
-                  const child = SCHOOL_ADMIN_NAV.find((entry) => entry.key === childKey);
-                  if (!child) return null;
-                  return (
-                    <button key={child.key} className={`nav-item ${tab===child.key?"active":""}`} onClick={() => goTab(child.key)} style={{paddingLeft:36, marginTop:2, marginBottom:2}}>
-                      <Ico name={child.icon} size={20} color={child.color} className="nav-item-icon" />
-                      <span className="nav-item-label" style={{color:child.color,fontWeight:600,fontSize:".84rem"}}>{child.label}</span>
-                    </button>
-                  );
-                })}
+                {hasChildren &&
+                  expandedGroups[item.key] &&
+                  childrenKeys.map((childKey) => {
+                    const child = filteredSchoolAdminNav.find(
+                      (entry) => entry.key === childKey,
+                    );
+                    if (!child) return null;
+                    return (
+                      <button
+                        key={child.key}
+                        className={`nav-item ${tab === child.key ? "active" : ""}`}
+                        onClick={() => goTab(child.key)}
+                        style={{
+                          paddingLeft: 36,
+                          marginTop: 2,
+                          marginBottom: 2,
+                        }}
+                      >
+                        <Ico
+                          name={child.icon}
+                          size={20}
+                          color={child.color}
+                          className="nav-item-icon"
+                        />
+                        <span
+                          className="nav-item-label"
+                          style={{
+                            color: child.color,
+                            fontWeight: 600,
+                            fontSize: ".84rem",
+                          }}
+                        >
+                          {child.label}
+                        </span>
+                      </button>
+                    );
+                  })}
               </div>
             );
           })}
         </nav>
-        <main className={`main ${sidebarOpen?"":"full"}`} onClick={handleMainBlankClick}>
-          {appCfg.maintenanceMode && <div className="alert alert-warning" style={{margin:"16px 16px 0",fontWeight:700,borderRadius:8}}>⚠️ Maintenance Mode is ON — some workflows may be unavailable.</div>}
-          {schoolRegistryError && <div className="alert alert-warning" style={{margin:"16px 16px 0",borderRadius:8}}>{schoolRegistryError}</div>}
-          {schoolScopeError && <div className="alert alert-warning" style={{margin:"16px 16px 0",borderRadius:8}}>{schoolScopeError}</div>}
+        <main
+          className={`main ${sidebarOpen ? "" : "full"}`}
+          onClick={handleMainBlankClick}
+        >
+          {appCfg.maintenanceMode && (
+            <div
+              className="alert alert-warning"
+              style={{
+                margin: "16px 16px 0",
+                fontWeight: 700,
+                borderRadius: 8,
+              }}
+            >
+              ⚠️ Maintenance Mode is ON — some workflows may be unavailable.
+            </div>
+          )}
+          {schoolRegistryError && (
+            <div
+              className="alert alert-warning"
+              style={{ margin: "16px 16px 0", borderRadius: 8 }}
+            >
+              {schoolRegistryError}
+            </div>
+          )}
+          {schoolScopeError && (
+            <div
+              className="alert alert-warning"
+              style={{ margin: "16px 16px 0", borderRadius: 8 }}
+            >
+              {schoolScopeError}
+            </div>
+          )}
           {renderPage()}
         </main>
         <div className="bottom-nav">
-          <div className="bottom-nav-grid" style={{gridTemplateColumns:`repeat(${BOTTOM.length},1fr)`}}>
+          <div
+            className="bottom-nav-grid"
+            style={{ gridTemplateColumns: `repeat(${BOTTOM.length},1fr)` }}
+          >
             {BOTTOM.map((key) => {
               const item = SCHOOL_ADMIN_NAV.find((entry) => entry.key === key);
-              return <button key={key} className={`bottom-nav-item ${tab===key?"active":""}`} onClick={() => goTab(key)}>
-                <Ico name={item.icon} size={30} color={item.color}/><span>{item.label}</span>
-              </button>;
+              return (
+                <button
+                  key={key}
+                  className={`bottom-nav-item ${tab === key ? "active" : ""}`}
+                  onClick={() => goTab(key)}
+                >
+                  <Ico name={item.icon} size={30} color={item.color} />
+                  <span>{item.label}</span>
+                </button>
+              );
             })}
           </div>
         </div>
@@ -8190,17 +17842,24 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
 // STUDENT PORTAL
 function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
   const { cfg: appCfg } = useContext(SettingsContext);
+  const studentFeesPortalEnabled = appCfg.studentFeesPortalEnabled !== false;
+  const studentSelectionPortalEnabled =
+    appCfg.studentSelectionPortalEnabled !== false;
   const childToParent = useMemo(() => {
     const map = {};
     Object.entries(STUDENT_SUBPAGE_MAP).forEach(([parent, children]) => {
-      children.forEach((key) => { map[key] = parent; });
+      children.forEach((key) => {
+        map[key] = parent;
+      });
     });
     return map;
   }, []);
   const [expandedGroups, setExpandedGroups] = useState(() =>
-    Object.fromEntries(Object.keys(STUDENT_SUBPAGE_MAP).map((k) => [k, false]))
+    Object.fromEntries(Object.keys(STUDENT_SUBPAGE_MAP).map((k) => [k, false])),
   );
-  const [tab, setTab] = useState(() => readStoredTab(STUDENT_TAB_KEY, "dashboard"));
+  const [tab, setTab] = useState(() =>
+    readStoredTab(STUDENT_TAB_KEY, "dashboard"),
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [schoolsData, setSchoolsData] = useState(SCHOOLS_DATA);
@@ -8210,25 +17869,71 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
   const [selectionRow, setSelectionRow] = useState(null);
   const [scoreValues, setScoreValues] = useState([]);
   const [chatUsers, setChatUsers] = useState([
-    {id:1, name:"Support Team", avatar:"S", unread:0, status:"active"},
-    {id:2, name:"Ms. Ama Owusu", avatar:"A", unread:0, status:"online"},
-    {id:3, name:"Mr. Kwesi Adjei", avatar:"K", unread:0, status:"away"},
-    {id:4, name:"Admissions Office", avatar:"O", unread:0, status:"active"},
-    {id:5, name:"Dr. Yaw Mensah", avatar:"Y", unread:0, status:"online"},
-    {id:6, name:"Accra Campus", avatar:"C", unread:0, status:"active"},
-    {id:7, name:"Kumasi Branch", avatar:"B", unread:0, status:"away"},
-    {id:8, name:"Finance Dept", avatar:"F", unread:0, status:"online"},
-    {id:9, name:"IT Support", avatar:"I", unread:0, status:"active"},
-    {id:10, name:"Student Affairs", avatar:"E", unread:0, status:"online"},
+    { id: 1, name: "Support Team", avatar: "S", unread: 0, status: "active" },
+    { id: 2, name: "Ms. Ama Owusu", avatar: "A", unread: 0, status: "online" },
+    { id: 3, name: "Mr. Kwesi Adjei", avatar: "K", unread: 0, status: "away" },
+    {
+      id: 4,
+      name: "Admissions Office",
+      avatar: "O",
+      unread: 0,
+      status: "active",
+    },
+    { id: 5, name: "Dr. Yaw Mensah", avatar: "Y", unread: 0, status: "online" },
+    { id: 6, name: "Accra Campus", avatar: "C", unread: 0, status: "active" },
+    { id: 7, name: "Kumasi Branch", avatar: "B", unread: 0, status: "away" },
+    { id: 8, name: "Finance Dept", avatar: "F", unread: 0, status: "online" },
+    { id: 9, name: "IT Support", avatar: "I", unread: 0, status: "active" },
+    {
+      id: 10,
+      name: "Student Affairs",
+      avatar: "E",
+      unread: 0,
+      status: "online",
+    },
   ]);
   const totalChatUnread = chatUsers.reduce((sum, u) => sum + u.unread, 0);
-  const BOTTOM = ["dashboard","selection","my-selection","fees"];
+  const BOTTOM = studentFeesPortalEnabled
+    ? ["dashboard", "selection", "my-selection", "fees"]
+    : ["dashboard", "selection", "my-selection", "results"];
+  const blockedStudentFeeKeys = useMemo(
+    () => (studentFeesPortalEnabled ? [] : ["fees", "pay-fees", "payment-plan"]),
+    [studentFeesPortalEnabled],
+  );
+  const blockedStudentSelectionKeys = useMemo(
+    () =>
+      studentSelectionPortalEnabled
+        ? []
+        : ["selection", "my-selection", "predictor", "scholarships"],
+    [studentSelectionPortalEnabled],
+  );
+  const blockedStudentNavKeys = useMemo(
+    () => [...blockedStudentFeeKeys, ...blockedStudentSelectionKeys],
+    [blockedStudentFeeKeys, blockedStudentSelectionKeys],
+  );
+  const filteredStudentNav = useMemo(
+    () =>
+      STUDENT_NAV.filter((item) =>
+        item.section ? true : !blockedStudentNavKeys.includes(item.key),
+      ),
+    [blockedStudentNavKeys],
+  );
   const selectionNoticeKey = `student_selection_notice_seen_${String(user?.email || user?.index || "student")}`;
   const selectionStatus = String(selectionRow?.status || "").toLowerCase();
-  const isSelectionApproved = !!selectionRow && (!!selectionRow?.approved || selectionStatus === "confirmed");
-  const approvedAtRaw = selectionRow?.reviewed_at || selectionRow?.reviewedAt || selectionRow?.updated_at || selectionRow?.created_at || null;
+  const isSelectionApproved =
+    !!selectionRow &&
+    (!!selectionRow?.approved || selectionStatus === "confirmed");
+  const approvedAtRaw =
+    selectionRow?.reviewed_at ||
+    selectionRow?.reviewedAt ||
+    selectionRow?.updated_at ||
+    selectionRow?.created_at ||
+    null;
   const approvedAtLabel = approvedAtRaw
-    ? new Date(approvedAtRaw).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+    ? new Date(approvedAtRaw).toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
     : "";
   const approvalInfo = {
     isApproved: isSelectionApproved,
@@ -8240,12 +17945,24 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
   const markSelectionApprovalSeen = useCallback(() => {
     if (!approvalInfo.isApproved) return;
     try {
-      sessionStorage.setItem(selectionNoticeKey, `${approvalInfo.id}:${approvalInfo.stamp}`);
+      sessionStorage.setItem(
+        selectionNoticeKey,
+        `${approvalInfo.id}:${approvalInfo.stamp}`,
+      );
     } catch {}
     setNotificationCount(0);
-  }, [approvalInfo.id, approvalInfo.isApproved, approvalInfo.stamp, selectionNoticeKey]);
+  }, [
+    approvalInfo.id,
+    approvalInfo.isApproved,
+    approvalInfo.stamp,
+    selectionNoticeKey,
+  ]);
 
-  const goTab = (key, closeSidebar = true) => { setTab(key); writeStoredTab(STUDENT_TAB_KEY, key); if (closeSidebar) setSidebarOpen(false); };
+  const goTab = (key, closeSidebar = true) => {
+    setTab(key);
+    writeStoredTab(STUDENT_TAB_KEY, key);
+    if (closeSidebar) setSidebarOpen(false);
+  };
   const reloadApp = () => window.location.reload();
 
   useEffect(() => {
@@ -8254,6 +17971,12 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
       setExpandedGroups((prev) => ({ ...prev, [parent]: true }));
     }
   }, [tab, childToParent]);
+  useEffect(() => {
+    if (blockedStudentNavKeys.includes(tab)) {
+      setTab("dashboard");
+      writeStoredTab(STUDENT_TAB_KEY, "dashboard");
+    }
+  }, [blockedStudentNavKeys, tab]);
 
   useEffect(() => {
     const loadStudentPortalData = async () => {
@@ -8264,11 +17987,32 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
         let student = null;
         const studentLookups = [];
         if (/^\d{12}$/.test(identifier)) {
-          studentLookups.push(() => supabase.from("students").select("*").eq("index_number", identifier).limit(1).maybeSingle());
-          studentLookups.push(() => supabase.from("students").select("*").eq("index", identifier).limit(1).maybeSingle());
+          studentLookups.push(() =>
+            supabase
+              .from("students")
+              .select("*")
+              .eq("index_number", identifier)
+              .limit(1)
+              .maybeSingle(),
+          );
+          studentLookups.push(() =>
+            supabase
+              .from("students")
+              .select("*")
+              .eq("index", identifier)
+              .limit(1)
+              .maybeSingle(),
+          );
         }
         if (user?.email && !String(user.email).endsWith("@student.local")) {
-          studentLookups.push(() => supabase.from("students").select("*").eq("email", user.email).limit(1).maybeSingle());
+          studentLookups.push(() =>
+            supabase
+              .from("students")
+              .select("*")
+              .eq("email", user.email)
+              .limit(1)
+              .maybeSingle(),
+          );
         }
         for (const run of studentLookups) {
           const { data, error } = await run();
@@ -8296,9 +18040,10 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
       if (student) {
         setStudentData({
           ...student,
-          full_name: student.full_name || student.name || user?.name || "Student",
+          full_name:
+            student.full_name || student.name || user?.name || "Student",
           index: student.index || student.index_number || identifier,
-          class: student.class || student.class_name || "JHS 3",
+          class: student.class || student.class_name || "",
           region: student.region || "Unknown",
           aggregate: Number(student.aggregate ?? 0),
           photo_url: resolveStudentPhotoUrl(student),
@@ -8327,43 +18072,107 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
         };
 
         const idx = student.index_number || student.index;
-        const [attendanceRows, feeRows, scoreRows, selection] = await Promise.all([
-          runFirstSuccessful([
-            () => supabase.from("attendance").select("*").eq("student_id", student.id).order("date", { ascending: false }),
-            ...(idx ? [() => supabase.from("attendance").select("*").eq("index_number", idx).order("date", { ascending: false })] : []),
-          ]),
-          runFirstSuccessful([
-            () => supabase.from("fees").select("*").eq("student_id", student.id).order("id", { ascending: false }),
-            ...(idx ? [() => supabase.from("fees").select("*").eq("index_number", idx).order("id", { ascending: false })] : []),
-          ]),
-          runFirstSuccessful([
-            () => supabase.from("scores").select("score").eq("student_id", student.id),
-            ...(idx ? [() => supabase.from("scores").select("score").eq("index_number", idx)] : []),
-          ]),
-          fetchStudentSelection({ supabase, userEmail: user?.email || getSessionUserEmail(), studentData: {
-            id: student.id,
-            index: student.index || student.index_number,
-            index_number: student.index_number || student.index,
-            full_name: student.full_name || student.name || user?.name || "",
-          } }),
-        ]);
+        const [attendanceRows, feeRows, scoreRows, selection] =
+          await Promise.all([
+            runFirstSuccessful([
+              () =>
+                supabase
+                  .from("attendance")
+                  .select("*")
+                  .eq("student_id", student.id)
+                  .order("date", { ascending: false }),
+              ...(idx
+                ? [
+                    () =>
+                      supabase
+                        .from("attendance")
+                        .select("*")
+                        .eq("index_number", idx)
+                        .order("date", { ascending: false }),
+                  ]
+                : []),
+            ]),
+            runFirstSuccessful([
+              () =>
+                supabase
+                  .from("fees")
+                  .select("*")
+                  .eq("student_id", student.id)
+                  .order("id", { ascending: false }),
+              ...(idx
+                ? [
+                    () =>
+                      supabase
+                        .from("fees")
+                        .select("*")
+                        .eq("index_number", idx)
+                        .order("id", { ascending: false }),
+                  ]
+                : []),
+            ]),
+            runFirstSuccessful([
+              () =>
+                supabase
+                  .from("scores")
+                  .select("score")
+                  .eq("student_id", student.id),
+              ...(idx
+                ? [
+                    () =>
+                      supabase
+                        .from("scores")
+                        .select("score")
+                        .eq("index_number", idx),
+                  ]
+                : []),
+            ]),
+            fetchStudentSelection({
+              supabase,
+              userEmail: user?.email || getSessionUserEmail(),
+              studentData: {
+                id: student.id,
+                index: student.index || student.index_number,
+                index_number: student.index_number || student.index,
+                full_name:
+                  student.full_name || student.name || user?.name || "",
+              },
+            }),
+          ]);
 
         if (Array.isArray(attendanceRows) && attendanceRows.length) {
-          setAttendanceData(attendanceRows.map((r, i) => ({ id: r.id ?? i + 1, date: r.date || r.day || "-", status: r.status || "Present" })));
+          setAttendanceData(
+            attendanceRows.map((r, i) => ({
+              id: r.id ?? i + 1,
+              date: r.date || r.day || "-",
+              status: r.status || "Present",
+            })),
+          );
         }
 
         if (Array.isArray(feeRows) && feeRows.length) {
-          setFeesData(feeRows.map((f, i) => ({
-            id: f.id ?? i + 1,
-            term: f.term || f.semester || `Term ${i + 1}`,
-            amount: Number(f.amount ?? f.total ?? 0),
-            paid: Number(f.paid ?? f.amount_paid ?? 0),
-            status: f.status || (Number(f.paid ?? 0) >= Number(f.amount ?? 0) ? "paid" : Number(f.paid ?? 0) > 0 ? "partial" : "unpaid"),
-          })));
+          setFeesData(
+            feeRows.map((f, i) => ({
+              id: f.id ?? i + 1,
+              term: f.term || f.semester || `Term ${i + 1}`,
+              amount: Number(f.amount ?? f.total ?? 0),
+              paid: Number(f.paid ?? f.amount_paid ?? 0),
+              status:
+                f.status ||
+                (Number(f.paid ?? 0) >= Number(f.amount ?? 0)
+                  ? "paid"
+                  : Number(f.paid ?? 0) > 0
+                    ? "partial"
+                    : "unpaid"),
+            })),
+          );
         }
 
         if (Array.isArray(scoreRows) && scoreRows.length) {
-          setScoreValues(scoreRows.map((row) => Number(row?.score ?? 0)).filter((v) => Number.isFinite(v) && v >= 0));
+          setScoreValues(
+            scoreRows
+              .map((row) => Number(row?.score ?? 0))
+              .filter((v) => Number.isFinite(v) && v >= 0),
+          );
         }
 
         if (selection) setSelectionRow(selection);
@@ -8389,12 +18198,22 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
       seenStamp = sessionStorage.getItem(selectionNoticeKey) || "";
     } catch {}
     const currentStamp = `${approvalInfo.id}:${approvalInfo.stamp}`;
-    if (seenStamp !== currentStamp && tab !== "announcements" && tab !== "my-selection") {
+    if (
+      seenStamp !== currentStamp &&
+      tab !== "announcements" &&
+      tab !== "my-selection"
+    ) {
       setNotificationCount(1);
     } else {
       setNotificationCount(0);
     }
-  }, [approvalInfo.id, approvalInfo.isApproved, approvalInfo.stamp, selectionNoticeKey, tab]);
+  }, [
+    approvalInfo.id,
+    approvalInfo.isApproved,
+    approvalInfo.stamp,
+    selectionNoticeKey,
+    tab,
+  ]);
 
   useEffect(() => {
     if (tab === "announcements") {
@@ -8415,58 +18234,169 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
 
   const renderPage = () => {
     const pages = {
-      dashboard:<StudentDashboard user={user} studentData={studentData} attendanceData={attendanceData} feesData={feesData} selectionInfo={{ count: normalizeSelectionList(selectionRow).length, status: selectionRow?.status || "not-submitted" }} scoreValues={scoreValues}/>,
-      profile:<StudentProfile user={user} studentData={studentData}/>,
-      results:<StudentResultsPage scoreValues={scoreValues}/>,
-      "analytics-student":<StudentAnalyticsPage scoreValues={scoreValues} attendanceData={attendanceData} feesData={feesData}/>,
-      attendance:<StudentAttendance attendanceData={attendanceData}/>, fees:<StudentFees feesData={feesData}/>, docs:<DocumentsPage/>,
-      announcements:<div className="fade-in">
-        <div className="page-header"><div className="page-title">Announcements</div><div className="page-sub">Notification channels: {appCfg.emailNotifs ? "Email " : ""}{appCfg.smsNotifs ? "SMS" : "In-app"}</div></div>
-        {approvalInfo.isApproved && (
-          <div className="card card-padded" style={{marginBottom:12,borderLeft:"4px solid #16a34a",background:"#f0fdf4"}}>
-            <div style={{fontWeight:800,marginBottom:4,color:"#14532d"}}>Selection Approved</div>
-            <div style={{color:"#166534",fontSize:".9rem"}}>Your selected schools have been approved by the admin and placement processing can continue.</div>
-            {approvalInfo.approvedAtLabel && <div style={{fontSize:".78rem",color:"#166534",marginTop:6}}>Approved: {approvalInfo.approvedAtLabel}</div>}
+      dashboard: (
+        <StudentDashboard
+          user={user}
+          studentData={studentData}
+          attendanceData={attendanceData}
+          feesData={feesData}
+          selectionInfo={{
+            count: normalizeSelectionList(selectionRow).length,
+            status: selectionRow?.status || "not-submitted",
+          }}
+          scoreValues={scoreValues}
+        />
+      ),
+      profile: <StudentProfile user={user} studentData={studentData} />,
+      results: <StudentResultsPage scoreValues={scoreValues} />,
+      "analytics-student": (
+        <StudentAnalyticsPage
+          scoreValues={scoreValues}
+          attendanceData={attendanceData}
+          feesData={feesData}
+        />
+      ),
+      attendance: <StudentAttendance attendanceData={attendanceData} />,
+      fees: <StudentFees feesData={feesData} />,
+      docs: <DocumentsPage />,
+      announcements: (
+        <div className="fade-in">
+          <div className="page-header">
+            <div className="page-title">Announcements</div>
+            <div className="page-sub">
+              Notification channels: {appCfg.emailNotifs ? "Email " : ""}
+              {appCfg.smsNotifs ? "SMS" : "In-app"}
+            </div>
           </div>
-        )}
-        {ANNOUNCEMENTS.map(a=>(
-          <div key={a.id} className={`card card-padded ${a.type==="urgent"?"":""}`} style={{marginBottom:12,borderLeft:`4px solid ${a.type==="urgent"?"#dc2626":a.type==="info"?"#1a56db":"#d97706"}`}}>
-            <div style={{fontWeight:700,marginBottom:4}}>{a.title}</div>
-            <div style={{color:"#475569",fontSize:".9rem"}}>{a.body}</div>
-            <div style={{fontSize:".78rem",color:"#94a3b8",marginTop:6}}>{a.date}</div>
-          </div>
-        ))}
-      </div>,
-      selection:<SchoolSelection schoolsData={schoolsData} studentData={studentData}/>,
-      "my-selection":<MySelection selectionRow={selectionRow} approvalInfo={approvalInfo}/>,
-      predictor:<PlacementPredictor schoolsData={schoolsData}/>, chat:<ChatPage chatUsers={chatUsers} onChatUsersChange={setChatUsers}/>,
-      assignments:<AssignmentTrackerPage/>,
-      "exam-schedule":<ExamSchedulePage/>,
-      "report-card":<ReportCardPage studentData={studentData} attendanceData={attendanceData} feesData={feesData}/>,
-      "subject-progress":<SubjectProgressPage/>,
-      "study-planner":<StudyPlannerPage/>,
-      "attendance-corrections":<AttendanceCorrectionPage attendanceData={attendanceData}/>,
-      "pay-fees":<StudentPaymentsPage feesData={feesData}/>,
-      "payment-plan":<StudentPaymentPlansPage feesData={feesData}/>,
-      "announcements-pro":<PersonalizedAnnouncementsPage/>,
-      "upload-docs":<StudentUploadDocsPage/>,
-      "calendar-sync":<CalendarSyncPage/>,
-      "support-tickets":<StudentTicketsPage/>,
-      goals:<StudentGoalsPage/>,
-      scholarships:<ScholarshipBoardPage/>,
-      resources:<LearningResourcesPage/>,
+          {approvalInfo.isApproved && (
+            <div
+              className="card card-padded"
+              style={{
+                marginBottom: 12,
+                borderLeft: "4px solid #16a34a",
+                background: "#f0fdf4",
+              }}
+            >
+              <div
+                style={{ fontWeight: 800, marginBottom: 4, color: "#14532d" }}
+              >
+                Selection Approved
+              </div>
+              <div style={{ color: "#166534", fontSize: ".9rem" }}>
+                Your selected schools have been approved by the admin and
+                placement processing can continue.
+              </div>
+              {approvalInfo.approvedAtLabel && (
+                <div
+                  style={{ fontSize: ".78rem", color: "#166534", marginTop: 6 }}
+                >
+                  Approved: {approvalInfo.approvedAtLabel}
+                </div>
+              )}
+            </div>
+          )}
+          {ANNOUNCEMENTS.map((a) => (
+            <div
+              key={a.id}
+              className={`card card-padded ${a.type === "urgent" ? "" : ""}`}
+              style={{
+                marginBottom: 12,
+                borderLeft: `4px solid ${a.type === "urgent" ? "#dc2626" : a.type === "info" ? "#1a56db" : "#d97706"}`,
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{a.title}</div>
+              <div style={{ color: "#475569", fontSize: ".9rem" }}>
+                {a.body}
+              </div>
+              <div
+                style={{ fontSize: ".78rem", color: "#94a3b8", marginTop: 6 }}
+              >
+                {a.date}
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
+      selection: (
+        <SchoolSelection schoolsData={schoolsData} studentData={studentData} />
+      ),
+      "my-selection": (
+        <MySelection selectionRow={selectionRow} approvalInfo={approvalInfo} />
+      ),
+      predictor: <PlacementPredictor schoolsData={schoolsData} />,
+      chat: <ChatPage chatUsers={chatUsers} onChatUsersChange={setChatUsers} />,
+      assignments: <AssignmentTrackerPage />,
+      "exam-schedule": <ExamSchedulePage />,
+      "report-card": (
+        <ReportCardPage
+          studentData={studentData}
+          attendanceData={attendanceData}
+          feesData={feesData}
+        />
+      ),
+      "subject-progress": <SubjectProgressPage />,
+      "study-planner": <StudyPlannerPage />,
+      "attendance-corrections": (
+        <AttendanceCorrectionPage attendanceData={attendanceData} />
+      ),
+      "pay-fees": <StudentPaymentsPage feesData={feesData} />,
+      "payment-plan": <StudentPaymentPlansPage feesData={feesData} />,
+      "announcements-pro": <PersonalizedAnnouncementsPage />,
+      "upload-docs": <StudentUploadDocsPage />,
+      "calendar-sync": <CalendarSyncPage />,
+      "support-tickets": <StudentTicketsPage />,
+      goals: <StudentGoalsPage />,
+      scholarships: <ScholarshipBoardPage />,
+      resources: <LearningResourcesPage />,
     };
-    return pages[tab] || <div className="card card-padded" style={{textAlign:"center",padding:48}}>Coming soon</div>;
+    return (
+      pages[tab] || (
+        <div
+          className="card card-padded"
+          style={{ textAlign: "center", padding: 48 }}
+        >
+          Coming soon
+        </div>
+      )
+    );
   };
 
   if (!appCfg.studentPortalOpen) {
     return (
-      <div className="app" style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:"#f8fafc"}}>
-        <div className="card card-padded" style={{maxWidth:420,textAlign:"center",padding:40}}>
-          <div style={{fontSize:3+"rem",marginBottom:12}}>🔒</div>
-          <div style={{fontWeight:800,fontSize:"1.2rem",marginBottom:8,color:"#1e3a8a"}}>Student Portal Closed</div>
-          <div style={{color:"#475569",fontSize:".95rem",marginBottom:20}}>The student portal is currently closed by the administrator. Please check back later or contact your school.</div>
-          <button className="btn btn-outline" onClick={onLogout}>Back to Login</button>
+      <div
+        className="app"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          background: "#f8fafc",
+        }}
+      >
+        <div
+          className="card card-padded"
+          style={{ maxWidth: 420, textAlign: "center", padding: 40 }}
+        >
+          <div style={{ fontSize: 3 + "rem", marginBottom: 12 }}>🔒</div>
+          <div
+            style={{
+              fontWeight: 800,
+              fontSize: "1.2rem",
+              marginBottom: 8,
+              color: "#1e3a8a",
+            }}
+          >
+            Student Portal Closed
+          </div>
+          <div
+            style={{ color: "#475569", fontSize: ".95rem", marginBottom: 20 }}
+          >
+            The student portal is currently closed by the administrator. Please
+            check back later or contact your school.
+          </div>
+          <button className="btn btn-outline" onClick={onLogout}>
+            Back to Login
+          </button>
         </div>
       </div>
     );
@@ -8474,13 +18404,45 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
 
   return (
     <div className="app">
-      <Topbar user={user} onLogout={onLogout} onMenuClick={()=>setSidebarOpen(o=>!o)} darkMode={darkMode} onToggleDark={onToggleDark} onOpenNotifications={openNotifications} onOpenProfile={() => goTab("profile")} onReloadApp={reloadApp} notificationCount={notificationCount} chatUnread={totalChatUnread} onOpenChat={() => goTab("chat")} systemName={appCfg.systemName}/>
+      <Topbar
+        user={user}
+        onLogout={onLogout}
+        onMenuClick={() => setSidebarOpen((o) => !o)}
+        darkMode={darkMode}
+        onToggleDark={onToggleDark}
+        onOpenNotifications={openNotifications}
+        onOpenProfile={() => goTab("profile")}
+        onReloadApp={reloadApp}
+        notificationCount={notificationCount}
+        chatUnread={totalChatUnread}
+        onOpenChat={() => goTab("chat")}
+        systemName={appCfg.systemName}
+      />
       <div className="shell">
-        {sidebarOpen && <div className="sidebar-overlay" onClick={()=>setSidebarOpen(false)}/>}
-        <nav className={`sidebar ${sidebarOpen?"":"closed"}`}>
-          <button className="sidebar-brand brand-btn" onClick={reloadApp} title="Reload app"><img src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png" alt="Campus Ghana"/></button>
-          {STUDENT_NAV.map((item, i)=> {
-            if (item.section) return <div key={i} className="sidebar-section">{item.section}</div>;
+        {sidebarOpen && (
+          <div
+            className="sidebar-overlay"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        <nav className={`sidebar ${sidebarOpen ? "" : "closed"}`}>
+          <button
+            className="sidebar-brand brand-btn"
+            onClick={reloadApp}
+            title="Reload app"
+          >
+            <img
+              src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png"
+              alt="Campus Ghana"
+            />
+          </button>
+          {filteredStudentNav.map((item, i) => {
+            if (item.section)
+              return (
+                <div key={i} className="sidebar-section">
+                  {item.section}
+                </div>
+              );
             if (childToParent[item.key]) return null;
 
             const childrenKeys = STUDENT_SUBPAGE_MAP[item.key] || [];
@@ -8490,49 +18452,118 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
             return (
               <div key={item.key}>
                 <button
-                  className={`nav-item ${activeParent?"active":""}`}
+                  className={`nav-item ${activeParent ? "active" : ""}`}
                   onClick={() => {
                     goTab(item.key, !hasChildren);
                     if (hasChildren) {
-                      setExpandedGroups((prev) => ({ ...prev, [item.key]: !prev[item.key] }));
+                      setExpandedGroups((prev) => ({
+                        ...prev,
+                        [item.key]: !prev[item.key],
+                      }));
                     }
                   }}
                 >
-                  <Ico name={item.icon} size={26} color={item.color} className="nav-item-icon" style={{strokeWidth:2.6,filter:"saturate(1.08) contrast(1.05)"}}/>
-                  <span className="nav-item-label" style={{color:item.color,fontWeight:700}}>{item.label}</span>
-                  {hasChildren && <span style={{marginLeft:"auto",fontWeight:700,color:"#64748b"}}>{expandedGroups[item.key] ? "▾" : "▸"}</span>}
+                  <Ico
+                    name={item.icon}
+                    size={26}
+                    color={item.color}
+                    className="nav-item-icon"
+                    style={{
+                      strokeWidth: 2.6,
+                      filter: "saturate(1.08) contrast(1.05)",
+                    }}
+                  />
+                  <span
+                    className="nav-item-label"
+                    style={{ color: item.color, fontWeight: 700 }}
+                  >
+                    {item.label}
+                  </span>
+                  {hasChildren && (
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontWeight: 700,
+                        color: "#64748b",
+                      }}
+                    >
+                      {expandedGroups[item.key] ? "▾" : "▸"}
+                    </span>
+                  )}
                 </button>
 
-                {hasChildren && expandedGroups[item.key] && childrenKeys.map((childKey) => {
-                  const child = STUDENT_NAV.find((n) => n.key === childKey);
-                  if (!child) return null;
-                  return (
-                    <button
-                      key={child.key}
-                      className={`nav-item ${tab===child.key?"active":""}`}
-                      onClick={()=>goTab(child.key)}
-                      style={{paddingLeft:36, marginTop:2, marginBottom:2}}
-                    >
-                      <Ico name={child.icon} size={20} color={child.color} className="nav-item-icon" />
-                      <span className="nav-item-label" style={{color:child.color,fontWeight:600,fontSize:".84rem"}}>{child.label}</span>
-                    </button>
-                  );
-                })}
+                {hasChildren &&
+                  expandedGroups[item.key] &&
+                  childrenKeys.map((childKey) => {
+                    const child = filteredStudentNav.find((n) => n.key === childKey);
+                    if (!child) return null;
+                    return (
+                      <button
+                        key={child.key}
+                        className={`nav-item ${tab === child.key ? "active" : ""}`}
+                        onClick={() => goTab(child.key)}
+                        style={{
+                          paddingLeft: 36,
+                          marginTop: 2,
+                          marginBottom: 2,
+                        }}
+                      >
+                        <Ico
+                          name={child.icon}
+                          size={20}
+                          color={child.color}
+                          className="nav-item-icon"
+                        />
+                        <span
+                          className="nav-item-label"
+                          style={{
+                            color: child.color,
+                            fontWeight: 600,
+                            fontSize: ".84rem",
+                          }}
+                        >
+                          {child.label}
+                        </span>
+                      </button>
+                    );
+                  })}
               </div>
             );
           })}
         </nav>
         <main className={`main full`} onClick={handleMainBlankClick}>
-          {appCfg.maintenanceMode && <div className="alert alert-warning" style={{margin:"16px 16px 0",fontWeight:700,borderRadius:8}}>⚠️ System is currently under maintenance. Some features may be unavailable.</div>}
+          {appCfg.maintenanceMode && (
+            <div
+              className="alert alert-warning"
+              style={{
+                margin: "16px 16px 0",
+                fontWeight: 700,
+                borderRadius: 8,
+              }}
+            >
+              ⚠️ System is currently under maintenance. Some features may be
+              unavailable.
+            </div>
+          )}
           {renderPage()}
         </main>
         <div className="bottom-nav">
-          <div className="bottom-nav-grid" style={{gridTemplateColumns:`repeat(${BOTTOM.length},1fr)`}}>
-            {BOTTOM.map(k=>{
-              const item = STUDENT_NAV.find(n=>n.key===k);
-              return <button key={k} className={`bottom-nav-item ${tab===k?"active":""}`} onClick={()=>goTab(k)}>
-                <Ico name={item.icon} size={30} color={item.color}/><span style={{fontSize:".56rem"}}>{item.label}</span>
-              </button>;
+          <div
+            className="bottom-nav-grid"
+            style={{ gridTemplateColumns: `repeat(${BOTTOM.length},1fr)` }}
+          >
+            {BOTTOM.map((k) => {
+              const item = STUDENT_NAV.find((n) => n.key === k);
+              return (
+                <button
+                  key={k}
+                  className={`bottom-nav-item ${tab === k ? "active" : ""}`}
+                  onClick={() => goTab(k)}
+                >
+                  <Ico name={item.icon} size={30} color={item.color} />
+                  <span style={{ fontSize: ".56rem" }}>{item.label}</span>
+                </button>
+              );
             })}
           </div>
         </div>
@@ -8561,7 +18592,8 @@ function GhanaCampus() {
       return;
     }
 
-    let displayName = authUser.user_metadata?.full_name || authUser.email || "User";
+    let displayName =
+      authUser.user_metadata?.full_name || authUser.email || "User";
     let role = normalizeRoleKey(authUser.user_metadata?.role || "student");
 
     let profile = null;
@@ -8580,7 +18612,14 @@ function GhanaCampus() {
 
     if (profile?.full_name) displayName = profile.full_name;
     if (profile?.role) role = normalizeRoleKey(profile.role);
-    const restoredPortal = resolvePortalFromAccount(profile || { role, registered_school_id: authUser.user_metadata?.registered_school_id, managed_school_name: authUser.user_metadata?.managed_school_name }, role);
+    const restoredPortal = resolvePortalFromAccount(
+      profile || {
+        role,
+        registered_school_id: authUser.user_metadata?.registered_school_id,
+        managed_school_name: authUser.user_metadata?.managed_school_name,
+      },
+      role,
+    );
 
     const restoredSession = {
       authSource: "supabase",
@@ -8590,8 +18629,14 @@ function GhanaCampus() {
         email: authUser.email,
         role,
         name: displayName,
-        registered_school_id: profile?.registered_school_id ?? authUser.user_metadata?.registered_school_id ?? null,
-        managed_school_name: profile?.managed_school_name || authUser.user_metadata?.managed_school_name || "",
+        registered_school_id:
+          profile?.registered_school_id ??
+          authUser.user_metadata?.registered_school_id ??
+          null,
+        managed_school_name:
+          profile?.managed_school_name ||
+          authUser.user_metadata?.managed_school_name ||
+          "",
       },
     };
     setSession(restoredSession);
@@ -8603,7 +18648,12 @@ function GhanaCampus() {
       const identifier = String(user.email || "").trim();
 
       if (portal === "student" && /^\d{12}$/.test(identifier)) {
-        const indexColumns = ["index_number", "index", "index_no", "bece_index"];
+        const indexColumns = [
+          "index_number",
+          "index",
+          "index_no",
+          "bece_index",
+        ];
         let matchedStudent = null;
 
         for (const col of indexColumns) {
@@ -8616,7 +18666,10 @@ function GhanaCampus() {
 
           if (studentErr) {
             if (isMissingColumnError(studentErr)) continue;
-            return { ok: false, error: studentErr.message || "Student validation failed." };
+            return {
+              ok: false,
+              error: studentErr.message || "Student validation failed.",
+            };
           }
           if (studentRow) {
             matchedStudent = studentRow;
@@ -8628,18 +18681,31 @@ function GhanaCampus() {
           return { ok: false, error: "Student ID not found." };
         }
 
-        const passwordValue = String(password || "").trim();
-        const parentContactColumns = ["parent_contact", "parent_phone", "guardian_phone", "guardian_contact", "phone", "parent_password"];
+        const passwordValue = normalizeParentContactValue(password);
+        const parentContactColumns = [
+          "parent_contact",
+          "parent_phone",
+          "guardian_phone",
+          "guardian_contact",
+          "phone",
+          "parent_password",
+        ];
         const hasValidParentContact = parentContactColumns.some((col) => {
           if (matchedStudent[col] == null) return false;
-          return String(matchedStudent[col]).trim() === passwordValue;
+          return (
+            normalizeParentContactValue(matchedStudent[col]) === passwordValue
+          );
         });
 
         if (!hasValidParentContact) {
-          return { ok: false, error: "Parent contact does not match our records." };
+          return {
+            ok: false,
+            error: "Parent contact does not match our records.",
+          };
         }
 
-        const studentName = matchedStudent.full_name || matchedStudent.name || "Student";
+        const studentName =
+          matchedStudent.full_name || matchedStudent.name || "Student";
         await supabase.auth.signOut();
         const studentSession = {
           authSource: "custom",
@@ -8663,14 +18729,21 @@ function GhanaCampus() {
         .eq("email", identifier)
         .limit(1);
 
-      if (!tableUsersError && Array.isArray(tableUsers) && tableUsers.length > 0) {
+      if (
+        !tableUsersError &&
+        Array.isArray(tableUsers) &&
+        tableUsers.length > 0
+      ) {
         const matchedUser = tableUsers[0];
         if (String(matchedUser.password || "") !== String(password || "")) {
           return { ok: false, error: "Invalid email or password." };
         }
 
         const resolvedRole = normalizeRoleKey(matchedUser.role || portal);
-        const resolvedPortal = resolvePortalFromAccount({ ...matchedUser, role: resolvedRole }, portal);
+        const resolvedPortal = resolvePortalFromAccount(
+          { ...matchedUser, role: resolvedRole },
+          portal,
+        );
         await supabase.auth.signOut();
         const tableSession = {
           authSource: "custom",
@@ -8689,7 +18762,10 @@ function GhanaCampus() {
         return { ok: true };
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({ email: user.email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password,
+      });
       if (error) return { ok: false, error: error.message };
 
       const authUser = data?.user;
@@ -8712,7 +18788,10 @@ function GhanaCampus() {
         }
       }
 
-      const resolvedPortal = resolvePortalFromAccount(profile || { role: roleFromProfile }, roleFromProfile);
+      const resolvedPortal = resolvePortalFromAccount(
+        profile || { role: roleFromProfile },
+        roleFromProfile,
+      );
       const s = {
         authSource: "supabase",
         portal: resolvedPortal,
@@ -8724,7 +18803,7 @@ function GhanaCampus() {
           role: roleFromProfile,
           registered_school_id: profile?.registered_school_id ?? null,
           managed_school_name: profile?.managed_school_name || "",
-        }
+        },
       };
       setSession(s);
       writeAppSession(s);
@@ -8746,8 +18825,8 @@ function GhanaCampus() {
       email: user.email,
       password,
       options: {
-        data: { full_name: user.name, role: portal }
-      }
+        data: { full_name: user.name, role: portal },
+      },
     });
     if (error) return { ok: false, error: error.message };
 
@@ -8790,7 +18869,8 @@ function GhanaCampus() {
   };
 
   useEffect(() => {
-    globalThis.__campus_user_email = session?.user?.email || "demo@campus.local";
+    globalThis.__campus_user_email =
+      session?.user?.email || "demo@campus.local";
   }, [session]);
 
   useEffect(() => {
@@ -8803,8 +18883,33 @@ function GhanaCampus() {
   useEffect(() => {
     const loadSettings = async () => {
       if (!supabase) return;
-      const { data } = await supabase.from("app_settings").select("config").eq("id", 1).maybeSingle();
-      if (data?.config) setAppSettings(s => ({ ...DEFAULT_SETTINGS, ...s, ...data.config }));
+      const { data } = await supabase
+        .from("app_settings")
+        .select("config")
+        .eq("id", 1)
+        .maybeSingle();
+      let mergedSettings = data?.config
+        ? { ...DEFAULT_SETTINGS, ...data.config }
+        : { ...DEFAULT_SETTINGS };
+
+      const { data: classRows, error: classError } = await supabase
+        .from("classes")
+        .select("name")
+        .eq("active", true)
+        .order("id", { ascending: true });
+
+      if (!classError && Array.isArray(classRows)) {
+        mergedSettings = {
+          ...mergedSettings,
+          classOptions: classRows
+            .map((row) => String(row?.name || "").trim())
+            .filter(Boolean),
+        };
+      } else if (isMissingTableError(classError, "classes")) {
+        // Keep legacy app_settings.classOptions when classes table is not migrated yet.
+      }
+
+      setAppSettings((s) => ({ ...DEFAULT_SETTINGS, ...s, ...mergedSettings }));
     };
     loadSettings();
   }, []);
@@ -8823,22 +18928,40 @@ function GhanaCampus() {
   }, [hydrateSessionFromSupabase]);
 
   return (
-    <SettingsContext.Provider value={{ session, cfg: appSettings, updateCfg: setAppSettings }}>
+    <SettingsContext.Provider
+      value={{ session, cfg: appSettings, updateCfg: setAppSettings }}
+    >
       <style>{css}</style>
-      {!session
-        ? <Landing onSelect={(portal, user, password) => login(portal, user, password)} hasSupabase={!!supabase}/>
-        : session.portal === "admin" || session.portal === "super_admin"
-          ? <AdminPortal user={session.user} onLogout={logout} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}/>
-          : session.portal === "school-admin"
-            ? <SchoolAdminPortal user={session.user} onLogout={logout} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}/>
-          : <StudentPortal user={session.user} onLogout={logout} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}/>
-      }
+      {!session ? (
+        <Landing
+          onSelect={(portal, user, password) => login(portal, user, password)}
+          hasSupabase={!!supabase}
+        />
+      ) : session.portal === "admin" || session.portal === "super_admin" ? (
+        <AdminPortal
+          user={session.user}
+          onLogout={logout}
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode((d) => !d)}
+        />
+      ) : session.portal === "school-admin" ? (
+        <SchoolAdminPortal
+          user={session.user}
+          onLogout={logout}
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode((d) => !d)}
+        />
+      ) : (
+        <StudentPortal
+          user={session.user}
+          onLogout={logout}
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode((d) => !d)}
+        />
+      )}
     </SettingsContext.Provider>
   );
 }
 
-
 // --- END DEBUG PROVIDER WRAP ---
 export default GhanaCampus;
-
-
