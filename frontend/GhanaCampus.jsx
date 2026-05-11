@@ -10247,6 +10247,50 @@ function SettingsPage() {
   const saveSettings = async () => {
     try {
       if (!runConfigCheck()) return;
+
+      // Check if non-super-admins are trying to change portal visibility settings
+      if (!isSuperAdmin) {
+        const portalVisibilityKeys = [
+          'adminFeesPortalEnabled',
+          'studentFeesPortalEnabled',
+          'studentDashboardEnabled',
+          'studentProfileEnabled',
+          'studentResultsEnabled',
+          'studentAnalyticsEnabled',
+          'studentReportCardEnabled',
+          'studentStudyPlannerEnabled',
+          'studentExamScheduleEnabled',
+          'studentLiveTestsEnabled',
+          'studentGoalsEnabled',
+          'studentSelectSchoolsEnabled',
+          'studentMySelectionEnabled',
+          'studentSelectionPortalEnabled',
+          'studentAttendanceEnabled',
+          'studentAttendanceCorrectionsEnabled',
+          'studentAnnouncementsEnabled',
+          'studentAnnouncementsProEnabled',
+          'studentSupportTicketsEnabled',
+          'studentChatEnabled',
+          'studentDocsEnabled',
+          'studentUploadDocsEnabled',
+          'studentResourcesEnabled',
+          'studentAssignmentsEnabled',
+          'studentCalendarSyncEnabled'
+        ];
+
+        for (const key of portalVisibilityKeys) {
+          if (cfg[key] !== globalCfg[key]) {
+            setStatusModal({
+              open: true,
+              type: "failure",
+              title: "Permission Denied",
+              message: "Only super admins can change portal visibility settings.",
+            });
+            return;
+          }
+        }
+      }
+
       updateCfg(cfg);
       if (supabase) {
         const { error } = await supabase
