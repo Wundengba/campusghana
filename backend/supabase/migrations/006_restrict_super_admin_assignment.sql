@@ -110,8 +110,9 @@ begin
   if next_role = 'super_admin'
      and previous_role <> 'super_admin'
      and actor_role is not null
-     and actor_role <> 'super_admin' then
-    raise exception 'Only super admins can assign the super_admin role.'
+     and actor_role <> 'super_admin'
+     and actor_role <> 'admin' then
+    raise exception 'Only admins can assign the super_admin role.'
       using errcode = '42501';
   end if;
 

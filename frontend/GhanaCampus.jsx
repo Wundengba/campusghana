@@ -11159,7 +11159,7 @@ function PermissionsMatrixPage({ currentUser }) {
     ? Math.round((enabledCount / totalPrivilegeCount) * 100)
     : 0;
   const actorRoleKey = normalizeRoleKey(currentUser?.role);
-  const canAssignSuperAdmin = actorRoleKey === "super_admin";
+  const canAssignSuperAdmin = actorRoleKey === "super_admin" || actorRoleKey === "admin";
   const canPromoteAdmins =
     actorRoleKey === "super_admin" || actorRoleKey === "admin";
   const adminPromotionRoles = roles.filter((role) => {
