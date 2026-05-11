@@ -154,16 +154,10 @@ const ensureSupabaseProfile = async (authUser, fallbackRole = "student") => {
 
 const BASE_ROLE_CATALOG = [
   {
-    key: "super_admin",
-    label: "Super Admin",
-    color: "#1d4ed8",
-    note: "Full platform control",
-  },
-  {
     key: "admin",
     label: "Admin",
-    color: "#0f766e",
-    note: "School and operations management",
+    color: "#1d4ed8",
+    note: "Full platform control",
   },
   {
     key: "school_admin",
@@ -192,8 +186,7 @@ const BASE_ROLE_CATALOG = [
 ];
 
 const DEFAULT_ROLE_MANAGE_FLAGS = {
-  super_admin: true,
-  admin: false,
+  admin: true,
   school_admin: false,
   teacher: false,
   staff: false,
@@ -6605,7 +6598,7 @@ function RegisteredSchoolsPage({
     }
   };
 
-  const isSuperAdmin = currentUser?.role === "super_admin";
+  const isSuperAdmin = currentUser?.role === "admin";
 
   return (
     <div className="fade-in">
@@ -10391,7 +10384,7 @@ function SettingsPage() {
     </div>
   );
   const isSuperAdmin =
-    normalizeRoleKey(session?.user?.role || "") === "super_admin";
+    normalizeRoleKey(session?.user?.role || "") === "admin";
 
   return (
     <div className="fade-in" ref={scrollRef}>
@@ -10937,16 +10930,10 @@ function PermissionsMatrixPage({ currentUser }) {
   const { cfg: globalCfg, updateCfg } = useContext(SettingsContext);
   const defaultBaseRoles = [
     {
-      key: "super_admin",
-      label: "Super Admin",
-      color: "#1d4ed8",
-      note: "Full platform control",
-    },
-    {
       key: "admin",
       label: "Admin",
-      color: "#0f766e",
-      note: "School and operations management",
+      color: "#1d4ed8",
+      note: "Full platform control",
     },
     {
       key: "school_admin",
@@ -11018,7 +11005,7 @@ function PermissionsMatrixPage({ currentUser }) {
     },
   ];
   const defaultPrivileges = {
-    super_admin: {
+    admin: {
       "students.view": true,
       "students.edit": true,
       "schools.view": true,
@@ -11034,23 +11021,6 @@ function PermissionsMatrixPage({ currentUser }) {
       "settings.manage": true,
       "audit.view": true,
       "registered_schools.manage": true,
-    },
-    admin: {
-      "students.view": true,
-      "students.edit": true,
-      "schools.view": true,
-      "placements.review": true,
-      "teachers.manage": true,
-      "scores.manage": true,
-      "results.publish": true,
-      "attendance.manage": true,
-      "fees.manage": true,
-      "payments.manage": true,
-      "finance.view": true,
-      "roles.manage": false,
-      "settings.manage": false,
-      "audit.view": false,
-      "registered_schools.manage": false,
     },
     school_admin: {
       "students.view": true,
@@ -11203,11 +11173,10 @@ function PermissionsMatrixPage({ currentUser }) {
     ? Math.round((enabledCount / totalPrivilegeCount) * 100)
     : 0;
   const actorRoleKey = normalizeRoleKey(currentUser?.role);
-  const canAssignSuperAdmin = actorRoleKey === "super_admin" || actorRoleKey === "admin";
+  const canAssignSuperAdmin = actorRoleKey === "admin";
   const canPromoteAdmins =
-    actorRoleKey === "super_admin" || actorRoleKey === "admin";
+    actorRoleKey === "admin";
   const adminPromotionRoles = roles.filter((role) => {
-    if (role.key === "super_admin") return canAssignSuperAdmin;
     if (role.key === "admin") return true;
     if (["school_admin", "teacher", "staff", "student"].includes(role.key))
       return false;
@@ -21820,7 +21789,7 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   const totalChatUnread = chatUsers.reduce((sum, u) => sum + u.unread, 0);
   // Determine if user is super admin
   const isSuperAdminUser = useMemo(() => 
-    normalizeRoleKey(user?.role || "") === "super_admin",
+    normalizeRoleKey(user?.role || "") === "admin",
     [user?.role]
   );
 
@@ -22593,7 +22562,7 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   };
 
   const renderPage = () => {
-    const isSuperAdminUser = normalizeRoleKey(user?.role || "") === "super_admin";
+    const isSuperAdminUser = normalizeRoleKey(user?.role || "") === "admin";
     
     // Check if current page is restricted to super admin
     if (SUPER_ADMIN_ONLY_KEYS.has(tab) && !isSuperAdminUser) {
@@ -26071,7 +26040,7 @@ function GhanaCampus() {
           onSelect={(portal, user, password) => login(portal, user, password)}
           hasSupabase={!!supabase}
         />
-      ) : session.portal === "admin" || session.portal === "super_admin" ? (
+      ) : session.portal === "admin" ? (
         <AdminPortal
           user={session.user}
           onLogout={logout}
