@@ -6719,9 +6719,116 @@ function RegisteredSchoolsPage({
                         >
                           <Ico name="edit" size={14} /> Edit
                         </button>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to delete ${school.name}?`)) {
+                              setSavingSchoolId(school.id);
+                              setPageError("");
+                              supabase.from('registered_schools').delete().eq('id', school.id).then(
+                                ({error}) => {
+                                  if(error) throw error;
+                                  setPageError("");
+                                }
+                              ).catch(err => {
+                                setPageError(String(err?.message || "Unable to delete school"));
+                              }).finally(() => setSavingSchoolId(null));
+                            }
+                          }}
+                          disabled={savingSchoolId === school.id}
+                          style={{ color: "#dc2626" }}
+                        >
+                          <Ico name="delete" size={14} /> Delete
+                        </button>
                       </div>
                     )}
                   </div>
+                  {editingSchoolId === school.id && (
+                    <div className="registered-school-edit-form card" style={{marginTop: 12, padding: 20, background: "#f8f9fa", border: "1px solid #e2e8f0"}}>
+                      <div style={{marginBottom: 16}}>
+                        <h4 style={{marginBottom: 4}}>Edit School</h4>
+                        <p style={{fontSize: ".85rem", color: "#64748b"}}>Update school information below.</p>
+                      </div>
+                      <div className="form-grid">
+                        <div className="form-group">
+                          <label className="form-label">School Name</label>
+                          <input
+                            className="form-control"
+                            value={editForm.name || ""}
+                            onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Location</label>
+                          <input
+                            className="form-control"
+                            value={editForm.location || ""}
+                            onChange={(e) => setEditForm({...editForm, location: e.target.value})}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Region</label>
+                          <select
+                            className="form-control"
+                            value={editForm.region || ""}
+                            onChange={(e) => setEditForm({...editForm, region: e.target.value})}
+                          >
+                            <option value="">Select Region</option>
+                            {['Greater Accra','Ashanti','Western','Central','Eastern','Volta','Northern','Upper East','Upper West','Bono','Oti','Ahafo','Bono East','North East','Savannah','Western North'].map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Category</label>
+                          <select
+                            className="form-control"
+                            value={editForm.category || ""}
+                            onChange={(e) => setEditForm({...editForm, category: e.target.value})}
+                          >
+                            <option value="">Select Category</option>
+                            <option value="A">Grade A</option>
+                            <option value="B">Grade B</option>
+                            <option value="C">Grade C</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Type</label>
+                          <input
+                            className="form-control"
+                            value={editForm.type || ""}
+                            onChange={(e) => setEditForm({...editForm, type: e.target.value})}
+                            placeholder="e.g. JHS, SHS, Mixed"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">
+                            <input
+                              type="checkbox"
+                              checked={editForm.active === true}
+                              onChange={(e) => setEditForm({...editForm, active: e.target.checked})}
+                              style={{marginRight: 8}}
+                            />
+                            Active
+                          </label>
+                        </div>
+                      </div>
+                      <div style={{display: "flex", gap: 12, marginTop: 16}}>
+                        <button
+                          className="btn btn-blue"
+                          onClick={() => saveEditSchool(school)}
+                          disabled={savingSchoolId === school.id}
+                        >
+                          {savingSchoolId === school.id ? "Saving..." : "Save Changes"}
+                        </button>
+                        <button
+                          className="btn btn-outline"
+                          onClick={cancelEditSchool}
+                          disabled={savingSchoolId === school.id}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="registered-school-body">
                     <div className="registered-school-grid">
                       <div className="registered-school-stat">
