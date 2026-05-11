@@ -12,7 +12,7 @@ const tabMemory = {
 };
 
 export function getSessionUserEmail() {
-  return globalThis.__campus_user_email || "demo@campus.local";
+  return globalThis.__campus_user_email || "";
 }
 
 export function readAppSession() {
@@ -21,7 +21,7 @@ export function readAppSession() {
     const raw = sessionStorage.getItem(APP_SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed?.authSource === "custom" ? parsed : null;
+    return parsed?.authSource ? parsed : null;
   } catch {
     return null;
   }
@@ -30,7 +30,7 @@ export function readAppSession() {
 export function writeAppSession(session) {
   appSessionMemory = session || null;
   try {
-    if (session?.authSource === "custom") {
+    if (session) {
       sessionStorage.setItem(APP_SESSION_KEY, JSON.stringify(session));
     } else {
       sessionStorage.removeItem(APP_SESSION_KEY);

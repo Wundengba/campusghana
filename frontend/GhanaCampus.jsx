@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useContext, useMemo } from "react";
+﻿import { useState, useEffect, useCallback, useContext, useMemo, useRef } from "react";
 import { supabase } from "./src/lib/supabaseClient.js";
 import { Ico } from "./src/components/Ico.jsx";
 import { Landing } from "./src/components/Landing.jsx";
@@ -114,6 +114,42 @@ const resolvePortalFromAccount = (record, fallback = "student") => {
   if (isSchoolScopedAccount(record)) return "school-admin";
   const roleKey = normalizeRoleKey(record?.role || fallback);
   return roleKey === "student" ? "student" : "admin";
+};
+
+const ensureSupabaseProfile = async (authUser, fallbackRole = "student") => {
+  if (!supabase || !authUser?.id || !profilesTableAvailable) return null;
+
+  const resolvedRole = normalizeRoleKey(
+    authUser.user_metadata?.role || fallbackRole || "student",
+  );
+  const profilePayload = {
+    id: authUser.id,
+    email: authUser.email,
+    full_name:
+      authUser.user_metadata?.full_name || authUser.email || "",
+    role: resolvedRole,
+    registered_school_id:
+      authUser.user_metadata?.registered_school_id ?? null,
+    managed_school_name:
+      authUser.user_metadata?.managed_school_name || "",
+  };
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(profilePayload, { onConflict: "id" })
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    if (isProfilesTableMissingError(error)) {
+      profilesTableAvailable = false;
+      return null;
+    }
+    console.warn("Could not sync Supabase profile:", error.message || error);
+    return null;
+  }
+
+  return data;
 };
 
 const BASE_ROLE_CATALOG = [
@@ -301,7 +337,18 @@ const css = `
     color:#fff; border:none; border-radius:10px; font-family:var(--font); font-weight:700;
     font-size:1rem; cursor:pointer; transition:opacity .2s; display:flex; align-items:center; justify-content:center; gap:8px; }
   .btn-primary:hover { opacity:.9; }
-  .demo-hint { font-size:.78rem; color:#94a3b8; margin-top:4px; }
+  .btn-secondary { padding:11px 14px; background:#f3f4f6; color:#374151; border:2px solid #e2e8f0;
+    border-radius:10px; font-family:var(--font); font-weight:600; font-size:1rem; cursor:pointer;
+    transition:all .2s; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn-secondary:hover { background:#e2e8f0; border-color:#cbd5e1; color:#1f2937; }
+  .btn-success { padding:11px 14px; background:#16a34a; color:#fff; border:none; border-radius:10px;
+    font-family:var(--font); font-weight:600; font-size:1rem; cursor:pointer; transition:opacity .2s;
+    display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn-success:hover { opacity:.9; }
+  .btn-danger { padding:11px 14px; background:#dc2626; color:#fff; border:none; border-radius:10px;
+    font-family:var(--font); font-weight:600; font-size:1rem; cursor:pointer; transition:opacity .2s;
+    display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn-danger:hover { opacity:.9; }
 
   /* TOPBAR */
   .topbar { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--topbar-h);
@@ -449,7 +496,7 @@ const css = `
     font-size:.65rem; font-weight:700; padding:2px 7px; }
   .nav-item:not(.active) svg { opacity:.88; }
   .nav-item:hover svg, .nav-item.active svg { opacity:1; transition:opacity .15s; filter:drop-shadow(0 1px 2px rgba(30,58,138,.18)); }
-  .bottom-nav-item svg { opacity:.9; transition:opacity .15s, filter .15s; }
+  .bottom-nav-item svg { opacity:.8; transition:all .2s ease; filter:grayscale(20%); }
   .bottom-nav-item:hover svg, .bottom-nav-item.active svg { opacity:1; filter:none; }
 
   .main { flex:1; margin-left:var(--sidebar-w); padding:24px; min-height:calc(100vh - var(--topbar-h)); overflow-x:hidden; width:calc(100vw - var(--sidebar-w)); max-width:100%; }
@@ -1565,6 +1612,81 @@ const css = `
   tr:last-child td { border-bottom:none; }
   tr:hover td { background:#f9fbff; }
 
+  /* SCHOOL AND CLASS GROUPING */
+  .school-group { margin-bottom: 24px; }
+  .school-header { 
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    color: white;
+    padding: 16px 20px;
+    border-radius: 12px 12px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .school-name { 
+    font-size: 1.2rem; 
+    font-weight: 700; 
+    margin: 0;
+  }
+  .school-count { 
+    font-size: 0.9rem; 
+    opacity: 0.9;
+    background: rgba(255,255,255,0.2);
+    padding: 4px 12px;
+    border-radius: 20px;
+  }
+  .class-group { margin-bottom: 16px; }
+  .class-header { 
+    background: #f1f5f9;
+    padding: 12px 16px;
+    border-left: 4px solid #3b82f6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .class-name { 
+    font-size: 1rem; 
+    font-weight: 600; 
+    color: #1e40af;
+    margin: 0;
+  }
+  .class-count { 
+    font-size: 0.8rem; 
+    color: #64748b;
+    background: #e2e8f0;
+    padding: 2px 8px;
+    border-radius: 12px;
+  }
+
+  /* MOBILE RESPONSIVE STYLES */
+  @media (max-width: 768px) {
+    .school-header {
+      padding: 12px 16px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .school-name {
+      font-size: 1.1rem;
+    }
+    .school-count {
+      font-size: 0.8rem;
+    }
+    .class-header {
+      padding: 10px 14px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+    .class-name {
+      font-size: 0.9rem;
+    }
+    .class-count {
+      font-size: 0.75rem;
+    }
+  }
+
   /* BADGE */
   .badge { display:inline-flex; align-items:center; padding:3px 10px; border-radius:99px; font-size:.72rem; font-weight:700; }
   .badge-success { background:#dcfce7; color:#16a34a; }
@@ -1756,13 +1878,13 @@ const css = `
     border-top:1px solid #dbe5f3; z-index:100; padding:5px 7px; height:60px;
     box-shadow:0 -6px 14px rgba(15,23,42,.06); }
   .bottom-nav-grid { display:grid; height:100%; gap:4px; }
-  .bottom-nav-item { display:flex; flex-direction:column; align-items:center; justify-content:center;
+  .bottom-nav-item { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8px 4px; border-radius:16px; transition:all .2s ease; font-size:.75rem; gap:6px; color:#64748b; background:none; border:none; cursor:pointer; position:relative; }
     background:none; border:none; cursor:pointer; font-family:var(--font); font-size:.64rem;
     color:#64748b; gap:1px; border-radius:8px; transition:all .2s; position:relative; }
   .bottom-nav-item svg { width:30px; height:30px; }
-  .bottom-nav-item span { font-weight:700; letter-spacing:.1px; }
+  .bottom-nav-item span { font-weight:600; letter-spacing:.02em; font-size:.7rem; transition:all .2s ease; }
   .bottom-nav-item:hover { background:#eef5ff; transform:translateY(-1px); }
-  .bottom-nav-item.active { color:#64748b; background:none; box-shadow:none; }
+  .bottom-nav-item.active { color:#3b82f6; background:linear-gradient(135deg,#dbeafe 0%,#bfdbfe 100%); box-shadow:0 4px 16px rgba(59,130,246,.2); transform:translateY(-1px); }
 
   .fade-in { animation: fadeIn .3s ease; }
   @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
@@ -2121,6 +2243,700 @@ const css = `
     .stats-grid { grid-template-columns:1fr; }
     .page-title { font-size:1.3rem; }
   }
+
+  /* LIVE TESTS */
+  .tests-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:20px; margin-top:20px; }
+  .test-card { background:#fff; border-radius:16px; padding:20px; box-shadow:var(--shadow); border:1px solid var(--border); }
+  .origin-badge { display:inline-flex; align-items:center; justify-content:center; margin-left:8px; padding:2px 6px; background:linear-gradient(135deg,#eef2ff 0%,#e0e7ff 100%); border-radius:12px; border:1px solid rgba(99,102,241,.2); }
+  .test-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; }
+  .test-title { font-size:1.1rem; font-weight:700; color:#0f172a; flex:1; margin-right:12px; }
+  .test-status { font-size:.8rem; font-weight:600; padding:4px 8px; border-radius:12px; background:#f3f4f6; white-space:nowrap; }
+  .test-meta { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .test-subject, .test-class, .test-type, .test-duration, .test-questions { font-size:.8rem; color:#64748b; background:#f8fafc; padding:4px 8px; border-radius:8px; }
+  .test-description { font-size:.9rem; color:#475569; margin-bottom:16px; line-height:1.5; }
+  .test-score { display:flex; align-items:center; gap:6px; font-weight:600; color:#16a34a; margin-bottom:16px; }
+  .test-actions { display:flex; gap:10px; }
+  .test-actions button { flex:1; border-radius:14px; }
+  .mapped-badge { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:999px; background:#eff6ff; color:#075985; font-weight:600; font-size:.86rem; margin-bottom:12px; border:1px solid rgba(14,165,233,.18); }
+
+  .study-content-page .page-header { background:linear-gradient(135deg,#1e293b 0%,#334155 50%,#475569 100%); border-radius:24px; padding:28px 32px; margin-bottom:28px; color:#fff; box-shadow:0 24px 60px rgba(30,41,59,.15); }
+  .study-content-page .page-header .page-title { font-size:2rem; margin-bottom:8px; }
+  .study-content-page .page-header .page-sub { color:rgba(241,245,249,.85); font-size:1rem; max-width:720px; line-height:1.6; }
+  .study-content-page .page-actions-row { align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px; }
+  .study-content-page .page-actions-row .btn-blue { min-width:185px; }
+
+  .study-content-page .activity-panel { background:linear-gradient(180deg,#ffffff 0%,#f1f5f9 50%,#e2e8f0 100%); border-radius:24px; padding:28px; margin-bottom:28px; border:1px solid rgba(71,85,105,.18); box-shadow:0 24px 60px rgba(30,41,59,.08); }
+  .study-content-page .activity-header { display:flex; justify-content:space-between; gap:18px; flex-wrap:wrap; align-items:flex-start; margin-bottom:22px; }
+  .study-content-page .activity-summary-grid { gap:18px; }
+  .study-content-page .activity-summary-card { background:linear-gradient(135deg,#ffffff 0%,#f8fafc 100%); padding:22px; border-radius:20px; border:1px solid rgba(203,213,225,.8); box-shadow:0 14px 40px rgba(30,41,59,.06); transition:transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+  .study-content-page .activity-summary-card:hover { transform:translateY(-1px); border-color:rgba(59,130,246,.25); box-shadow:0 20px 50px rgba(30,41,59,.1); }
+  .study-content-page .summary-label { font-size:.82rem; text-transform:uppercase; letter-spacing:.08em; color:#64748b; margin-bottom:10px; }
+  .study-content-page .summary-value { font-size:1.9rem; font-weight:800; color:#1e293b; }
+
+  .study-content-page .activity-table-card { background:linear-gradient(135deg,#ffffff 0%,#f8fafc 100%); padding:24px; border-radius:24px; border:1px solid rgba(203,213,225,.8); box-shadow:0 18px 44px rgba(30,41,59,.08); margin-top:20px; }
+  .study-content-page .activity-table th { background:linear-gradient(135deg,#f1f5f9 0%,#e2e8f0 100%); color:#1e293b; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .study-content-page .activity-table tbody tr:hover { background:linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%); }
+  .study-content-page .activity-table td { color:#475569; }
+  .study-content-page .lesson-activity-summary { background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%); border-radius:16px; padding:16px 18px; margin-bottom:20px; color:#1e293b; border:1px solid rgba(59,130,246,.2); position:relative; }
+  .study-content-page .lesson-activity-summary::before { content:''; position:absolute; top:0; left:0; width:4px; height:100%; background:linear-gradient(180deg,#3b82f6,#1d4ed8); border-radius:16px 0 0 16px; }
+
+  .study-content-page .empty-state { padding:42px 20px; color:#64748b; }
+  .study-content-page .tests-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:24px; margin-top:28px; }
+  .study-content-page .test-card { background:linear-gradient(135deg,#ffffff 0%,#f8fafc 100%); border-radius:24px; padding:28px; box-shadow:0 24px 60px rgba(30,41,59,.08); border:1px solid rgba(203,213,225,.8); transition:transform .2s ease, box-shadow .2s ease; display:flex; flex-direction:column; position:relative; overflow:hidden; }
+  .study-content-page .test-card::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; background:linear-gradient(90deg,#3b82f6,#1d4ed8,#7c3aed); }
+  .study-content-page .test-card:hover { transform:translateY(-4px); box-shadow:0 32px 80px rgba(30,41,59,.15); }
+  .study-content-page .test-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid rgba(203,213,225,.6); }
+  .study-content-page .test-title { font-size:1.2rem; line-height:1.35; font-weight:600; color:#1e293b; margin-bottom:4px; }
+  .study-content-page .origin-badge { display:inline-flex; align-items:center; justify-content:center; margin-left:8px; padding:2px 6px; background:linear-gradient(135deg,#eef2ff 0%,#e0e7ff 100%); border-radius:12px; border:1px solid rgba(99,102,241,.2); }
+  .study-content-page .test-status { background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%); color:#92400e; padding:6px 12px; border-radius:20px; font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; border:1px solid rgba(245,158,11,.3); }
+  .study-content-page .test-meta { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px; }
+  .study-content-page .test-meta span { background:linear-gradient(135deg,#f1f5f9 0%,#e2e8f0 100%); color:#475569; border:1px solid rgba(148,163,184,.4); padding:8px 12px; border-radius:16px; font-size:.82rem; font-weight:500; transition:transform .15s ease, box-shadow .15s ease; }
+  .study-content-page .test-meta span:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(30,41,59,.1); }
+  .study-content-page .test-description { margin-bottom:18px; line-height:1.7; color:#64748b; font-size:.95rem; padding:16px; background:linear-gradient(135deg,#fafbfc 0%,#f1f5f9 100%); border-radius:12px; border-left:4px solid #3b82f6; }
+  .study-content-page .test-actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:auto; padding-top:16px; border-top:1px solid rgba(203,213,225,.6); }
+  .study-content-page .test-actions button { min-width:140px; padding:10px 16px; border-radius:12px; font-weight:600; font-size:.85rem; transition:all .2s ease; border:none; cursor:pointer; }
+  .study-content-page .test-actions button:hover { transform:translateY(-1px); box-shadow:0 8px 20px rgba(30,41,59,.15); }
+  .study-content-page .test-actions .btn-sm { padding:9px 16px; }
+
+  @media (max-width: 768px) {
+    .study-content-page .test-card { padding:20px; }
+    .study-content-page .test-header { flex-direction:column; align-items:flex-start; gap:12px; }
+    .study-content-page .test-actions { flex-direction:column; }
+    .study-content-page .test-actions button { min-width:100%; }
+  }
+
+  .activity-panel { background:#f8fafc; border:1px solid #e2e8f0; border-radius:20px; padding:20px; margin-bottom:24px; }
+  .activity-summary-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin-top:16px; }
+  .activity-summary-card { background:#fff; border-radius:16px; padding:16px; border:1px solid #e2e8f0; }
+  .summary-label { font-size:.85rem; color:#64748b; margin-bottom:8px; }
+  .summary-value { font-size:1.5rem; font-weight:700; color:#0f172a; }
+  .activity-table-card { background:#fff; border-radius:16px; border:1px solid #e2e8f0; padding:16px; margin-top:18px; }
+  .activity-table-wrap { overflow-x:auto; }
+  .activity-table { width:100%; border-collapse:collapse; }
+  .activity-table th,
+  .activity-table td { text-align:left; padding:12px 10px; border-bottom:1px solid #e2e8f0; font-size:.86rem; color:#334155; }
+  .activity-table th { color:#0f172a; font-weight:700; }
+  .lesson-activity-summary { background:#f1f5f9; border-radius:14px; padding:10px 14px; margin-bottom:16px; font-size:.9rem; color:#0f172a; }
+
+  .empty-state { text-align:center; padding:60px 20px; color:#6b7280; }
+  .empty-title { font-size:1.2rem; font-weight:600; margin:16px 0 8px; }
+  .empty-subtitle { font-size:.9rem; }
+
+  /* Test Editor Modal */
+  .modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.52); display:flex; align-items:center; justify-content:center; padding:20px; z-index:1200; }
+  .modal-content { width:min(800px, 100%); max-height:85vh; overflow:auto; background:#fff; border-radius:20px; box-shadow:0 24px 80px rgba(15,23,42,.28); }
+  .modal-content.large-modal { width:min(1000px, 100%); }
+  .modal-content.fullscreen-modal {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    min-height: 100%;
+    margin: 0;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  .modal-content.fullscreen-modal .modal-body {
+    height: calc(100% - 84px);
+    overflow: auto;
+  }
+  .modal-content.fullscreen-modal {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    min-height: 100%;
+    margin: 0;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  .modal-content.fullscreen-modal .modal-body {
+    height: calc(100% - 84px);
+    overflow: auto;
+  }
+  .modal-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; padding:24px 24px 0; }
+  .modal-header h3 { font-size:1.3rem; font-weight:800; color:#0f172a; margin:0; }
+  .modal-close { border:none; background:#eef2ff; color:#1e3a8a; width:36px; height:36px; border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .modal-body { padding:0 24px; }
+  .modal-footer { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; padding:0 24px 24px; }
+
+  .questions-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  .questions-list { display:flex; flex-direction:column; gap:16px; }
+  .question-item { background:#f8fafc; border-radius:12px; padding:16px; border:1px solid #e2e8f0; }
+  .question-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; flex-wrap:wrap; gap:8px; }
+  .question-number { font-weight:700; color:#1a56db; margin-right:8px; }
+  .question-text { flex:1; font-weight:500; }
+  .question-meta { display:flex; gap:12px; align-items:center; }
+  .question-type { font-size:.75rem; color:#6b7280; background:#f3f4f6; padding:2px 6px; border-radius:4px; text-transform:uppercase; font-weight:600; }
+  .question-points { font-size:.8rem; color:#64748b; background:#fff; padding:2px 6px; border-radius:6px; border:1px solid #e2e8f0; }
+  .question-answers { margin-top:12px; }
+  .answer-option { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .answer-option.correct .answer-text { font-weight:600; color:#16a34a; }
+  .answer-letter { font-weight:700; color:#374151; min-width:20px; }
+  .question-explanation { margin-top:12px; padding:12px; background:#ecfdf5; border-radius:8px; border-left:4px solid #16a34a; }
+
+  .form-group { margin-bottom:16px; }
+  .form-group label { display:block; font-weight:600; color:#374151; margin-bottom:6px; }
+  .form-row { display:flex; gap:12px; }
+  .form-row .form-group { flex:1; }
+  .answer-input-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .answer-input-row input[type="radio"] { margin:0; }
+  .answer-input-row input[type="text"] { flex:1; }
+  .btn-icon { border:none; background:#f3f4f6; color:#6b7280; width:32px; height:32px; border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+
+  /* Test Taking */
+  .test-taking { max-width:800px; margin:0 auto; }
+  .test-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding:20px; background:#fff; border-radius:16px; box-shadow:var(--shadow); }
+  .test-timer { display:flex; align-items:center; gap:6px; font-weight:700; font-size:1.1rem; }
+  .test-progress { margin-bottom:24px; }
+  .progress-bar { height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; margin-bottom:8px; }
+  .progress-fill { height:100%; background:linear-gradient(90deg,#1a56db,#3b82f6); transition:width .3s ease; }
+  .progress-text { text-align:center; font-size:.9rem; color:#64748b; }
+  .question-card { background:#fff; border-radius:16px; padding:24px; box-shadow:var(--shadow); margin-bottom:24px; }
+  .question-text { font-size:1.1rem; font-weight:600; margin-bottom:20px; line-height:1.6; }
+  .question-answers { display:flex; flex-direction:column; gap:12px; }
+  .answer-option { display:flex; align-items:center; gap:12px; padding:16px; border:2px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all .2s; }
+  .answer-option:hover { border-color:#1a56db; background:#f0f9ff; }
+  .answer-option input[type="radio"] { margin:0; width:18px; height:18px; }
+  .answer-label { display:flex; align-items:center; gap:8px; flex:1; }
+  .short-answer-input { margin-top:12px; }
+  .short-answer-input .form-input { padding:12px; font-size:1rem; }
+  .long-text-input { margin-top:12px; }
+  .long-text-input .form-input { padding:12px; font-size:1rem; line-height:1.5; }
+  .true-false-options { display:flex; gap:12px; }
+  .true-false-options .answer-option { flex:1; justify-content:center; }
+  .test-navigation { display:flex; justify-content:space-between; gap:16px; }
+  .test-navigation button { flex:1; max-width:200px; }
+
+  @media (max-width:768px) {
+    .tests-grid { grid-template-columns:1fr; }
+    .test-header { flex-direction:column; align-items:flex-start; gap:8px; }
+    .test-actions { flex-direction:column; }
+    .modal-content { width:95%; margin:20px; }
+    .form-row { flex-direction:column; }
+    .test-navigation { flex-direction:column; }
+    .test-navigation button { max-width:none; }
+  }
+
+/* PARENT PORTAL STYLES */
+.portal-container {
+  min-height: 100vh;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+}
+
+.portal-container.dark-mode {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.portal-main {
+  display: flex;
+  flex: 1;
+  position: relative;
+}
+
+.portal-sidebar {
+  width: 280px;
+  background: white;
+  border-right: 1px solid #e2e8f0;
+  position: fixed;
+  top: 60px;
+  left: 0;
+  bottom: 60px;
+  z-index: 1000;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  overflow-y: auto;
+}
+
+.portal-sidebar.open {
+  transform: translateX(0);
+}
+
+.portal-container.dark-mode .portal-sidebar {
+  background: #1e293b;
+  border-right: 1px solid #334155;
+}
+
+.sidebar-content {
+  padding: 20px;
+}
+
+.portal-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-section {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 16px 0 8px 0;
+  padding: 0 12px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nav-item:hover {
+  background: #f1f5f9;
+}
+
+.nav-item.active {
+  background: var(--nav-color);
+  color: white;
+}
+
+.portal-container.dark-mode .nav-item {
+  color: #cbd5e1;
+}
+
+.portal-container.dark-mode .nav-item:hover {
+  background: #334155;
+}
+
+.portal-content-area {
+  flex: 1;
+  margin-left: 0;
+  margin-bottom: 60px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.portal-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.portal-container.dark-mode .page-header h1 {
+  color: #f1f5f9;
+}
+
+.page-header p {
+  color: #64748b;
+  margin: 0;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.dashboard-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.portal-container.dark-mode .dashboard-card {
+  background: #1e293b;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+}
+
+.card-content h3 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.portal-container.dark-mode .card-content h3 {
+  color: #f1f5f9;
+}
+
+.card-content p {
+  color: #64748b;
+  margin: 0;
+  font-size: 14px;
+}
+
+.children-overview h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 32px 0 16px 0;
+}
+
+.portal-container.dark-mode .children-overview h2 {
+  color: #f1f5f9;
+}
+
+.children-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.child-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.child-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.portal-container.dark-mode .child-card {
+  background: #1e293b;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.child-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+}
+
+.child-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.child-info h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.portal-container.dark-mode .child-info h4 {
+  color: #f1f5f9;
+}
+
+.child-info p {
+  color: #64748b;
+  margin: 0;
+  font-size: 14px;
+}
+
+.children-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.child-detail-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.portal-container.dark-mode .child-detail-card {
+  background: #1e293b;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.child-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.child-avatar-large {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+}
+
+.child-avatar-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.child-details h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.portal-container.dark-mode .child-details h3 {
+  color: #f1f5f9;
+}
+
+.child-details p {
+  color: #64748b;
+  margin: 4px 0;
+}
+
+.child-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+}
+
+.empty-state h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #475569;
+  margin: 16px 0 8px 0;
+}
+
+.portal-container.dark-mode .empty-state h3 {
+  color: #cbd5e1;
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.notifications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notification-item {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 4px solid #3b82f6;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.notification-item.unread {
+  border-left-color: #f59e0b;
+  background: #fefce8;
+}
+
+.portal-container.dark-mode .notification-item {
+  background: #1e293b;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.notification-header h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.portal-container.dark-mode .notification-header h4 {
+  color: #f1f5f9;
+}
+
+.notification-date {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.notification-item p {
+  color: #475569;
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.notification-item small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.portal-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 0;
+  z-index: 1000;
+}
+
+.portal-container.dark-mode .portal-bottom-nav {
+  background: #1e293b;
+  border-top: 1px solid #334155;
+}
+
+.bottom-nav-item {
+  background: none;
+  border: none;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.bottom-nav-item.active {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 999;
+}
+
+.portal-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 16px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e2e8f0;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.btn-secondary {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.portal-container.dark-mode .btn-secondary {
+  background: #334155;
+  color: #cbd5e1;
+  border-color: #475569;
+}
+
+.portal-container.dark-mode .btn-secondary:hover {
+  background: #475569;
+  border-color: #64748b;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .portal-sidebar {
+    width: 100%;
+  }
+
+  .portal-content-area {
+    padding: 16px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .children-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .child-header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .child-actions {
+    justify-content: center;
+  }
+
+  .page-header h1 {
+    font-size: 24px;
+  }
+}
 `;
 
 // DASHBOARD (Admin)
@@ -2406,50 +3222,93 @@ function ActionStatusModal({ state, onClose }) {
   );
 }
 
-const buildStudentDraft = (student = null) => ({
-  full_name: student?.full_name || student?.name || "",
-  index: student?.index || student?.index_number || student?.index_no || "",
-  class: student?.class || student?.class_name || "",
-  region: student?.region || "Ashanti",
-  parent_contact:
+const buildStudentDraft = (student = null) => {
+  const studentClass = student?.class || student?.class_name || "";
+  const normalizedParentContact =
     student?.parent_contact ||
     student?.parent_phone ||
     student?.guardian_phone ||
     student?.guardian_contact ||
-    "",
-  registered_school_id:
-    student?.registered_school_id != null
-      ? String(student.registered_school_id)
-      : "",
-  // aggregate removed
-  status: student?.status || "pending",
-  photo_url: student?.photo_url || "",
-});
+    "";
+  const generatedIndex = getStudentIdFromParentContact(
+    normalizedParentContact,
+    studentClass,
+  );
 
-const normalizeStudentRecord = (student = {}, fallbackIndex = 0) => ({
-  id: student.id ?? fallbackIndex + 1,
-  full_name: student.full_name || student.name || "Unnamed Student",
-  index:
-    student.index ||
-    student.index_number ||
-    student.index_no ||
-    `AUTO${fallbackIndex + 1}`,
-  class: student.class || student.class_name || "",
-  region: student.region || "Unknown",
-  // aggregate removed
-  status: student.status || "pending",
-  email: student.email || null,
-  parent_contact:
+  return {
+    full_name: student?.full_name || student?.name || "",
+    index:
+      generatedIndex ||
+      student?.index ||
+      student?.index_number ||
+      student?.index_no ||
+      "",
+    class: student?.class || student?.class_name || "",
+    region: student?.region || "Ashanti",
+    parent_contact: normalizedParentContact,
+    registered_school_id:
+      student?.registered_school_id != null
+        ? String(student.registered_school_id)
+        : "",
+    date_of_birth: student?.date_of_birth || "",
+    // aggregate removed
+    status: student?.status || "pending",
+    photo_url: student?.photo_url || "",
+  };
+};
+
+const normalizeStudentRecord = (student = {}, fallbackIndex = 0) => {
+  const studentClass = student.class || student.class_name || "";
+  const normalizedParentContact =
     student.parent_contact ||
     student.parent_phone ||
     student.guardian_phone ||
     student.guardian_contact ||
-    "",
-  photo_url: resolveStudentPhotoUrl(student),
-  registered_school_id: student.registered_school_id ?? null,
-  created_at: student.created_at || null,
-  updated_at: student.updated_at || null,
-});
+    "";
+  const generatedIndex = getStudentIdFromParentContact(
+    normalizedParentContact,
+    studentClass,
+  );
+
+  return {
+    id: student.id ?? fallbackIndex + 1,
+    full_name: student.full_name || student.name || "Unnamed Student",
+    index:
+      generatedIndex ||
+      student.index ||
+      student.index_number ||
+      student.index_no ||
+      `AUTO${fallbackIndex + 1}`,
+    class: studentClass,
+    region: student.region || "Unknown",
+    date_of_birth: student.date_of_birth || "",
+    // aggregate removed
+    status: student.status || "pending",
+    email: student.email || null,
+    parent_contact: normalizedParentContact,
+    photo_url: resolveStudentPhotoUrl(student),
+    registered_school_id: student.registered_school_id ?? null,
+    created_at: student.created_at || null,
+    updated_at: student.updated_at || null,
+  };
+};
+
+const isBasic8Student = (studentClass) => {
+  if (!studentClass) return false;
+  return /basic\s*8/i.test(String(studentClass).trim());
+};
+
+const isBasic9Student = (studentClass) => {
+  if (!studentClass) return false;
+  return /basic\s*9/i.test(String(studentClass).trim());
+};
+
+const getStudentIdFromParentContact = (parentContact, studentClass) => {
+  if (isBasic8Student(studentClass) || isBasic9Student(studentClass)) return null;
+  const normalized = normalizeParentContactValue(parentContact);
+  if (!normalized) return null;
+  return normalized.endsWith("27") ? normalized : `${normalized}27`;
+};
 
 const normalizeParentContactValue = (value) => {
   const raw = String(value ?? "").trim();
@@ -2615,6 +3474,15 @@ function StudentEditorModal({
               value={draft.parent_contact || ""}
               onChange={(e) => onChange("parent_contact", e.target.value)}
               placeholder="e.g. 0241234567"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Date of Birth</label>
+            <input
+              className="form-control"
+              type="date"
+              value={draft.date_of_birth || ""}
+              onChange={(e) => onChange("date_of_birth", e.target.value)}
             />
           </div>
           <div className="form-group" style={{ gridColumn: "1 / -1" }}>
@@ -2838,11 +3706,12 @@ function StudentsPage({
   heroSub = "Review the current intake pipeline, search across enrolled learners quickly, and move straight into adding a new student without leaving the admissions workspace.",
   heroNote = "Live list view across configured classes and region origin.",
   directoryTitle = "Student directory",
-  directorySub = "Search by name or student ID, then review class placement at a glance.",
+  directorySub = "Students grouped by registered school and class. Search by name or student ID.",
   emptyRemoteMessage = "No student rows are currently available from Supabase.",
   onReloadStudents,
   registeredSchools = [],
   canAssignRegisteredSchool = false,
+  isSuperAdmin = false,
 }) {
   const { cfg } = useContext(SettingsContext);
   const classOptions = resolveClassOptions(cfg);
@@ -2850,10 +3719,16 @@ function StudentsPage({
   const [editingStudent, setEditingStudent] = useState(null);
   const [studentDraft, setStudentDraft] = useState(() => buildStudentDraft());
   const [savingStudent, setSavingStudent] = useState(false);
+  const [movingStudent, setMovingStudent] = useState(null);
+  const [movingSchoolId, setMovingSchoolId] = useState("");
+  const [savingMove, setSavingMove] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [bulkClass, setBulkClass] = useState("");
   const [bulkSchoolId, setBulkSchoolId] = useState("");
+  const [bulkStatus, setBulkStatus] = useState("");
   const [applyingBulk, setApplyingBulk] = useState(false);
+  const [selectedFilterSchoolId, setSelectedFilterSchoolId] = useState("");
+  const [selectedFilterClassId, setSelectedFilterClassId] = useState("");
   const [statusModal, setStatusModal] = useState({
     open: false,
     type: "success",
@@ -2931,15 +3806,67 @@ function StudentsPage({
       s.full_name.toLowerCase().includes(search.toLowerCase()) ||
       String(s.index).includes(search),
   );
+
+  const schoolNameById = new Map(
+    (registeredSchools || []).map((school) => [String(school.id), school.name]),
+  );
+
+  // Group students by school and then by class
+  const groupedStudents = useMemo(() => {
+    const groups = {};
+    
+    filtered.forEach(student => {
+      const schoolId = student.registered_school_id || 'unassigned';
+      const schoolName = schoolId === 'unassigned' ? 'Not Assigned' : schoolNameById.get(String(schoolId)) || `School #${schoolId}`;
+      const className = student.class || 'No Class';
+      
+      if (!groups[schoolId]) {
+        groups[schoolId] = {
+          name: schoolName,
+          classes: {},
+          totalStudents: 0
+        };
+      }
+      
+      if (!groups[schoolId].classes[className]) {
+        groups[schoolId].classes[className] = [];
+      }
+      
+      groups[schoolId].classes[className].push(student);
+      groups[schoolId].totalStudents++;
+    });
+    
+    return groups;
+  }, [filtered, schoolNameById]);
+
+  // Get available classes for selected school
+  const availableClasses = useMemo(() => {
+    if (!selectedFilterSchoolId) return [];
+    const schoolData = groupedStudents[selectedFilterSchoolId];
+    if (!schoolData) return [];
+    return Object.keys(schoolData.classes).sort();
+  }, [selectedFilterSchoolId, groupedStudents]);
+
+  // Get students for selected school and class
+  const displayedStudents = useMemo(() => {
+    if (!selectedFilterSchoolId) return filtered;
+    if (!selectedFilterClassId) {
+      // Show all students from selected school
+      const schoolData = groupedStudents[selectedFilterSchoolId];
+      if (!schoolData) return [];
+      return Object.values(schoolData.classes).flat();
+    }
+    // Show students from selected school and class
+    const schoolData = groupedStudents[selectedFilterSchoolId];
+    if (!schoolData) return [];
+    return schoolData.classes[selectedFilterClassId] || [];
+  }, [selectedFilterSchoolId, selectedFilterClassId, groupedStudents, filtered]);
   const parentContactOf = (student) =>
     student?.parent_contact ||
     student?.parent_phone ||
     student?.guardian_phone ||
     student?.guardian_contact ||
     "-";
-  const schoolNameById = new Map(
-    (registeredSchools || []).map((school) => [String(school.id), school.name]),
-  );
   const schoolOf = (student) => {
     const id = student?.registered_school_id;
     if (id == null || String(id).trim() === "") return "Not assigned";
@@ -2958,13 +3885,13 @@ function StudentsPage({
     (student) => student.status === "pending",
   ).length;
   const canEditStudents = typeof onEditStudent === "function";
-  const filteredStudentIds = filtered.map((student) => String(student.id));
-  const selectedInFilteredCount = filteredStudentIds.filter((id) =>
+  const displayedStudentIds = displayedStudents.map((student) => String(student.id));
+  const selectedInDisplayedCount = displayedStudentIds.filter((id) =>
     selectedStudentIds.includes(id),
   ).length;
-  const allFilteredSelected =
-    filteredStudentIds.length > 0 &&
-    selectedInFilteredCount === filteredStudentIds.length;
+  const allDisplayedSelected =
+    displayedStudentIds.length > 0 &&
+    selectedInDisplayedCount === displayedStudentIds.length;
 
   const toggleStudentSelection = (student) => {
     const id = String(student.id);
@@ -2973,18 +3900,18 @@ function StudentsPage({
     );
   };
 
-  const toggleSelectAllFiltered = () => {
-    if (!filteredStudentIds.length) return;
+  const toggleSelectAllDisplayed = () => {
+    if (!displayedStudentIds.length) return;
     setSelectedStudentIds((current) => {
       if (
-        filteredStudentIds.every((id) => current.includes(id)) &&
-        filteredStudentIds.length
+        displayedStudentIds.every((id) => current.includes(id)) &&
+        displayedStudentIds.length
       ) {
-        return current.filter((id) => !filteredStudentIds.includes(id));
+        return current.filter((id) => !displayedStudentIds.includes(id));
       }
       return [
-        ...current.filter((id) => !filteredStudentIds.includes(id)),
-        ...filteredStudentIds,
+        ...current.filter((id) => !displayedStudentIds.includes(id)),
+        ...displayedStudentIds,
       ];
     });
   };
@@ -3000,12 +3927,16 @@ function StudentsPage({
       });
       return;
     }
-    if (!bulkClass && !(canAssignRegisteredSchool && bulkSchoolId !== "")) {
+    if (
+      !bulkClass &&
+      bulkStatus === "" &&
+      !(canAssignRegisteredSchool && bulkSchoolId !== "")
+    ) {
       setStatusModal({
         open: true,
         type: "failure",
         title: "Bulk Update Failed",
-        message: "Choose a class and/or school assignment to apply.",
+        message: "Choose a class, status, or school assignment to apply.",
       });
       return;
     }
@@ -3019,6 +3950,9 @@ function StudentsPage({
         if (!student) continue;
         const nextDraft = buildStudentDraft(student);
         if (bulkClass) nextDraft.class = bulkClass;
+        if (isSuperAdmin && bulkStatus !== "") {
+          nextDraft.status = bulkStatus;
+        }
         if (canAssignRegisteredSchool && bulkSchoolId !== "") {
           nextDraft.registered_school_id =
             bulkSchoolId === "__UNASSIGN__" ? "" : bulkSchoolId;
@@ -3051,6 +3985,41 @@ function StudentsPage({
   const openStudentEditor = (student) => {
     setEditingStudent(student);
     setStudentDraft(buildStudentDraft(student));
+  };
+
+  const openMoveStudentModal = (student) => {
+    setMovingStudent(student);
+    setMovingSchoolId(String(student?.registered_school_id || ""));
+  };
+
+  const saveMoveStudent = async () => {
+    if (!movingStudent) return;
+    setSavingMove(true);
+    try {
+      const nextDraft = buildStudentDraft(movingStudent);
+      nextDraft.registered_school_id = movingSchoolId === "" ? "" : movingSchoolId;
+      await onEditStudent?.(movingStudent, nextDraft);
+      setMovingStudent(null);
+      setMovingSchoolId("");
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "Student Moved",
+        message: "Student school assignment updated successfully.",
+      });
+      if (typeof onReloadStudents === "function") {
+        await onReloadStudents();
+      }
+    } catch (error) {
+      setStatusModal({
+        open: true,
+        type: "failure",
+        title: "Move Failed",
+        message: error?.message || "Could not move student.",
+      });
+    } finally {
+      setSavingMove(false);
+    }
   };
 
   const saveStudentEdit = async () => {
@@ -3123,13 +4092,19 @@ function StudentsPage({
             </div>
           </div>
           <div className="students-summary-card">
+            <div className="students-summary-label">Schools</div>
+            <div className="students-summary-value">{Object.keys(groupedStudents).length}</div>
+            <div className="students-summary-sub">
+              Registered schools with students
+            </div>
+          </div>
+          <div className="students-summary-card">
             <div className="students-summary-label">Search Results</div>
             <div className="students-summary-value">{filtered.length}</div>
             <div className="students-summary-sub">
               Matching the current filter
             </div>
           </div>
-          {/* Aggregate summary card removed */}
           <div className="students-summary-card">
             <div className="students-summary-label">Pending Review</div>
             <div className="students-summary-value">{pendingCount}</div>
@@ -3162,6 +4137,78 @@ function StudentsPage({
             )}
           </div>
         </div>
+
+        {/* School and Class Selection Filters */}
+        <div
+          className="card card-padded"
+          style={{ marginBottom: 12, border: "1px solid #e2e8f0", background: "#f8fafc" }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 12 }}>
+            📍 Filter by School & Class
+          </div>
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Select School</label>
+              <select
+                className="form-control"
+                value={selectedFilterSchoolId}
+                onChange={(e) => {
+                  setSelectedFilterSchoolId(e.target.value);
+                  setSelectedFilterClassId(""); // Reset class when school changes
+                }}
+              >
+                <option value="">-- View All Schools --</option>
+                {Object.entries(groupedStudents).map(([schoolId, schoolData]) => (
+                  <option key={schoolId} value={schoolId}>
+                    {schoolData.name} ({schoolData.totalStudents} students)
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "4px" }}>
+                Start by selecting a school to filter students
+              </div>
+            </div>
+
+            {selectedFilterSchoolId && (
+              <div className="form-group">
+                <label className="form-label">Select Class</label>
+                <select
+                  className="form-control"
+                  value={selectedFilterClassId}
+                  onChange={(e) => setSelectedFilterClassId(e.target.value)}
+                >
+                  <option value="">-- All Classes in {groupedStudents[selectedFilterSchoolId]?.name} --</option>
+                  {availableClasses.map((className) => {
+                    const studentCount = groupedStudents[selectedFilterSchoolId]?.classes[className]?.length || 0;
+                    return (
+                      <option key={className} value={className}>
+                        {className} ({studentCount} students)
+                      </option>
+                    );
+                  })}
+                </select>
+                <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "4px" }}>
+                  {selectedFilterClassId ? `Showing students in ${selectedFilterClassId}` : "Select a class or view all classes"}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {selectedFilterSchoolId && (
+            <div style={{ 
+              padding: "12px", 
+              background: "#dbeafe", 
+              borderRadius: "8px", 
+              marginTop: "12px",
+              fontSize: "0.9rem",
+              color: "#1e40af"
+            }}>
+              🔍 Currently showing <strong>{displayedStudents.length}</strong> student{displayedStudents.length !== 1 ? "s" : ""} 
+              {selectedFilterClassId ? ` from ${selectedFilterClassId}` : " from all classes"}
+            </div>
+          )}
+        </div>
+
         {canEditStudents && (
           <div
             className="card card-padded"
@@ -3186,6 +4233,20 @@ function StudentsPage({
                   ))}
                 </select>
               </div>
+              {isSuperAdmin && (
+                <div className="form-group">
+                  <label className="form-label">Bulk Status</label>
+                  <select
+                    className="form-control"
+                    value={bulkStatus}
+                    onChange={(e) => setBulkStatus(e.target.value)}
+                  >
+                    <option value="">No status change</option>
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                  </select>
+                </div>
+              )}
               {canAssignRegisteredSchool && (
                 <div className="form-group">
                   <label className="form-label">Assign School</label>
@@ -3209,9 +4270,9 @@ function StudentsPage({
               <button
                 className="btn btn-outline"
                 type="button"
-                onClick={toggleSelectAllFiltered}
+                onClick={toggleSelectAllDisplayed}
               >
-                {allFilteredSelected ? "Clear Visible Selection" : "Select All Visible"}
+                {allDisplayedSelected ? "Clear Visible Selection" : "Select All Visible"}
               </button>
               <button
                 className="btn btn-blue"
@@ -3229,67 +4290,267 @@ function StudentsPage({
 
         {isMobile ? (
           <div className="mobile-record-list">
-            {filtered.map((s, i) => (
-              <div key={s.id} className="mobile-record-card">
-                <div className="mobile-record-head">
-                  <div className="mobile-record-identity">
-                    <div className="mobile-record-avatar">
-                      {s.photo_url ? (
-                        <img src={s.photo_url} alt={s.full_name} />
-                      ) : (
-                        initialsFor(s.full_name)
-                      )}
+            {selectedFilterSchoolId ? (
+              // Filtered view: show only selected school/class students
+              <div>
+                {displayedStudents.length > 0 ? (
+                  <div key={selectedFilterSchoolId} className="school-group">
+                    <div className="school-header">
+                      <h3 className="school-name">{groupedStudents[selectedFilterSchoolId]?.name}</h3>
+                      <span className="school-count">{displayedStudents.length} students</span>
                     </div>
-                    <div>
-                      <div className="mobile-record-title">
-                        {i + 1}. {s.full_name}
+                    {selectedFilterClassId ? (
+                      // Show single class
+                      <div className="class-group">
+                        <div className="class-header">
+                          <h4 className="class-name">Class {selectedFilterClassId}</h4>
+                          <span className="class-count">{displayedStudents.length} students</span>
+                        </div>
+                        {displayedStudents.map((s, i) => (
+                          <div key={s.id} className="mobile-record-card">
+                            <div className="mobile-record-head">
+                              <div className="mobile-record-identity">
+                                <div className="mobile-record-avatar">
+                                  {s.photo_url ? (
+                                    <img src={s.photo_url} alt={s.full_name} />
+                                  ) : (
+                                    initialsFor(s.full_name)
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="mobile-record-title">
+                                    {i + 1}. {s.full_name}
+                                  </div>
+                                  <div className="mobile-record-sub">
+                                    Student ID: {s.index}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mobile-record-grid">
+                              <div className="mobile-record-item">
+                                <label>Class</label>
+                                <span>{s.class}</span>
+                              </div>
+                              <div className="mobile-record-item">
+                                <label>School</label>
+                                <span>{schoolOf(s)}</span>
+                              </div>
+                              <div className="mobile-record-item">
+                                <label>Parent Contact</label>
+                                <span>{parentContactOf(s)}</span>
+                              </div>
+                            </div>
+                            {canEditStudents && (
+                              <div className="mobile-record-actions">
+                                <button
+                                  className="btn btn-outline"
+                                  onClick={() => toggleStudentSelection(s)}
+                                >
+                                  {selectedStudentIds.includes(String(s.id)) ? "Deselect" : "Select"}
+                                </button>
+                                <button
+                                  className="btn btn-outline btn-sm record-action-btn action-edit"
+                                  onClick={() => openStudentEditor(s)}
+                                >
+                                  Edit
+                                </button>
+                                {canAssignRegisteredSchool && (
+                                  <button
+                                    className="btn btn-sm record-action-btn"
+                                    onClick={() => openMoveStudentModal(s)}
+                                    style={{ background: "#f3f4f6", borderColor: "#d1d5db", color: "#374151" }}
+                                  >
+                                    Move School
+                                  </button>
+                                )}
+                                <button
+                                  className="btn btn-sm record-action-btn action-delete"
+                                  disabled={deletingId === s.id}
+                                  onClick={() => handleDelete(s)}
+                                >
+                                  {deletingId === s.id ? "Deleting..." : "Delete"}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                      <div className="mobile-record-sub">
-                        Student ID: {s.index}
+                    ) : (
+                      <div className="students-empty-state">
+                        No students in this class
                       </div>
+                    )}
+                  </div>
+                ) : (
+                  // Show all classes in the selected school
+                  Object.entries(groupedStudents[selectedFilterSchoolId]?.classes || {}).map(([className, classData]) => (
+                    <div key={className} className="class-group">
+                      <div className="class-header">
+                        <h4 className="class-name">Class {className}</h4>
+                        <span className="class-count">{classData.length} students</span>
+                      </div>
+                      {classData.map((s, i) => (
+                        <div key={s.id} className="mobile-record-card">
+                          <div className="mobile-record-head">
+                            <div className="mobile-record-identity">
+                              <div className="mobile-record-avatar">
+                                {s.photo_url ? (
+                                  <img src={s.photo_url} alt={s.full_name} />
+                                ) : (
+                                  initialsFor(s.full_name)
+                                )}
+                              </div>
+                              <div>
+                                <div className="mobile-record-title">
+                                  {i + 1}. {s.full_name}
+                                </div>
+                                <div className="mobile-record-sub">
+                                  Student ID: {s.index}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mobile-record-grid">
+                            <div className="mobile-record-item">
+                              <label>Class</label>
+                              <span>{s.class}</span>
+                            </div>
+                            <div className="mobile-record-item">
+                              <label>School</label>
+                              <span>{schoolOf(s)}</span>
+                            </div>
+                            <div className="mobile-record-item">
+                              <label>Parent Contact</label>
+                              <span>{parentContactOf(s)}</span>
+                            </div>
+                          </div>
+                          {canEditStudents && (
+                            <div className="mobile-record-actions">
+                              <button
+                                className="btn btn-outline"
+                                onClick={() => toggleStudentSelection(s)}
+                              >
+                                {selectedStudentIds.includes(String(s.id)) ? "Deselect" : "Select"}
+                              </button>
+                              <button
+                                className="btn btn-outline btn-sm record-action-btn action-edit"
+                                onClick={() => openStudentEditor(s)}
+                              >
+                                Edit
+                              </button>
+                              {canAssignRegisteredSchool && (
+                                <button
+                                  className="btn btn-sm record-action-btn"
+                                  onClick={() => openMoveStudentModal(s)}
+                                  style={{ background: "#f3f4f6", borderColor: "#d1d5db", color: "#374151" }}
+                                >
+                                  Move School
+                                </button>
+                              )}
+                              <button
+                                className="btn btn-sm record-action-btn action-delete"
+                                disabled={deletingId === s.id}
+                                onClick={() => handleDelete(s)}
+                              >
+                                {deletingId === s.id ? "Deleting..." : "Delete"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                  {/* Aggregate chip removed from mobile view */}
-                </div>
-                <div className="mobile-record-grid">
-                  <div className="mobile-record-item">
-                    <label>Class</label>
-                    <span>{s.class}</span>
-                  </div>
-                  <div className="mobile-record-item">
-                    <label>School</label>
-                    <span>{schoolOf(s)}</span>
-                  </div>
-                  <div className="mobile-record-item">
-                    <label>Parent Contact</label>
-                    <span>{parentContactOf(s)}</span>
-                  </div>
-                </div>
-                {canEditStudents && (
-                  <div className="mobile-record-actions">
-                    <button
-                      className="btn btn-outline"
-                      onClick={() => toggleStudentSelection(s)}
-                    >
-                      {selectedStudentIds.includes(String(s.id)) ? "Deselect" : "Select"}
-                    </button>
-                    <button
-                      className="btn btn-outline btn-sm record-action-btn action-edit"
-                      onClick={() => openStudentEditor(s)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="btn btn-sm record-action-btn action-delete"
-                      disabled={deletingId === s.id}
-                      onClick={() => handleDelete(s)}
-                    >
-                      {deletingId === s.id ? "Deleting..." : "Delete"}
-                    </button>
-                  </div>
+                  ))
                 )}
               </div>
-            ))}
+            ) : (
+              // Default view: show all schools grouped
+              Object.entries(groupedStudents).map(([schoolId, schoolData]) => (
+                <div key={schoolId} className="school-group">
+                  <div className="school-header">
+                    <h3 className="school-name">{schoolData.name}</h3>
+                    <span className="school-count">{schoolData.totalStudents} students</span>
+                  </div>
+                  {Object.entries(schoolData.classes).map(([className, classData]) => (
+                    <div key={className} className="class-group">
+                      <div className="class-header">
+                        <h4 className="class-name">Class {className}</h4>
+                        <span className="class-count">{classData.length} students</span>
+                      </div>
+                      {classData.map((s, i) => (
+                        <div key={s.id} className="mobile-record-card">
+                          <div className="mobile-record-head">
+                            <div className="mobile-record-identity">
+                              <div className="mobile-record-avatar">
+                                {s.photo_url ? (
+                                  <img src={s.photo_url} alt={s.full_name} />
+                                ) : (
+                                  initialsFor(s.full_name)
+                                )}
+                              </div>
+                              <div>
+                                <div className="mobile-record-title">
+                                  {i + 1}. {s.full_name}
+                                </div>
+                                <div className="mobile-record-sub">
+                                  Student ID: {s.index}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mobile-record-grid">
+                            <div className="mobile-record-item">
+                              <label>Class</label>
+                              <span>{s.class}</span>
+                            </div>
+                            <div className="mobile-record-item">
+                              <label>School</label>
+                              <span>{schoolOf(s)}</span>
+                            </div>
+                            <div className="mobile-record-item">
+                              <label>Parent Contact</label>
+                              <span>{parentContactOf(s)}</span>
+                            </div>
+                          </div>
+                          {canEditStudents && (
+                            <div className="mobile-record-actions">
+                              <button
+                                className="btn btn-outline"
+                                onClick={() => toggleStudentSelection(s)}
+                              >
+                                {selectedStudentIds.includes(String(s.id)) ? "Deselect" : "Select"}
+                              </button>
+                              <button
+                                className="btn btn-outline btn-sm record-action-btn action-edit"
+                                onClick={() => openStudentEditor(s)}
+                              >
+                                Edit
+                              </button>
+                              {canAssignRegisteredSchool && (
+                                <button
+                                  className="btn btn-sm record-action-btn"
+                                  onClick={() => openMoveStudentModal(s)}
+                                  style={{ background: "#f3f4f6", borderColor: "#d1d5db", color: "#374151" }}
+                                >
+                                  Move School
+                                </button>
+                              )}
+                              <button
+                                className="btn btn-sm record-action-btn action-delete"
+                                disabled={deletingId === s.id}
+                                onClick={() => handleDelete(s)}
+                              >
+                                {deletingId === s.id ? "Deleting..." : "Delete"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
             {!filtered.length && (
               <div className="students-empty-state">
                 No students match the current search. Try a different name or
@@ -3303,9 +4564,10 @@ function StudentsPage({
               <div>
                 <div className="students-table-title">Admissions ledger</div>
                 <div className="students-table-sub">
-                  {filtered.length} visible record
-                  {filtered.length === 1 ? "" : "s"} with class and school
-                  tracking.
+                  {selectedFilterSchoolId 
+                    ? `${selectedFilterClassId ? `${selectedFilterClassId} - ` : ''}${groupedStudents[selectedFilterSchoolId]?.name} (${displayedStudents.length} visible record${displayedStudents.length === 1 ? "" : "s"})`
+                    : `Students grouped by school and class (${filtered.length} visible record${filtered.length === 1 ? "" : "s"})`
+                  }
                 </div>
               </div>
               <div className="students-table-status">
@@ -3313,102 +4575,381 @@ function StudentsPage({
               </div>
             </div>
             <div className="table-wrap">
-              <table className="students-table">
-                <thead>
-                  <tr>
-                    {canEditStudents && (
-                      <th>
-                        <input
-                          type="checkbox"
-                          checked={allFilteredSelected}
-                          onChange={toggleSelectAllFiltered}
-                        />
-                      </th>
-                    )}
-                    <th>#</th>
-                    <th data-col="photo">
-                      <span className="students-th-label">Photo</span>
-                    </th>
-                    <th data-col="name">
-                      <span className="students-th-label">Name</span>
-                    </th>
-                    <th data-col="student-id">
-                      <span className="students-th-label">Student ID</span>
-                    </th>
-                    <th data-col="class">
-                      <span className="students-th-label">Class</span>
-                    </th>
-                    <th data-col="school">
-                      <span className="students-th-label">School</span>
-                    </th>
-                    <th data-col="parent-contact">
-                      <span className="students-th-label">Parent Contact</span>
-                    </th>
-                    {canEditStudents && (
-                      <th>
-                        <span className="students-th-label">Actions</span>
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((s, i) => (
-                    <tr key={s.id}>
-                      {canEditStudents && (
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={selectedStudentIds.includes(String(s.id))}
-                            onChange={() => toggleStudentSelection(s)}
-                          />
-                        </td>
-                      )}
-                      <td>{i + 1}</td>
-                      <td>
-                        {s.photo_url ? (
-                          <img
-                            src={s.photo_url}
-                            alt={s.full_name}
-                            className="students-avatar"
-                          />
-                        ) : (
-                          <div className="students-avatar-placeholder">
-                            {initialsFor(s.full_name)}
-                          </div>
-                        )}
-                      </td>
-                      <td className="students-name-cell">
-                        <strong>{s.full_name}</strong>
-                        <span>Status: {s.status || "pending"}</span>
-                      </td>
-                      <td className="students-id-cell">{s.index}</td>
-                      <td>{s.class}</td>
-                      <td>{schoolOf(s)}</td>
-                      <td>{parentContactOf(s)}</td>
-                      {/* Aggregate column removed */}
-                      {canEditStudents && (
-                        <td>
-                          <div className="record-action-group">
-                            <button
-                              className="btn btn-sm record-action-btn action-edit"
-                              onClick={() => openStudentEditor(s)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="btn btn-sm record-action-btn action-delete"
-                              disabled={deletingId === s.id}
-                              onClick={() => handleDelete(s)}
-                            >
-                              {deletingId === s.id ? "Deleting..." : "Delete"}
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {selectedFilterSchoolId ? (
+                // Filtered view: show only selected school/class
+                <div key={selectedFilterSchoolId} className="school-group">
+                  <div className="school-header">
+                    <h3 className="school-name">{groupedStudents[selectedFilterSchoolId]?.name}</h3>
+                    <span className="school-count">{displayedStudents.length} students</span>
+                  </div>
+                  
+                  {selectedFilterClassId ? (
+                    // Show single class table
+                    <div className="class-group">
+                      <div className="class-header">
+                        <h4 className="class-name">Class: {selectedFilterClassId}</h4>
+                        <span className="class-count">{displayedStudents.length} students</span>
+                      </div>
+                      
+                      <table className="students-table">
+                        <thead>
+                          <tr>
+                            {canEditStudents && (
+                              <th>
+                                <input
+                                  type="checkbox"
+                                  checked={displayedStudents.every(s => selectedStudentIds.includes(String(s.id)))}
+                                  onChange={() => {
+                                    const displayedIds = displayedStudents.map(s => String(s.id));
+                                    const allSelected = displayedIds.every(id => selectedStudentIds.includes(id));
+                                    if (allSelected) {
+                                      setSelectedStudentIds(current => current.filter(id => !displayedIds.includes(id)));
+                                    } else {
+                                      setSelectedStudentIds(current => [
+                                        ...current.filter(id => !displayedIds.includes(id)),
+                                        ...displayedIds
+                                      ]);
+                                    }
+                                  }}
+                                />
+                              </th>
+                            )}
+                            <th>#</th>
+                            <th data-col="photo">
+                              <span className="students-th-label">Photo</span>
+                            </th>
+                            <th data-col="name">
+                              <span className="students-th-label">Name</span>
+                            </th>
+                            <th data-col="student-id">
+                              <span className="students-th-label">Student ID</span>
+                            </th>
+                            <th data-col="parent-contact">
+                              <span className="students-th-label">Parent Contact</span>
+                            </th>
+                            {canEditStudents && (
+                              <th>
+                                <span className="students-th-label">Actions</span>
+                              </th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {displayedStudents.map((s, i) => (
+                            <tr key={s.id}>
+                              {canEditStudents && (
+                                <td>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedStudentIds.includes(String(s.id))}
+                                    onChange={() => toggleStudentSelection(s)}
+                                  />
+                                </td>
+                              )}
+                              <td>{i + 1}</td>
+                              <td>
+                                {s.photo_url ? (
+                                  <img
+                                    src={s.photo_url}
+                                    alt={s.full_name}
+                                    className="students-avatar"
+                                  />
+                                ) : (
+                                  <div className="students-avatar-placeholder">
+                                    {initialsFor(s.full_name)}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="students-name-cell">
+                                <strong>{s.full_name}</strong>
+                                <span>Status: {s.status || "pending"}</span>
+                              </td>
+                              <td className="students-id-cell">{s.index}</td>
+                              <td>{parentContactOf(s)}</td>
+                              {canEditStudents && (
+                                <td>
+                                  <div className="record-action-group">
+                                    <button
+                                      className="btn btn-sm record-action-btn action-edit"
+                                      onClick={() => openStudentEditor(s)}
+                                    >
+                                      Edit
+                                    </button>
+                                    {canAssignRegisteredSchool && (
+                                      <button
+                                        className="btn btn-sm record-action-btn"
+                                        onClick={() => openMoveStudentModal(s)}
+                                        style={{ background: "#f3f4f6", borderColor: "#d1d5db", color: "#374151" }}
+                                      >
+                                        Move School
+                                      </button>
+                                    )}
+                                    <button
+                                      className="btn btn-sm record-action-btn action-delete"
+                                      disabled={deletingId === s.id}
+                                      onClick={() => handleDelete(s)}
+                                    >
+                                      {deletingId === s.id ? "Deleting..." : "Delete"}
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    // Show all classes in selected school - stacked tables
+                    Object.entries(groupedStudents[selectedFilterSchoolId]?.classes || {}).map(([className, classStudents]) => (
+                      <div key={className} className="class-group">
+                        <div className="class-header">
+                          <h4 className="class-name">Class: {className}</h4>
+                          <span className="class-count">{classStudents.length} students</span>
+                        </div>
+                        
+                        <table className="students-table">
+                          <thead>
+                            <tr>
+                              {canEditStudents && (
+                                <th>
+                                  <input
+                                    type="checkbox"
+                                    checked={classStudents.every(s => selectedStudentIds.includes(String(s.id)))}
+                                    onChange={() => {
+                                      const classStudentIds = classStudents.map(s => String(s.id));
+                                      const allSelected = classStudentIds.every(id => selectedStudentIds.includes(id));
+                                      if (allSelected) {
+                                        setSelectedStudentIds(current => current.filter(id => !classStudentIds.includes(id)));
+                                      } else {
+                                        setSelectedStudentIds(current => [
+                                          ...current.filter(id => !classStudentIds.includes(id)),
+                                          ...classStudentIds
+                                        ]);
+                                      }
+                                    }}
+                                  />
+                                </th>
+                              )}
+                              <th>#</th>
+                              <th data-col="photo">
+                                <span className="students-th-label">Photo</span>
+                              </th>
+                              <th data-col="name">
+                                <span className="students-th-label">Name</span>
+                              </th>
+                              <th data-col="student-id">
+                                <span className="students-th-label">Student ID</span>
+                              </th>
+                              <th data-col="parent-contact">
+                                <span className="students-th-label">Parent Contact</span>
+                              </th>
+                              {canEditStudents && (
+                                <th>
+                                  <span className="students-th-label">Actions</span>
+                                </th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {classStudents.map((s, i) => (
+                              <tr key={s.id}>
+                                {canEditStudents && (
+                                  <td>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedStudentIds.includes(String(s.id))}
+                                      onChange={() => toggleStudentSelection(s)}
+                                    />
+                                  </td>
+                                )}
+                                <td>{i + 1}</td>
+                                <td>
+                                  {s.photo_url ? (
+                                    <img
+                                      src={s.photo_url}
+                                      alt={s.full_name}
+                                      className="students-avatar"
+                                    />
+                                  ) : (
+                                    <div className="students-avatar-placeholder">
+                                      {initialsFor(s.full_name)}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="students-name-cell">
+                                  <strong>{s.full_name}</strong>
+                                  <span>Status: {s.status || "pending"}</span>
+                                </td>
+                                <td className="students-id-cell">{s.index}</td>
+                                <td>{parentContactOf(s)}</td>
+                                {canEditStudents && (
+                                  <td>
+                                    <div className="record-action-group">
+                                      <button
+                                        className="btn btn-sm record-action-btn action-edit"
+                                        onClick={() => openStudentEditor(s)}
+                                      >
+                                        Edit
+                                      </button>
+                                      {canAssignRegisteredSchool && (
+                                        <button
+                                          className="btn btn-sm record-action-btn"
+                                          onClick={() => openMoveStudentModal(s)}
+                                          style={{ background: "#f3f4f6", borderColor: "#d1d5db", color: "#374151" }}
+                                        >
+                                          Move School
+                                        </button>
+                                      )}
+                                      <button
+                                        className="btn btn-sm record-action-btn action-delete"
+                                        disabled={deletingId === s.id}
+                                        onClick={() => handleDelete(s)}
+                                      >
+                                        {deletingId === s.id ? "Deleting..." : "Delete"}
+                                      </button>
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : (
+                // Default view: show all schools and classes
+                Object.entries(groupedStudents).map(([schoolId, schoolData]) => (
+                  <div key={schoolId} className="school-group">
+                    <div className="school-header">
+                      <h3 className="school-name">{schoolData.name}</h3>
+                      <span className="school-count">
+                        {Object.values(schoolData.classes).reduce((total, classStudents) => total + classStudents.length, 0)} students
+                      </span>
+                    </div>
+                    
+                    {Object.entries(schoolData.classes).map(([className, classStudents]) => (
+                      <div key={className} className="class-group">
+                        <div className="class-header">
+                          <h4 className="class-name">Class: {className}</h4>
+                          <span className="class-count">{classStudents.length} students</span>
+                        </div>
+                        
+                        <table className="students-table">
+                          <thead>
+                            <tr>
+                              {canEditStudents && (
+                                <th>
+                                  <input
+                                    type="checkbox"
+                                    checked={classStudents.every(s => selectedStudentIds.includes(String(s.id)))}
+                                    onChange={() => {
+                                      const classStudentIds = classStudents.map(s => String(s.id));
+                                      const allSelected = classStudentIds.every(id => selectedStudentIds.includes(id));
+                                      if (allSelected) {
+                                        setSelectedStudentIds(current => current.filter(id => !classStudentIds.includes(id)));
+                                      } else {
+                                        setSelectedStudentIds(current => [
+                                          ...current.filter(id => !classStudentIds.includes(id)),
+                                          ...classStudentIds
+                                        ]);
+                                      }
+                                    }}
+                                  />
+                                </th>
+                              )}
+                              <th>#</th>
+                              <th data-col="photo">
+                                <span className="students-th-label">Photo</span>
+                              </th>
+                              <th data-col="name">
+                                <span className="students-th-label">Name</span>
+                              </th>
+                              <th data-col="student-id">
+                                <span className="students-th-label">Student ID</span>
+                              </th>
+                              <th data-col="parent-contact">
+                                <span className="students-th-label">Parent Contact</span>
+                              </th>
+                              {canEditStudents && (
+                                <th>
+                                  <span className="students-th-label">Actions</span>
+                                </th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {classStudents.map((s, i) => (
+                              <tr key={s.id}>
+                                {canEditStudents && (
+                                  <td>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedStudentIds.includes(String(s.id))}
+                                      onChange={() => toggleStudentSelection(s)}
+                                    />
+                                  </td>
+                                )}
+                                <td>{i + 1}</td>
+                                <td>
+                                  {s.photo_url ? (
+                                    <img
+                                      src={s.photo_url}
+                                      alt={s.full_name}
+                                      className="students-avatar"
+                                    />
+                                  ) : (
+                                    <div className="students-avatar-placeholder">
+                                      {initialsFor(s.full_name)}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="students-name-cell">
+                                  <strong>{s.full_name}</strong>
+                                  <span>Status: {s.status || "pending"}</span>
+                                </td>
+                                <td className="students-id-cell">{s.index}</td>
+                                <td>{parentContactOf(s)}</td>
+                                {canEditStudents && (
+                                  <td>
+                                    <div className="record-action-group">
+                                      <button
+                                        className="btn btn-sm record-action-btn action-edit"
+                                        onClick={() => openStudentEditor(s)}
+                                      >
+                                        Edit
+                                      </button>
+                                      {canAssignRegisteredSchool && (
+                                        <button
+                                          className="btn btn-sm record-action-btn"
+                                          onClick={() => openMoveStudentModal(s)}
+                                          style={{ background: "#f3f4f6", borderColor: "#d1d5db", color: "#374151" }}
+                                        >
+                                          Move School
+                                        </button>
+                                      )}
+                                      <button
+                                        className="btn btn-sm record-action-btn action-delete"
+                                        disabled={deletingId === s.id}
+                                        onClick={() => handleDelete(s)}
+                                      >
+                                        {deletingId === s.id ? "Deleting..." : "Delete"}
+                                      </button>
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              )}
+              
               {!filtered.length && (
                 <div className="students-empty-state" style={{ margin: 16 }}>
                   No students match the current search. Try a different name or
@@ -3432,12 +4973,60 @@ function StudentsPage({
         registeredSchools={registeredSchools}
         canAssignRegisteredSchool={canAssignRegisteredSchool}
       />
+      {canAssignRegisteredSchool && movingStudent && (
+        <div className="modal-backdrop" onClick={() => !savingMove && setMovingStudent(null)}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <div className="modal-title">Move Student to School</div>
+                <div className="modal-sub">
+                  Reassign {movingStudent?.full_name} to a registered school
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => !savingMove && setMovingStudent(null)}>
+                ✕
+              </button>
+            </div>
+            <div className="form-grid">
+              <div className="form-group full">
+                <label className="form-label">Registered School</label>
+                <select
+                  className="form-control"
+                  value={movingSchoolId}
+                  onChange={(e) => setMovingSchoolId(e.target.value)}
+                  disabled={savingMove}
+                >
+                  <option value="">-- Unassign from all schools --</option>
+                  {registeredSchools.map((school) => (
+                    <option key={school.id} value={String(school.id)}>
+                      {school.name}
+                      {school.region ? ` (${school.region})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button
+                className="btn btn-outline"
+                onClick={() => setMovingStudent(null)}
+                disabled={savingMove}
+              >
+                Cancel
+              </button>
+              <button className="btn btn-blue" onClick={saveMoveStudent} disabled={savingMove}>
+                {savingMove ? "Moving..." : "Move Student"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ENROLL
-function EnrollPage({ onBack, registeredSchoolId = null, onEnrolled = null }) {
+function EnrollPage({ onBack, registeredSchoolId = null, onEnrolled = null, registeredSchools = [], isSuperAdmin = false }) {
   const { cfg } = useContext(SettingsContext);
   const classOptions = resolveClassOptions(cfg);
   const classOptionsKey = classOptions.join("||");
@@ -3450,12 +5039,50 @@ function EnrollPage({ onBack, registeredSchoolId = null, onEnrolled = null }) {
     guardian: "",
     phone: "",
     photoUrl: "",
+    registeredSchoolId: registeredSchoolId || "",
   });
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoFileName, setPhotoFileName] = useState("");
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
+  const autoGeneratedIndexRef = useRef("");
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const generateStudentId = (studentContact, studentClass) => {
+    const generatedId = getStudentIdFromParentContact(studentContact, studentClass);
+    if (!generatedId) {
+      if (
+        autoGeneratedIndexRef.current &&
+        form.index === autoGeneratedIndexRef.current
+      ) {
+        set("index", "");
+      }
+      autoGeneratedIndexRef.current = "";
+      return;
+    }
+
+    if (!form.index || form.index === autoGeneratedIndexRef.current) {
+      set("index", generatedId);
+      autoGeneratedIndexRef.current = generatedId;
+    }
+  };
+
+  useEffect(() => {
+    const contactValue = form.phone || form.guardian || "";
+    generateStudentId(contactValue, form.class);
+  }, [form.phone, form.class]);
+
+  useEffect(() => {
+    if (form.registeredSchoolId) {
+      const selectedSchool = registeredSchools.find(
+        (s) => String(s.id) === String(form.registeredSchoolId),
+      );
+      if (selectedSchool?.region && selectedSchool.region !== form.region) {
+        set("region", selectedSchool.region);
+      }
+    }
+  }, [form.registeredSchoolId, registeredSchools]);
+
   useEffect(() => {
     const nextClass = classOptions[0] || "";
     if (!classOptions.includes(form.class) && form.class !== nextClass) {
@@ -3485,8 +5112,16 @@ function EnrollPage({ onBack, registeredSchoolId = null, onEnrolled = null }) {
   };
 
   const enrollStudent = async () => {
-    if (!form.name.trim() || !form.index.trim()) {
-      alert("Name and student ID are required.");
+    if (!form.name.trim()) {
+      alert("Name is required.");
+      return;
+    }
+    if (isSuperAdmin && !form.registeredSchoolId) {
+      alert("Please select a registered school to enroll this student.");
+      return;
+    }
+    if (!form.index.trim()) {
+      alert("Student ID is required. Please select a school first to auto-generate it, or enter one manually.");
       return;
     }
     if (!form.class.trim()) {
@@ -3507,16 +5142,23 @@ function EnrollPage({ onBack, registeredSchoolId = null, onEnrolled = null }) {
     };
 
     if (supabase) {
+      const selectedSchool = registeredSchools.find(
+        (s) =>
+          String(s.id) ===
+          String(registeredSchoolId != null ? registeredSchoolId : form.registeredSchoolId),
+      );
       const payload = {
         full_name: student.full_name,
         index_number: student.index,
         index: student.index,
         class: student.class,
-        region: student.region,
+        region: selectedSchool?.region || student.region,
         // aggregate removed
         status: student.status,
         ...(registeredSchoolId != null
           ? { registered_school_id: registeredSchoolId }
+          : isSuperAdmin && form.registeredSchoolId
+          ? { registered_school_id: form.registeredSchoolId }
           : {}),
         date_of_birth: form.dob || null,
         parent_contact: form.guardian || form.phone || null,
@@ -3801,10 +5443,13 @@ function EnrollPage({ onBack, registeredSchoolId = null, onEnrolled = null }) {
                     <label className="form-label">Student ID</label>
                     <input
                       className="form-control"
-                      placeholder="e.g. CG-2026-014"
+                      placeholder="e.g. 024123456727"
                       value={form.index}
                       onChange={(e) => set("index", e.target.value)}
                     />
+                                    <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: 6 }}>
+                      ID is auto-generated from the guardian phone + 27 when available, except for Basic 8 and Basic 9 students.
+                    </div>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Date of Birth</label>
@@ -3889,11 +5534,49 @@ function EnrollPage({ onBack, registeredSchoolId = null, onEnrolled = null }) {
                       className="form-control"
                       placeholder="Guardian or student phone"
                       value={form.phone}
-                      onChange={(e) => set("phone", e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "").slice(0, 10);
+                        set("phone", value);
+                      }}
                     />
+                    <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: 6 }}>
+                      Enter a guardian phone number and the Student ID will be generated automatically.
+                    </div>
                   </div>
                 </div>
               </section>
+
+              {isSuperAdmin && (
+                <section className="enroll-section">
+                  <div className="enroll-section-head">
+                    <div>
+                      <div className="enroll-section-title">Registered School Assignment</div>
+                      <div className="enroll-section-sub">
+                        Assign the student to a registered school for management and operations.
+                      </div>
+                    </div>
+                    <span className="enroll-section-badge">Required</span>
+                  </div>
+                  <div className="enroll-fields">
+                    <div className="form-group full">
+                      <label className="form-label">Registered School</label>
+                      <select
+                        className="form-control"
+                        value={form.registeredSchoolId}
+                        onChange={(e) => set("registeredSchoolId", e.target.value)}
+                      >
+                        <option value="">-- Select a registered school --</option>
+                        {registeredSchools.map((school) => (
+                          <option key={school.id} value={school.id}>
+                            {school.name}
+                            {school.region ? ` (${school.region})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </section>
+              )}
             </div>
 
             <div className="enroll-actions">
@@ -4805,13 +6488,16 @@ function RegisteredSchoolsPage({
   admins,
   onRegisterNew,
   onCreateSchoolAdmin,
+  onUpdateSchool,
   setupError = "",
   currentUser = null,
 }) {
   const { cfg: globalCfg } = useContext(SettingsContext);
   const isMobile = useIsMobileLayout();
   const [expandedSchoolId, setExpandedSchoolId] = useState(null);
+  const [editingSchoolId, setEditingSchoolId] = useState(null);
   const [forms, setForms] = useState({});
+  const [editForm, setEditForm] = useState({});
   const [savingSchoolId, setSavingSchoolId] = useState(null);
   const [pageError, setPageError] = useState("");
   const activeCount = schools.filter((school) => school.active).length;
@@ -4879,6 +6565,47 @@ function RegisteredSchoolsPage({
       setSavingSchoolId(null);
     }
   };
+
+  const startEditSchool = (school) => {
+    setEditForm({
+      name: school.name || "",
+      location: school.location || "",
+      region: school.region || "Ashanti",
+      type: school.type || "",
+      category: school.category || "",
+      active: !!school.active,
+    });
+    setEditingSchoolId(school.id);
+    setExpandedSchoolId(null); // Close admin form if open
+  };
+
+  const cancelEditSchool = () => {
+    setEditingSchoolId(null);
+    setEditForm({});
+  };
+
+  const saveEditSchool = async (school) => {
+    if (!editForm.name.trim()) {
+      setPageError("School name is required.");
+      return;
+    }
+
+    setSavingSchoolId(school.id);
+    setPageError("");
+    try {
+      await onUpdateSchool(school.id, editForm);
+      setEditingSchoolId(null);
+      setEditForm({});
+    } catch (err) {
+      setPageError(
+        String(err?.message || "Unable to update the school right now."),
+      );
+    } finally {
+      setSavingSchoolId(null);
+    }
+  };
+
+  const isSuperAdmin = currentUser?.role === "super_admin";
 
   return (
     <div className="fade-in">
@@ -4990,6 +6717,17 @@ function RegisteredSchoolsPage({
                         {school.active ? "Active" : "Inactive"}
                       </span>
                     </div>
+                    {isSuperAdmin && (
+                      <div className="registered-school-actions">
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => startEditSchool(school)}
+                          disabled={editingSchoolId === school.id}
+                        >
+                          <Ico name="edit" size={14} /> Edit
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="registered-school-body">
                     <div className="registered-school-grid">
@@ -6826,6 +8564,821 @@ function ResultsPage({ studentsData, tableInfo }) {
   );
 }
 
+// â”€â”€â”€ LIVE TESTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function LiveTestsPage({ currentUser }) {
+  const [tests, setTests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingTest, setEditingTest] = useState(null);
+  const [testForm, setTestForm] = useState({
+    title: '',
+    description: '',
+    subject: '',
+    class: '',
+    test_type: 'mixed',
+    duration_minutes: 30
+  });
+
+  useEffect(() => {
+    loadTests();
+  }, []);
+
+  const loadTests = async () => {
+    if (!supabase) {
+      setTests([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('live_tests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTests(data || []);
+    } catch (error) {
+      console.error('Error loading tests:', error);
+      setTests([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateTest = async () => {
+    if (!supabase || !testForm.title.trim()) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('live_tests')
+        .insert([{
+          ...testForm,
+          created_by: currentUser?.id
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setTests([data, ...tests]);
+      setShowCreateModal(false);
+      setTestForm({
+        title: '',
+        description: '',
+        subject: '',
+        class: '',
+        test_type: 'mixed',
+        duration_minutes: 30
+      });
+    } catch (error) {
+      console.error('Error creating test:', error);
+      const errorMessage = error?.message || error?.error_description || 'Unknown error';
+      alert(`Failed to create test:\n${errorMessage}`);
+    }
+  };
+
+  const handleToggleTest = async (testId, isActive) => {
+    if (!supabase) return;
+
+    try {
+      const updateData = {
+        is_active: isActive,
+        start_time: isActive ? new Date().toISOString() : null,
+        end_time: isActive ? null : new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('live_tests')
+        .update(updateData)
+        .eq('id', testId);
+
+      if (error) throw error;
+
+      setTests(tests.map(test =>
+        test.id === testId
+          ? { ...test, ...updateData }
+          : test
+      ));
+    } catch (error) {
+      console.error('Error toggling test:', error);
+      alert('Failed to update test status. Please try again.');
+    }
+  };
+
+  const handleDeleteTest = async (testId) => {
+    if (!supabase || !confirm('Are you sure you want to delete this test? This action cannot be undone.')) return;
+
+    try {
+      const { error } = await supabase
+        .from('live_tests')
+        .delete()
+        .eq('id', testId);
+
+      if (error) throw error;
+
+      setTests(tests.filter(test => test.id !== testId));
+    } catch (error) {
+      console.error('Error deleting test:', error);
+      alert('Failed to delete test. Please try again.');
+    }
+  };
+
+  const formatDuration = (minutes) => {
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  };
+
+  const getTestStatus = (test) => {
+    if (test.is_active) return { text: 'Active', color: '#16a34a' };
+    if (test.end_time) return { text: 'Completed', color: '#6b7280' };
+    return { text: 'Draft', color: '#f59e0b' };
+  };
+
+  if (loading) {
+    return (
+      <div className="fade-in">
+        <div className="page-header">
+          <div className="page-title">Live Tests</div>
+        </div>
+        <div className="loading-spinner">Loading tests...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Live Tests</div>
+        <button
+          className="btn-primary"
+          onClick={() => setShowCreateModal(true)}
+          style={{ backgroundColor: '#7c3aed' }}
+        >
+          <Ico name="plus" size={18} color="#fff" />
+          Create Test
+        </button>
+      </div>
+
+      {!supabase && (
+        <div className="alert alert-warning">
+          Supabase is not configured. Live tests require database connectivity.
+        </div>
+      )}
+
+      <div className="tests-grid">
+        {tests.length === 0 ? (
+          <div className="empty-state">
+            <Ico name="quiz" size={48} color="#9ca3af" />
+            <div className="empty-title">No tests created yet</div>
+            <div className="empty-subtitle">Create your first live test to get started</div>
+          </div>
+        ) : (
+          tests.map(test => {
+            const status = getTestStatus(test);
+            return (
+              <div key={test.id} className="test-card">
+                <div className="test-header">
+                  <div className="test-title">{test.title}</div>
+                  <div className="test-status" style={{ color: status.color }}>
+                    {status.text}
+                  </div>
+                </div>
+
+                <div className="test-meta">
+                  {test.subject && <span className="test-subject">{test.subject}</span>}
+                  {test.class && <span className="test-class">{test.class}</span>}
+                  <span className="test-type">{test.test_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                  <span className="test-duration">{formatDuration(test.duration_minutes)}</span>
+                  <span className="test-questions">{test.total_questions} questions</span>
+                </div>
+
+                {test.description && (
+                  <div className="test-description">{test.description}</div>
+                )}
+
+                <div className="test-actions">
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setEditingTest(test)}
+                  >
+                    <Ico name="edit" size={16} color="#374151" />
+                    Edit Questions
+                  </button>
+
+                  <button
+                    className={`btn-${test.is_active ? 'danger' : 'success'}`}
+                    onClick={() => handleToggleTest(test.id, !test.is_active)}
+                  >
+                    <Ico name={test.is_active ? 'stop' : 'play'} size={16} color="#fff" />
+                    {test.is_active ? 'Stop Test' : 'Start Test'}
+                  </button>
+
+                  <button
+                    className="btn-danger"
+                    onClick={() => handleDeleteTest(test.id)}
+                  >
+                    <Ico name="trash" size={16} color="#fff" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Create Test Modal */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Create New Test</h3>
+              <button
+                className="modal-close"
+                onClick={() => setShowCreateModal(false)}
+              >
+                <Ico name="close" size={20} color="#6b7280" />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Test Title *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={testForm.title}
+                  onChange={e => setTestForm({...testForm, title: e.target.value})}
+                  placeholder="Enter test title"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  className="form-input"
+                  value={testForm.description}
+                  onChange={e => setTestForm({...testForm, description: e.target.value})}
+                  placeholder="Enter test description (optional)"
+                  rows={3}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Test Type</label>
+                <select
+                  className="form-input"
+                  value={testForm.test_type}
+                  onChange={e => setTestForm({...testForm, test_type: e.target.value})}
+                >
+                  <option value="mixed">Mixed Question Types</option>
+                  <option value="multiple_choice">Multiple Choice Only</option>
+                  <option value="true_false">True/False Only</option>
+                  <option value="short_answer">Short Answer Only</option>
+                  <option value="fill_in">Fill in the Blank Only</option>
+                  <option value="long_text">Long Text/Essay Only</option>
+                </select>
+                <small style={{ color: '#6b7280', fontSize: '0.8rem' }}>
+                  Select the primary question type(s) for this test
+                </small>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Subject</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={testForm.subject}
+                    onChange={e => setTestForm({...testForm, subject: e.target.value})}
+                    placeholder="e.g., Mathematics"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Class</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={testForm.class}
+                    onChange={e => setTestForm({...testForm, class: e.target.value})}
+                    placeholder="e.g., JHS 3"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Duration (minutes)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={testForm.duration_minutes}
+                  onChange={e => setTestForm({...testForm, duration_minutes: parseInt(e.target.value) || 30})}
+                  min={5}
+                  max={300}
+                />
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                onClick={() => setShowCreateModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleCreateTest}
+                disabled={!testForm.title.trim()}
+                style={{ backgroundColor: '#7c3aed' }}
+              >
+                Create Test
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Test Modal */}
+      {editingTest && (
+        <TestEditorModal
+          test={editingTest}
+          onClose={() => setEditingTest(null)}
+          onUpdate={loadTests}
+        />
+      )}
+    </div>
+  );
+}
+
+// Test Editor Modal Component
+function TestEditorModal({ test, onClose, onUpdate }) {
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddQuestion, setShowAddQuestion] = useState(false);
+
+  // Determine default question type based on test type
+  const getDefaultQuestionType = () => {
+    if (test.test_type === 'mixed') return 'multiple_choice';
+    return test.test_type;
+  };
+
+  const [questionForm, setQuestionForm] = useState({
+    question_text: '',
+    question_type: getDefaultQuestionType(),
+    points: 1,
+    correct_answer: '',
+    explanation: '',
+    answers: [{ answer_text: '', is_correct: false }, { answer_text: '', is_correct: false }]
+  });
+
+  useEffect(() => {
+    loadQuestions();
+  }, [test.id]);
+
+  const loadQuestions = async () => {
+    if (!supabase) {
+      setQuestions([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('test_questions')
+        .select(`
+          *,
+          test_answers (*)
+        `)
+        .eq('test_id', test.id)
+        .order('order_index');
+
+      if (error) throw error;
+      setQuestions(data || []);
+    } catch (error) {
+      console.error('Error loading questions:', error);
+      setQuestions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddQuestion = async () => {
+    if (!supabase || !questionForm.question_text.trim()) return;
+
+    try {
+      // Insert question
+      const { data: questionData, error: questionError } = await supabase
+        .from('test_questions')
+        .insert([{
+          test_id: test.id,
+          question_text: questionForm.question_text,
+          question_type: questionForm.question_type,
+          points: questionForm.points,
+          correct_answer: questionForm.correct_answer,
+          explanation: questionForm.explanation,
+          order_index: questions.length
+        }])
+        .select()
+        .single();
+
+      if (questionError) throw questionError;
+
+      // Insert answers for multiple choice
+      if (questionForm.question_type === 'multiple_choice') {
+        const answersToInsert = questionForm.answers
+          .filter(answer => answer.answer_text.trim())
+          .map((answer, index) => ({
+            question_id: questionData.id,
+            answer_text: answer.answer_text,
+            is_correct: answer.is_correct,
+            order_index: index
+          }));
+
+        if (answersToInsert.length > 0) {
+          const { error: answersError } = await supabase
+            .from('test_answers')
+            .insert(answersToInsert);
+
+          if (answersError) throw answersError;
+        }
+      }
+
+      // Update total questions count
+      await supabase
+        .from('live_tests')
+        .update({ total_questions: questions.length + 1 })
+        .eq('id', test.id);
+
+      setShowAddQuestion(false);
+      setQuestionForm({
+        question_text: '',
+        question_type: getDefaultQuestionType(),
+        points: 1,
+        correct_answer: '',
+        explanation: '',
+        answers: [{ answer_text: '', is_correct: false }, { answer_text: '', is_correct: false }]
+      });
+      loadQuestions();
+      onUpdate();
+    } catch (error) {
+      console.error('Error adding question:', error);
+      alert('Failed to add question. Please try again.');
+    }
+  };
+
+  const addAnswerOption = () => {
+    setQuestionForm({
+      ...questionForm,
+      answers: [...questionForm.answers, { answer_text: '', is_correct: false }]
+    });
+  };
+
+  const updateAnswer = (index, field, value) => {
+    const newAnswers = [...questionForm.answers];
+    newAnswers[index] = { ...newAnswers[index], [field]: value };
+    setQuestionForm({ ...questionForm, answers: newAnswers });
+  };
+
+  const removeAnswer = (index) => {
+    if (questionForm.answers.length > 2) {
+      setQuestionForm({
+        ...questionForm,
+        answers: questionForm.answers.filter((_, i) => i !== index)
+      });
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content large-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3>Edit Test: {test.title}</h3>
+            <div style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '4px' }}>
+              Test Type: {test.test_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+            </div>
+          </div>
+          <button className="modal-close" onClick={onClose}>
+            <Ico name="close" size={20} color="#6b7280" />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div className="questions-header">
+            <h4>Questions ({questions.length})</h4>
+            <button
+              className="btn-primary"
+              onClick={() => setShowAddQuestion(true)}
+              style={{ backgroundColor: '#10b981' }}
+            >
+              <Ico name="plus" size={16} color="#fff" />
+              Add Question
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="loading-spinner">Loading questions...</div>
+          ) : questions.length === 0 ? (
+            <div className="empty-state">
+              <Ico name="quiz" size={32} color="#9ca3af" />
+              <div className="empty-title">No questions added yet</div>
+              <div className="empty-subtitle">Add questions to make this test functional</div>
+            </div>
+          ) : (
+            <div className="questions-list">
+              {questions.map((question, index) => (
+                <div key={question.id} className="question-item">
+                  <div className="question-header">
+                    <span className="question-number">{index + 1}.</span>
+                    <span className="question-text">{question.question_text}</span>
+                    <div className="question-meta">
+                      <span className="question-type">{question.question_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                      <span className="question-points">{question.points} pts</span>
+                    </div>
+                  </div>
+
+                  {question.question_type === 'multiple_choice' && question.test_answers && (
+                    <div className="question-answers">
+                      {question.test_answers.map((answer, ansIndex) => (
+                        <div key={answer.id} className={`answer-option ${answer.is_correct ? 'correct' : ''}`}>
+                          <span className="answer-letter">{String.fromCharCode(65 + ansIndex)}</span>
+                          <span className="answer-text">{answer.answer_text}</span>
+                          {answer.is_correct && <Ico name="check" size={14} color="#16a34a" />}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {question.question_type === 'true_false' && (
+                    <div className="question-answers">
+                      <div className={`answer-option ${question.correct_answer === 'true' ? 'correct' : ''}`}>
+                        <span className="answer-text">True</span>
+                        {question.correct_answer === 'true' && <Ico name="check" size={14} color="#16a34a" />}
+                      </div>
+                      <div className={`answer-option ${question.correct_answer === 'false' ? 'correct' : ''}`}>
+                        <span className="answer-text">False</span>
+                        {question.correct_answer === 'false' && <Ico name="check" size={14} color="#16a34a" />}
+                      </div>
+                    </div>
+                  )}
+
+                  {(question.question_type === 'short_answer' || question.question_type === 'fill_in') && question.correct_answer && (
+                    <div className="question-answers">
+                      <div className="answer-option correct">
+                        <span className="answer-text">
+                          {question.question_type === 'fill_in' ? 'Acceptable answers: ' : 'Correct answer: '}
+                          {question.correct_answer}
+                        </span>
+                        <Ico name="check" size={14} color="#16a34a" />
+                      </div>
+                    </div>
+                  )}
+
+                  {question.question_type === 'long_text' && question.correct_answer && (
+                    <div className="question-answers">
+                      <div className="answer-option">
+                        <span className="answer-text">
+                          <strong>Grading criteria:</strong> {question.correct_answer}
+                        </span>
+                        <Ico name="edit" size={14} color="#f59e0b" />
+                      </div>
+                    </div>
+                  )}
+
+                  {question.explanation && (
+                    <div className="question-explanation">
+                      <strong>Explanation:</strong> {question.explanation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn-secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+
+      {/* Add Question Modal */}
+      {showAddQuestion && (
+        <div className="modal-overlay" onClick={() => setShowAddQuestion(false)}>
+          <div className="modal-content large-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Add Question</h3>
+              <button
+                className="modal-close"
+                onClick={() => setShowAddQuestion(false)}
+              >
+                <Ico name="close" size={20} color="#6b7280" />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Question Text *</label>
+                <textarea
+                  className="form-input"
+                  value={questionForm.question_text}
+                  onChange={e => setQuestionForm({...questionForm, question_text: e.target.value})}
+                  placeholder="Enter your question"
+                  rows={3}
+                />
+              </div>
+
+              <div className="form-row">
+                {test.test_type === 'mixed' && (
+                  <div className="form-group">
+                    <label>Question Type</label>
+                    <select
+                      className="form-input"
+                      value={questionForm.question_type}
+                      onChange={e => setQuestionForm({...questionForm, question_type: e.target.value})}
+                    >
+                      <option value="multiple_choice">Multiple Choice</option>
+                      <option value="true_false">True/False</option>
+                      <option value="short_answer">Short Answer</option>
+                      <option value="fill_in">Fill in the Blank</option>
+                      <option value="long_text">Long Text/Essay</option>
+                    </select>
+                  </div>
+                )}
+
+                {test.test_type !== 'mixed' && (
+                  <div className="form-group">
+                    <label>Question Type</label>
+                    <div className="form-input" style={{ backgroundColor: '#f8fafc', color: '#6b7280' }}>
+                      {questionForm.question_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      <small style={{ display: 'block', marginTop: '4px', fontSize: '0.8rem' }}>
+                        (Fixed for {test.test_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} tests)
+                      </small>
+                    </div>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label>Points</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={questionForm.points}
+                    onChange={e => setQuestionForm({...questionForm, points: parseInt(e.target.value) || 1})}
+                    min={1}
+                    max={10}
+                  />
+                </div>
+              </div>
+
+              {questionForm.question_type === 'multiple_choice' && (
+                <div className="form-group">
+                  <label>Answer Options</label>
+                  {questionForm.answers.map((answer, index) => (
+                    <div key={index} className="answer-input-row">
+                      <input
+                        type="radio"
+                        name="correct-answer"
+                        checked={answer.is_correct}
+                        onChange={() => {
+                          const newAnswers = questionForm.answers.map((ans, i) => ({
+                            ...ans,
+                            is_correct: i === index
+                          }));
+                          setQuestionForm({...questionForm, answers: newAnswers});
+                        }}
+                      />
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={answer.answer_text}
+                        onChange={e => updateAnswer(index, 'answer_text', e.target.value)}
+                        placeholder={`Option ${String.fromCharCode(65 + index)}`}
+                      />
+                      {questionForm.answers.length > 2 && (
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          onClick={() => removeAnswer(index)}
+                        >
+                          <Ico name="trash" size={16} color="#ef4444" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={addAnswerOption}
+                    style={{ marginTop: '8px' }}
+                  >
+                    <Ico name="plus" size={14} color="#374151" />
+                    Add Option
+                  </button>
+                </div>
+              )}
+
+              {questionForm.question_type === 'true_false' && (
+                <div className="form-group">
+                  <label>Correct Answer</label>
+                  <select
+                    className="form-input"
+                    value={questionForm.correct_answer}
+                    onChange={e => setQuestionForm({...questionForm, correct_answer: e.target.value})}
+                  >
+                    <option value="">Select answer</option>
+                    <option value="true">True</option>
+                    <option value="false">False</option>
+                  </select>
+                </div>
+              )}
+
+              {questionForm.question_type === 'short_answer' && (
+                <div className="form-group">
+                  <label>Correct Answer</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={questionForm.correct_answer}
+                    onChange={e => setQuestionForm({...questionForm, correct_answer: e.target.value})}
+                    placeholder="Enter the correct answer"
+                  />
+                </div>
+              )}
+
+              {questionForm.question_type === 'fill_in' && (
+                <div className="form-group">
+                  <label>Correct Answer(s)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={questionForm.correct_answer}
+                    onChange={e => setQuestionForm({...questionForm, correct_answer: e.target.value})}
+                    placeholder="Enter correct answer(s), separate multiple with | (e.g., answer1|answer2)"
+                  />
+                  <small style={{ color: '#6b7280', fontSize: '0.8rem' }}>
+                    For fill-in-the-blank, you can specify multiple acceptable answers separated by |
+                  </small>
+                </div>
+              )}
+
+              {questionForm.question_type === 'long_text' && (
+                <div className="form-group">
+                  <label>Grading Rubric/Keywords</label>
+                  <textarea
+                    className="form-input"
+                    value={questionForm.correct_answer}
+                    onChange={e => setQuestionForm({...questionForm, correct_answer: e.target.value})}
+                    placeholder="Enter key points, keywords, or grading criteria for evaluation"
+                    rows={4}
+                  />
+                  <small style={{ color: '#6b7280', fontSize: '0.8rem' }}>
+                    For essay questions, enter keywords, key points, or grading criteria that should be present in the answer
+                  </small>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label>Explanation (Optional)</label>
+                <textarea
+                  className="form-input"
+                  value={questionForm.explanation}
+                  onChange={e => setQuestionForm({...questionForm, explanation: e.target.value})}
+                  placeholder="Explain the correct answer"
+                  rows={2}
+                />
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                onClick={() => setShowAddQuestion(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleAddQuestion}
+                disabled={!questionForm.question_text.trim()}
+                style={{ backgroundColor: '#10b981' }}
+              >
+                Add Question
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // â”€â”€â”€ FINANCE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function FinancePage({ financeSummary, tableInfo }) {
   const hasFinanceError = hasRealTableError(tableInfo);
@@ -7315,12 +9868,23 @@ function EventsPage({ eventsData, tableInfo, registeredSchoolId = null }) {
           message: "The event was saved to Supabase.",
         });
       } else {
+        const tableMissing = isMissingTableError(error, "events");
+        const columnMissing = isMissingColumnError(error);
+        const message = tableMissing
+          ? "Events table is not configured in Supabase. Run backend/supabase/migrations/001_public_portal_tables.sql, then refresh."
+          : columnMissing && registeredSchoolId != null
+          ? "School-scoped events require backend/supabase/migrations/004_add_registered_school_scope.sql. Run the migration, then refresh."
+          : String(error?.message || "").toLowerCase().includes("row-level security") ||
+            String(error?.message || "").toLowerCase().includes("violates row-level security")
+          ? "The write was blocked by Supabase auth/RLS. Check your policies and make sure the current user has insert permissions on the events table."
+          : `Event was saved locally only. Supabase write failed.${error?.message ? ` ${error.message}` : ""}`;
+
         setEvents((e) => [...e, { id: Date.now(), ...form }]);
         setStatusModal({
           open: true,
           type: "failure",
           title: "Supabase Save Failed",
-          message: "Event was saved locally only. Supabase write failed.",
+          message,
         });
       }
     } else {
@@ -7485,19 +10049,33 @@ function SettingsPage() {
     title: "",
     message: "",
   });
+  const scrollRef = useRef(null);
 
   // Sync local form state when global settings change (e.g. on first load from Supabase)
   useEffect(() => {
     setCfg(globalCfg);
   }, [globalCfg]);
 
-  const set = (k, v) => setCfg((c) => ({ ...c, [k]: v }));
+  const set = (k, v) => {
+    if (scrollRef.current) {
+      scrollRef.current._savedScrollTop = scrollRef.current.scrollTop;
+    }
+    setCfg((c) => ({ ...c, [k]: v }));
+  };
   const classOptions = resolveClassOptions(cfg);
   useEffect(() => {
     setSelectedClassOption((current) =>
       classOptions.includes(current) ? current : classOptions[0] || "",
     );
   }, [classOptions.join("||")]);
+
+  // Restore scroll position after state changes
+  useEffect(() => {
+    if (scrollRef.current && scrollRef.current._savedScrollTop !== undefined) {
+      scrollRef.current.scrollTop = scrollRef.current._savedScrollTop;
+      delete scrollRef.current._savedScrollTop;
+    }
+  });
   const persistClassOptions = async (nextClassOptions) => {
     const nextCfg = { ...cfg, classOptions: nextClassOptions };
     setCfg(nextCfg);
@@ -7772,7 +10350,7 @@ function SettingsPage() {
     normalizeRoleKey(session?.user?.role || "") === "super_admin";
 
   return (
-    <div className="fade-in">
+    <div className="fade-in" ref={scrollRef}>
       <div className="page-header">
         <div className="page-title">Settings</div>
         <div className="page-sub">
@@ -8018,7 +10596,7 @@ function SettingsPage() {
       <div className="card card-padded" style={{ marginBottom: 16 }}>
         <SectionTitle
           title="Portal Feature Access"
-          sub="Super admins can enable or hide fee modules per portal."
+          sub="Super admins can enable or hide portal pages and modules for students and admins."
         />
         {isSuperAdmin ? (
           <>
@@ -8033,17 +10611,127 @@ function SettingsPage() {
               sub="Show fees, pay fees, and payment plan pages for students."
             />
             <Toggle
-              k="studentSelectionPortalEnabled"
-              label="Enable School Selection in Student Portal"
-              sub="Show select schools, my selection, and predictor pages for students."
-            />
-          </>
-        ) : (
-          <div className="alert alert-info">
-            Only super admins can change fee visibility across portals.
-          </div>
-        )}
-      </div>
+                k="studentDashboardEnabled"
+                label="Enable Student Dashboard"
+                sub="Show the main student portal dashboard page."
+              />
+              <Toggle
+                k="studentProfileEnabled"
+                label="Enable Student Profile"
+                sub="Show the student profile page."
+              />
+              <Toggle
+                k="studentResultsEnabled"
+                label="Enable Results"
+                sub="Show academic results for students."
+              />
+              <Toggle
+                k="studentAnalyticsEnabled"
+                label="Enable Analytics"
+                sub="Show analytics and performance trends for students."
+              />
+              <Toggle
+                k="studentReportCardEnabled"
+                label="Enable Report Card"
+                sub="Show the student report card page."
+              />
+              <Toggle
+                k="studentStudyPlannerEnabled"
+                label="Enable Study Planner"
+                sub="Show the study planner page."
+              />
+              <Toggle
+                k="studentExamScheduleEnabled"
+                label="Enable Exam Schedule"
+                sub="Show exam schedule information to students."
+              />
+              <Toggle
+                k="studentLiveTestsEnabled"
+                label="Enable Live Tests"
+                sub="Show live test opportunities in the student portal."
+              />
+              <Toggle
+                k="studentGoalsEnabled"
+                label="Enable Goals"
+                sub="Show the student goals page."
+              />
+              <Toggle
+                k="studentSelectSchoolsEnabled"
+                label="Enable Select Schools"
+                sub="Show the student school selection page."
+              />
+              <Toggle
+                k="studentMySelectionEnabled"
+                label="Enable My Selection"
+                sub="Show the student selected schools review page."
+              />
+              <Toggle
+                k="studentSelectionPortalEnabled"
+                label="Enable Selection Portal Features"
+                sub="Show predictor and scholarships pages for students."
+              />
+              <Toggle
+                k="studentAttendanceEnabled"
+                label="Enable Attendance"
+                sub="Show the attendance summary page for students."
+              />
+              <Toggle
+                k="studentAttendanceCorrectionsEnabled"
+                label="Enable Attendance Corrections"
+                sub="Show the attendance correction request page."
+              />
+              <Toggle
+                k="studentAnnouncementsEnabled"
+                label="Enable Announcements"
+                sub="Show the main announcements page for students."
+              />
+              <Toggle
+                k="studentAnnouncementsProEnabled"
+                label="Enable Personalized Updates"
+                sub="Show personalized announcements and updates."
+              />
+              <Toggle
+                k="studentSupportTicketsEnabled"
+                label="Enable Support Tickets"
+                sub="Show the student support ticketing page."
+              />
+              <Toggle
+                k="studentChatEnabled"
+                label="Enable Chat"
+                sub="Show the chat page for student support."
+              />
+              <Toggle
+                k="studentDocsEnabled"
+                label="Enable Documents"
+                sub="Show the student documents overview page."
+              />
+              <Toggle
+                k="studentUploadDocsEnabled"
+                label="Enable Upload Documents"
+                sub="Show the document upload page for students."
+              />
+              <Toggle
+                k="studentResourcesEnabled"
+                label="Enable Learning Resources"
+                sub="Show the learning resources page for students."
+              />
+              <Toggle
+                k="studentAssignmentsEnabled"
+                label="Enable Assignments"
+                sub="Show the assignments page for students."
+              />
+              <Toggle
+                k="studentCalendarSyncEnabled"
+                label="Enable Calendar Sync"
+                sub="Show the calendar sync page for students."
+              />
+            </>
+          ) : (
+            <div className="alert alert-info">
+              Only super admins can change portal visibility settings.
+            </div>
+          )}
+        </div>
 
       {/* Security & Access */}
       <div className="card card-padded" style={{ marginBottom: 16 }}>
@@ -11130,6 +13818,8 @@ function StudentDashboard({
       sum + Math.max((Number(f.amount) || 0) - (Number(f.paid) || 0), 0),
     0,
   );
+  const feesEnabled = cfg.studentFeesPortalEnabled !== false;
+  const selectionEnabled = cfg.studentSelectSchoolsEnabled !== false;
   const selectionCount = Number(selectionInfo?.count || 0);
   const selectionStatus = String(
     selectionInfo?.status || "not-submitted",
@@ -11166,7 +13856,7 @@ function StudentDashboard({
             {student.region} Region &nbsp;·&nbsp;{" "}
             <strong>{cfg.currentTerm}</strong> &nbsp;·&nbsp; {cfg.academicYear}
           </div>
-          {cfg.selectionDeadline && (
+          {selectionEnabled && cfg.selectionDeadline && (
             <div
               style={{
                 marginTop: 4,
@@ -11233,26 +13923,34 @@ function StudentDashboard({
             text: "#007a46",
             icon: "attendance",
           },
-          {
-            label: "Fees Status",
-            value: outstanding > 0 ? "Outstanding" : "Cleared",
-            sub: `${money.format(outstanding)} outstanding`,
-            ic: outstanding > 0 ? "#ff7a00" : "#00b86b",
-            bgStart: outstanding > 0 ? "#fff4e8" : "#ecfff5",
-            bgEnd: outstanding > 0 ? "#ffc47a" : "#92f0c2",
-            text: outstanding > 0 ? "#a54800" : "#007a46",
-            icon: "fees",
-          },
-          {
-            label: "Selection",
-            value: selectionLabel,
-            sub: `${selectionCount} choice(s) made`,
-            ic: "#c026ff",
-            bgStart: "#fdf0ff",
-            bgEnd: "#efadff",
-            text: "#8610b3",
-            icon: "selection",
-          },
+          ...(feesEnabled
+        ? [
+            {
+              label: "Fees Status",
+              value: outstanding > 0 ? "Outstanding" : "Cleared",
+              sub: `${money.format(outstanding)} outstanding`,
+              ic: outstanding > 0 ? "#ff7a00" : "#00b86b",
+              bgStart: outstanding > 0 ? "#fff4e8" : "#ecfff5",
+              bgEnd: outstanding > 0 ? "#ffc47a" : "#92f0c2",
+              text: outstanding > 0 ? "#a54800" : "#007a46",
+              icon: "fees",
+            },
+          ]
+        : []),
+          ...(selectionEnabled
+        ? [
+            {
+              label: "Selection",
+              value: selectionLabel,
+              sub: `${selectionCount} choice(s) made`,
+              ic: "#c026ff",
+              bgStart: "#fdf0ff",
+              bgEnd: "#efadff",
+              text: "#8610b3",
+              icon: "selection",
+            },
+          ]
+        : []),
         ].map((s) => (
           <div
             key={s.label}
@@ -11278,7 +13976,7 @@ function StudentDashboard({
           </div>
         ))}
       </div>
-      <div className="card card-padded">
+      <div className="card card-padded" style={{ marginTop: 12 }}>
         <h3 style={{ fontWeight: 700, marginBottom: 12 }}>Announcements</h3>
         {ANNOUNCEMENTS.map((a) => (
           <div
@@ -11286,7 +13984,7 @@ function StudentDashboard({
             className={`alert ${a.type === "urgent" ? "alert-danger" : a.type === "info" ? "alert-info" : "alert-warning"}`}
             style={{ marginBottom: 8 }}
           >
-            <strong>{a.title}</strong> â€” {a.body}{" "}
+            <strong>{a.title}</strong> — {a.body}{" "}
             <span style={{ opacity: 0.7, fontSize: ".78rem" }}>({a.date})</span>
           </div>
         ))}
@@ -11652,12 +14350,26 @@ function StudentAttendance({ attendanceData }) {
 // â”€â”€â”€ STUDENT FEES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function StudentFees({ feesData }) {
   const { cfg } = useContext(SettingsContext);
+  const feesEnabled = cfg.studentFeesPortalEnabled !== false;
   const rows = Array.isArray(feesData) ? feesData : [];
   const money = new Intl.NumberFormat(cfg.locale || "en-GH", {
     style: "currency",
     currency: cfg.currency || "GHS",
     maximumFractionDigits: 0,
   });
+  if (!feesEnabled) {
+    return (
+      <div className="fade-in">
+        <div className="page-header">
+          <div className="page-title">My Fees</div>
+        </div>
+        <div className="card card-padded alert alert-info">
+          Fees are currently disabled for this portal.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -12130,42 +14842,8 @@ function DocumentsPage() {
       <div className="page-header">
         <div className="page-title">Documents</div>
       </div>
-      <div className="card-grid-tight">
-        {[
-          { name: "BECE Form", type: "Form", icon: "docs" },
-          { name: "School Report", type: "Report", icon: "results" },
-          { name: "Admission Letter", type: "Letter", icon: "enroll" },
-          { name: "Medical Certificate", type: "Health", icon: "fees" },
-        ].map((d) => (
-          <div
-            key={d.name}
-            className="card card-padded"
-            style={{ textAlign: "center" }}
-          >
-            <div
-              style={{
-                fontSize: "2.5rem",
-                marginBottom: 8,
-                display: "flex",
-                justifyContent: "center",
-              }}
-            >
-              <Ico name={d.icon} size={34} color="#1a56db" />
-            </div>
-            <div style={{ fontWeight: 700 }}>{d.name}</div>
-            <div
-              style={{ fontSize: ".78rem", color: "#94a3b8", marginBottom: 12 }}
-            >
-              {d.type}
-            </div>
-            <button
-              className="btn btn-outline btn-sm"
-              style={{ width: "100%" }}
-            >
-              Download
-            </button>
-          </div>
-        ))}
+      <div className="card card-padded" style={{ textAlign: "center" }}>
+        No documents are currently available.
       </div>
     </div>
   );
@@ -12421,6 +15099,8 @@ function ExamSchedulePage() {
 }
 
 function ReportCardPage({ studentData, attendanceData, feesData }) {
+  const { cfg } = useContext(SettingsContext);
+  const feesEnabled = cfg.studentFeesPortalEnabled !== false;
   const student = studentData || {
     full_name: "Student",
     index: "-",
@@ -12455,7 +15135,9 @@ function ReportCardPage({ studentData, attendanceData, feesData }) {
       `Student ID: ${student.index}`,
       `Class: ${student.class}`,
       `Attendance Rate: ${attendanceRate}%`,
-      `Outstanding Fees: GHS ${totalOutstanding}`,
+      ...(feesEnabled
+        ? [`Outstanding Fees: GHS ${totalOutstanding}`]
+        : [`Fees section disabled`]),
       `Generated: ${new Date().toLocaleString()}`,
     ];
     lines.forEach((line) => {
@@ -12487,9 +15169,16 @@ function ReportCardPage({ studentData, attendanceData, feesData }) {
           <div>
             <strong>Attendance Rate:</strong> {attendanceRate}%
           </div>
-          <div>
-            <strong>Outstanding Fees:</strong> GHS {totalOutstanding}
-          </div>
+          {feesEnabled && (
+            <div>
+              <strong>Outstanding Fees:</strong> GHS {totalOutstanding}
+            </div>
+          )}
+          {!feesEnabled && (
+            <div>
+              <strong>Outstanding Fees:</strong> Fees are disabled
+            </div>
+          )}
         </div>
         <button
           className="btn btn-blue"
@@ -12503,7 +15192,7 @@ function ReportCardPage({ studentData, attendanceData, feesData }) {
   );
 }
 
-function StudentResultsPage({ scoreValues }) {
+function StudentResultsPage({ scoreValues, attendanceData, feesData }) {
   const rows = (scoreValues || []).map((score, i) => {
     const gradeInfo = getGrade(Number(score || 0));
     return {
@@ -12532,6 +15221,24 @@ function StudentResultsPage({ scoreValues }) {
     },
     { A: 0, B: 0, C: 0, D: 0, F: 0 },
   );
+  const values = rows.map((row) => Number(row.score || 0)).filter((v) => Number.isFinite(v));
+  const avg = values.length
+    ? Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+    : 0;
+  const attendanceRows = attendanceData || [];
+  const present = attendanceRows.filter(
+    (a) => String(a.status).toLowerCase() === "present",
+  ).length;
+  const attendanceRate = Math.round(
+    (present / Math.max(attendanceRows.length, 1)) * 100,
+  );
+  const feeRows = feesData || [];
+  const outstanding = feeRows.reduce(
+    (sum, f) => sum + Math.max(Number(f.amount || 0) - Number(f.paid || 0), 0),
+    0,
+  );
+  const { cfg } = useContext(SettingsContext);
+  const feesEnabled = cfg.studentFeesPortalEnabled !== false;
   const total = Math.max(rows.length, 1);
   const summarySegments = [
     { grade: "A", color: "#16a34a" },
@@ -12553,9 +15260,9 @@ function StudentResultsPage({ scoreValues }) {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <div className="page-title">Results</div>
+        <div className="page-title">Results & Analytics</div>
         <div className="page-sub">
-          Your subject scores and grades for the current term.
+          Your academic results and performance insights in one view.
         </div>
       </div>
       <div className="stats-grid stats-grid-3">
@@ -12600,6 +15307,74 @@ function StudentResultsPage({ scoreValues }) {
               : "No subject score yet"}
           </div>
         </div>
+      </div>
+      <div className="stats-grid" style={{ marginTop: 12 }}>
+        {[
+          {
+            label: "Average Score",
+            value: values.length ? `${avg}%` : "N/A",
+            sub: values.length ? "From your current results" : "No score data yet",
+            bg: "#dbeafe",
+            c: "#1e40af",
+          },
+          {
+            label: "Attendance",
+            value: `${attendanceRate}%`,
+            sub: `${present}/${attendanceRows.length} present`,
+            bg: "#dcfce7",
+            c: "#16a34a",
+          },
+          ...(feesEnabled
+            ? [
+                {
+                  label: "Outstanding Fees",
+                  value: `GHS ${outstanding}`,
+                  sub: outstanding > 0 ? "Pending payment" : "Cleared",
+                  bg: outstanding > 0 ? "#fee2e2" : "#dcfce7",
+                  c: outstanding > 0 ? "#dc2626" : "#16a34a",
+                },
+              ]
+            : []),
+        ].map((s) => (
+          <div key={s.label} className="stat-card" style={{ background: s.bg }}>
+            <div className="stat-label" style={{ color: s.c }}>
+              {s.label}
+            </div>
+            <div className="stat-value" style={{ color: s.c }}>
+              {s.value}
+            </div>
+            <div className="stat-sub" style={{ color: s.c }}>
+              {s.sub}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="card card-padded" style={{ marginTop: 14 }}>
+        <h3 style={{ fontWeight: 700, marginBottom: 10 }}>
+          Subject Strength Snapshot
+        </h3>
+        {values.length ? (
+          values.map((v, i) => (
+            <div key={`${i}-${v}`} className="subject-progress-row">
+              <span className="subject-progress-label">
+                {SUBJECTS[i] || `Subject ${i + 1}`}
+              </span>
+              <div className="progress" style={{ flex: 1 }}>
+                <div
+                  className="progress-bar"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, v))}%`,
+                    background:
+                      v >= 70 ? "#16a34a" : v >= 55 ? "#d97706" : "#dc2626",
+                  }}
+                />
+              </div>
+              <span className="subject-progress-value">{v}%</span>
+            </div>
+          ))
+        ) : (
+          <div style={{ color: "#64748b" }}>No score data to analyze yet.</div>
+        )}
       </div>
       <div className="results-visual-grid results-visual-grid-wide">
         <div className="results-panel">
@@ -12766,6 +15541,8 @@ function StudentAnalyticsPage({ scoreValues, attendanceData, feesData }) {
     0,
   );
 
+  const { cfg } = useContext(SettingsContext);
+  const feesEnabled = cfg.studentFeesPortalEnabled !== false;
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -12790,13 +15567,17 @@ function StudentAnalyticsPage({ scoreValues, attendanceData, feesData }) {
             bg: "#dcfce7",
             c: "#16a34a",
           },
-          {
-            label: "Outstanding Fees",
-            value: `GHS ${outstanding}`,
-            sub: outstanding > 0 ? "Pending payment" : "Cleared",
-            bg: outstanding > 0 ? "#fee2e2" : "#dcfce7",
-            c: outstanding > 0 ? "#dc2626" : "#16a34a",
-          },
+          ...(feesEnabled
+            ? [
+                {
+                  label: "Outstanding Fees",
+                  value: `GHS ${outstanding}`,
+                  sub: outstanding > 0 ? "Pending payment" : "Cleared",
+                  bg: outstanding > 0 ? "#fee2e2" : "#dcfce7",
+                  c: outstanding > 0 ? "#dc2626" : "#16a34a",
+                },
+              ]
+            : []),
         ].map((s) => (
           <div key={s.label} className="stat-card" style={{ background: s.bg }}>
             <div className="stat-label" style={{ color: s.c }}>
@@ -12840,43 +15621,6 @@ function StudentAnalyticsPage({ scoreValues, attendanceData, feesData }) {
         ) : (
           <div style={{ color: "#64748b" }}>No score data to analyze yet.</div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function SubjectProgressPage() {
-  const rows = SUBJECTS.slice(0, 8).map((s) => ({
-    subject: s,
-    avg: Math.floor(Math.random() * 35) + 55,
-  }));
-  return (
-    <div className="fade-in">
-      <div className="page-header">
-        <div className="page-title">Subject Progress</div>
-        <div className="page-sub">View performance trend by subject.</div>
-      </div>
-      <div className="card card-padded">
-        {rows.map((r) => (
-          <div key={r.subject} className="subject-progress-row">
-            <div className="subject-progress-label">{r.subject}</div>
-            <div className="progress" style={{ flex: 1 }}>
-              <div
-                className="progress-bar"
-                style={{
-                  width: `${r.avg}%`,
-                  background:
-                    r.avg >= 70
-                      ? "#16a34a"
-                      : r.avg >= 55
-                        ? "#d97706"
-                        : "#dc2626",
-                }}
-              />
-            </div>
-            <div className="subject-progress-value">{r.avg}%</div>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -13177,6 +15921,8 @@ function AttendanceCorrectionPage({ attendanceData }) {
 }
 
 function StudentPaymentsPage({ feesData }) {
+  const { cfg } = useContext(SettingsContext);
+  const feesEnabled = cfg.studentFeesPortalEnabled !== false;
   const isMobile = useIsMobileLayout();
   const [payments, setPayments] = useState([]);
   const [form, setForm] = useState({
@@ -13184,6 +15930,22 @@ function StudentPaymentsPage({ feesData }) {
     amount: "",
     method: "mobile-money",
   });
+  if (!feesEnabled) {
+    return (
+      <div className="fade-in">
+        <div className="page-header">
+          <div className="page-title">Pay Fees</div>
+          <div className="page-sub">
+            Fee payment is disabled in your portal settings.
+          </div>
+        </div>
+        <div className="card card-padded alert alert-info">
+          Fees are currently disabled, so payment options are unavailable.
+        </div>
+      </div>
+    );
+  }
+
   const pay = () => {
     if (!form.amount) return;
     setPayments((p) => [
@@ -13334,12 +16096,28 @@ function StudentPaymentsPage({ feesData }) {
 }
 
 function StudentPaymentPlansPage({ feesData }) {
+  const { cfg } = useContext(SettingsContext);
+  const feesEnabled = cfg.studentFeesPortalEnabled !== false;
   const outstanding = (feesData || []).reduce(
     (s, f) => s + Math.max(Number(f.amount || 0) - Number(f.paid || 0), 0),
     0,
   );
   const [plan, setPlan] = useState(null);
   const [months, setMonths] = useState(3);
+  if (!feesEnabled) {
+    return (
+      <div className="fade-in">
+        <div className="page-header">
+          <div className="page-title">Payment Plan Request</div>
+          <div className="page-sub">Fee installment options are disabled.</div>
+        </div>
+        <div className="card card-padded alert alert-info">
+          Fee portal features are disabled in this portal configuration.
+        </div>
+      </div>
+    );
+  }
+
   const requestPlan = () => {
     if (!outstanding) return;
     setPlan({
@@ -13858,33 +16636,214 @@ function ScholarshipBoardPage() {
 }
 
 function LearningResourcesPage() {
-  const rows = [
+  const [activeTab, setActiveTab] = useState("browse");
+  const [resources] = useState([
     {
       id: 1,
       subject: "Mathematics",
       title: "Past Questions Pack",
       type: "PDF",
+      downloads: 342,
+      rating: 4.8,
     },
     {
       id: 2,
       subject: "Integrated Science",
       title: "Revision Video Playlist",
       type: "Video",
+      downloads: 567,
+      rating: 4.9,
     },
-    { id: 3, subject: "English", title: "Essay Writing Guide", type: "Guide" },
-  ];
+    { id: 3, subject: "English", title: "Essay Writing Guide", type: "Guide", downloads: 213, rating: 4.5 },
+  ]);
+  const [courses] = useState([
+    { id: 1, title: "AP Calculus I", instructor: "Dr. Sarah Johnson", price: "Free", students: 1240, rating: 4.7 },
+    { id: 2, title: "IGCSE Physics", instructor: "Mr. Ahmed Hassan", price: "GHS 50", students: 856, rating: 4.6 },
+    { id: 3, title: "German Language Basics", instructor: "Frau Marta Schmidt", price: "Free", students: 342, rating: 4.4 },
+  ]);
+  const [discussions] = useState([
+    { id: 1, title: "How to solve logarithmic equations?", replies: 12, views: 245, author: "Ama K." },
+    { id: 2, title: "Best study methods for Biology", replies: 28, views: 512, author: "Kwesi M." },
+    { id: 3, title: "Essay writing tips for literature", replies: 8, views: 156, author: "Janet S." },
+  ]);
   const isMobile = useIsMobileLayout();
-  return (
+
+  const renderBrowseCourses = () => (
     <div className="fade-in">
       <div className="page-header">
-        <div className="page-title">Learning Resources</div>
+        <div className="page-title">Open Learning Courses</div>
         <div className="page-sub">
-          Access notes, past questions, and study materials.
+          Explore free and paid courses from global educators and institutions.
         </div>
       </div>
       {isMobile ? (
         <div className="mobile-record-list">
-          {rows.map((r) => (
+          {courses.map((c) => (
+            <div key={c.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{c.title}</div>
+                  <div className="mobile-record-sub">{c.instructor}</div>
+                </div>
+                <span className="badge badge-blue">{c.price}</span>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item">
+                  <label>Students</label>
+                  <span>{c.students}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Rating</label>
+                  <span>⭐ {c.rating}</span>
+                </div>
+              </div>
+              <div className="mobile-record-actions">
+                <button className="btn btn-sm btn-blue">Enroll</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Course Title</th>
+                <th>Instructor</th>
+                <th>Price</th>
+                <th>Students</th>
+                <th>Rating</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {courses.map((c) => (
+                <tr key={c.id}>
+                  <td><strong>{c.title}</strong></td>
+                  <td>{c.instructor}</td>
+                  <td>{c.price}</td>
+                  <td>{c.students}</td>
+                  <td>⭐ {c.rating}</td>
+                  <td><button className="btn btn-sm btn-blue">Enroll</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderQuizzes = () => (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Practice Quizzes</div>
+        <div className="page-sub">
+          Test your knowledge with interactive quizzes and get instant feedback.
+        </div>
+      </div>
+      <div className="stats-grid" style={{ marginBottom: 16 }}>
+        <div className="stat-card" style={{ background: "#dbeafe" }}>
+          <div className="stat-label" style={{ color: "#1e40af" }}>Quizzes Attempted</div>
+          <div className="stat-value" style={{ color: "#1e40af", fontSize: "1.5rem" }}>12</div>
+          <div className="stat-sub" style={{ color: "#1e40af" }}>Average score: 82%</div>
+        </div>
+        <div className="stat-card" style={{ background: "#dcfce7" }}>
+          <div className="stat-label" style={{ color: "#16a34a" }}>Badges Earned</div>
+          <div className="stat-value" style={{ color: "#16a34a", fontSize: "1.5rem" }}>8</div>
+          <div className="stat-sub" style={{ color: "#16a34a" }}>Science Master, Math Expert</div>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+        {["Algebra Fundamentals", "Chemistry Reactions", "Biology Cells", "Physics Forces", "Literature Analysis"].map((quiz, i) => (
+          <div key={i} className="card card-padded" style={{ marginBottom: 0 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>{quiz}</div>
+            <div style={{ color: "#64748b", fontSize: ".9rem", marginBottom: 12 }}>10 questions • 5 minutes</div>
+            <button className="btn btn-sm btn-blue" style={{ width: "100%" }}>Start Quiz</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderCommunity = () => (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Learning Community</div>
+        <div className="page-sub">
+          Discuss topics, ask questions, and learn from peers worldwide.
+        </div>
+      </div>
+      <div className="card card-padded" style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Start a Discussion</div>
+        <input
+          className="form-control"
+          placeholder="What would you like to ask?"
+          style={{ marginBottom: 8 }}
+        />
+        <button className="btn btn-blue" style={{ width: "100%" }}>Post Discussion</button>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {discussions.map((d) => (
+            <div key={d.id} className="mobile-record-card">
+              <div className="mobile-record-head">
+                <div>
+                  <div className="mobile-record-title">{d.title}</div>
+                  <div className="mobile-record-sub">By {d.author}</div>
+                </div>
+              </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item">
+                  <label>Replies</label>
+                  <span>{d.replies}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Views</label>
+                  <span>{d.views}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Discussion</th>
+                <th>Author</th>
+                <th>Replies</th>
+                <th>Views</th>
+              </tr>
+            </thead>
+            <tbody>
+              {discussions.map((d) => (
+                <tr key={d.id}>
+                  <td><strong>{d.title}</strong></td>
+                  <td>{d.author}</td>
+                  <td>{d.replies}</td>
+                  <td>{d.views}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderResources = () => (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Study Materials</div>
+        <div className="page-sub">
+          Access notes, past questions, and study guides from the community.
+        </div>
+      </div>
+      {isMobile ? (
+        <div className="mobile-record-list">
+          {resources.map((r) => (
             <div key={r.id} className="mobile-record-card">
               <div className="mobile-record-head">
                 <div>
@@ -13893,8 +16852,18 @@ function LearningResourcesPage() {
                 </div>
                 <span className="badge badge-blue">{r.type}</span>
               </div>
+              <div className="mobile-record-grid">
+                <div className="mobile-record-item">
+                  <label>Downloads</label>
+                  <span>{r.downloads}</span>
+                </div>
+                <div className="mobile-record-item">
+                  <label>Rating</label>
+                  <span>⭐ {r.rating}</span>
+                </div>
+              </div>
               <div className="mobile-record-actions">
-                <button className="btn btn-sm btn-outline">Open</button>
+                <button className="btn btn-sm btn-outline">Download</button>
               </div>
             </div>
           ))}
@@ -13907,24 +16876,52 @@ function LearningResourcesPage() {
                 <th>Subject</th>
                 <th>Resource</th>
                 <th>Type</th>
+                <th>Downloads</th>
+                <th>Rating</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {resources.map((r) => (
                 <tr key={r.id}>
                   <td>{r.subject}</td>
                   <td>{r.title}</td>
                   <td>{r.type}</td>
-                  <td>
-                    <button className="btn btn-sm btn-outline">Open</button>
-                  </td>
+                  <td>{r.downloads}</td>
+                  <td>⭐ {r.rating}</td>
+                  <td><button className="btn btn-sm btn-outline">Download</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+    </div>
+  );
+
+  return (
+    <div className="fade-in">
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, borderBottom: "1px solid #e2e8f0", paddingBottom: 12, flexWrap: "wrap" }}>
+        {[
+          { key: "browse", label: "📚 Courses" },
+          { key: "quiz", label: "✏️ Quizzes" },
+          { key: "resources", label: "📄 Materials" },
+          { key: "community", label: "💬 Community" },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            className={`btn ${activeTab === tab.key ? "btn-blue" : "btn-outline"}`}
+            onClick={() => setActiveTab(tab.key)}
+            style={{ fontSize: ".9rem" }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {activeTab === "browse" && renderBrowseCourses()}
+      {activeTab === "quiz" && renderQuizzes()}
+      {activeTab === "resources" && renderResources()}
+      {activeTab === "community" && renderCommunity()}
     </div>
   );
 }
@@ -15173,10 +18170,1794 @@ function FeatureFlagsPage() {
   );
 }
 
+function PeerTutoringPage() {
+  const [tutors, setTutors] = useState([
+    { id: 1, name: "Kwasi Mensah", subject: "Mathematics", rating: 4.8, sessions: 12, students: 5 },
+    { id: 2, name: "Ama Owusu", subject: "English", rating: 4.9, sessions: 18, students: 7 },
+  ]);
+  const isMobile = useIsMobileLayout();
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">👥 Peer Tutoring Platform</div>
+        <div className="page-sub">Connect students for one-on-one tutoring sessions</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16, marginBottom: 24 }}>
+        <div className="card" style={{ padding: 16, background: "#f0f9ff" }}>
+          <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 4 }}>Active Tutors</div>
+          <div style={{ fontSize: "2em", fontWeight: 700, color: "#0369a1" }}>{tutors.length}</div>
+        </div>
+        <div className="card" style={{ padding: 16, background: "#ecfdf5" }}>
+          <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 4 }}>Total Sessions</div>
+          <div style={{ fontSize: "2em", fontWeight: 700, color: "#059669" }}>{tutors.reduce((s, t) => s + t.sessions, 0)}</div>
+        </div>
+      </div>
+      <div className="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tutor</th>
+              <th>Subject</th>
+              <th>Rating</th>
+              <th>Sessions</th>
+              <th>Students</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tutors.map((t) => (
+              <tr key={t.id}>
+                <td style={{ fontWeight: 600 }}>{t.name}</td>
+                <td>{t.subject}</td>
+                <td>⭐ {t.rating}</td>
+                <td>{t.sessions}</td>
+                <td>{t.students}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MentalHealthPortal({ currentUser = {} }) {
+  const [counselors, setCounselors] = useState([
+    { id: 1, name: "Dr. Yaw Mensah", specialization: "Academic Stress", available: true },
+    { id: 2, name: "Ms. Ada Ama", specialization: "Social Issues", available: true },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">💬 Mental Health & Counseling</div>
+        <div className="page-sub">Support and resources for student wellbeing</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+        {counselors.map((c) => (
+          <div key={c.id} className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>{c.name}</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>📚 {c.specialization}</div>
+            <button className="btn btn-blue" style={{ width: "100%" }}>
+              {c.available ? "Book Session" : "Coming Soon"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LibraryManagementPage() {
+  const [books, setBooks] = useState([
+    { id: 1, title: "Advanced Mathematics", author: "Prof. A. Mensah", available: 12, total: 15, isbn: "978-123-456" },
+    { id: 2, title: "English Literature", author: "Dr. K. Owusu", available: 8, total: 10, isbn: "978-789-012" },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">📚 Library Management</div>
+        <div className="page-sub">Book catalog and borrowing system</div>
+      </div>
+      <div className="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Author</th>
+              <th>Available</th>
+              <th>Total</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {books.map((b) => (
+              <tr key={b.id}>
+                <td style={{ fontWeight: 600 }}>{b.title}</td>
+                <td>{b.author}</td>
+                <td><span style={{ background: "#ecfdf5", padding: "4px 8px", borderRadius: 4 }}>{b.available}</span></td>
+                <td>{b.total}</td>
+                <td><button className="btn btn-sm btn-blue">{b.available > 0 ? "Borrow" : "Reserve"}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AlumniPortalPage() {
+  const [alumni, setAlumni] = useState([
+    { id: 1, name: "Kwame Asante", graduationYear: 2020, profession: "Software Engineer", company: "Tech Innovations Ltd" },
+    { id: 2, name: "Abena Kofi", graduationYear: 2019, profession: "Medical Doctor", company: "Central Hospital" },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">🎓 Alumni Portal & Networking</div>
+        <div className="page-sub">Connect with graduates and track their success</div>
+      </div>
+      <div className="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Graduation Year</th>
+              <th>Profession</th>
+              <th>Organization</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alumni.map((a) => (
+              <tr key={a.id}>
+                <td style={{ fontWeight: 600 }}>{a.name}</td>
+                <td>{a.graduationYear}</td>
+                <td>{a.profession}</td>
+                <td>{a.company}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ScholarshipManagementPage() {
+  const [scholarships, setScholarships] = useState([
+    { id: 1, name: "Merit Excellence Award", amount: "GHS 5,000", deadline: "2026-06-30", recipients: 15 },
+    { id: 2, name: "Need-Based Assistance", amount: "GHS 3,000", deadline: "2026-07-15", recipients: 25 },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">🎖️ Scholarship Management</div>
+        <div className="page-sub">Track scholarships and eligibility</div>
+      </div>
+      <div className="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Scholarship</th>
+              <th>Amount</th>
+              <th>Deadline</th>
+              <th>Recipients</th>
+            </tr>
+          </thead>
+          <tbody>
+            {scholarships.map((s) => (
+              <tr key={s.id}>
+                <td style={{ fontWeight: 600 }}>{s.name}</td>
+                <td>{s.amount}</td>
+                <td>{s.deadline}</td>
+                <td><span style={{ background: "#dbeafe", padding: "4px 8px", borderRadius: 4 }}>{s.recipients}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ParentTeacherConferencePage() {
+  const [conferences, setConferences] = useState([
+    { id: 1, student: "Ama Mensah", date: "2026-05-15", time: "14:00", teacher: "Mr. Kwame", status: "Scheduled" },
+    { id: 2, student: "Kwasi Owusu", date: "2026-05-16", time: "15:30", teacher: "Ms. Abena", status: "Pending" },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">👨‍🏫 Parent-Teacher Conferences</div>
+        <div className="page-sub">Schedule and manage meetings with parents</div>
+      </div>
+      <div className="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Teacher</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {conferences.map((c) => (
+              <tr key={c.id}>
+                <td style={{ fontWeight: 600 }}>{c.student}</td>
+                <td>{c.date}</td>
+                <td>{c.time}</td>
+                <td>{c.teacher}</td>
+                <td><span style={{ background: c.status === "Scheduled" ? "#ecfdf5" : "#fef3c7", padding: "4px 8px", borderRadius: 4 }}>{c.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MedicalRecordsPage() {
+  const [records, setRecords] = useState([
+    { id: 1, student: "Ama Mensah", bloodType: "O+", allergies: "Peanuts", lastCheckup: "2026-03-15" },
+    { id: 2, student: "Kwasi Owusu", bloodType: "A+", allergies: "None", lastCheckup: "2026-02-28" },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">⚕️ Medical Records</div>
+        <div className="page-sub">Health information and emergency contacts</div>
+      </div>
+      <div className="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Blood Type</th>
+              <th>Allergies</th>
+              <th>Last Checkup</th>
+            </tr>
+          </thead>
+          <tbody>
+            {records.map((r) => (
+              <tr key={r.id}>
+                <td style={{ fontWeight: 600 }}>{r.student}</td>
+                <td>{r.bloodType}</td>
+                <td>{r.allergies}</td>
+                <td>{r.lastCheckup}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function TransportHostelPage() {
+  const [buses, setBuses] = useState([
+    { id: 1, route: "Accra - School", driver: "Mr. Agyeman", capacity: 50, occupied: 38, status: "Active" },
+    { id: 2, route: "Kumasi - School", driver: "Mr. Kofi", capacity: 45, occupied: 32, status: "Active" },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">🚌 Transport & Hostel Management</div>
+        <div className="page-sub">Bus tracking and boarding student management</div>
+      </div>
+      <div className="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Route</th>
+              <th>Driver</th>
+              <th>Capacity</th>
+              <th>Occupied</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {buses.map((b) => (
+              <tr key={b.id}>
+                <td style={{ fontWeight: 600 }}>{b.route}</td>
+                <td>{b.driver}</td>
+                <td>{b.capacity}</td>
+                <td><span style={{ background: "#e0e7ff", padding: "4px 8px", borderRadius: 4 }}>{b.occupied}/{b.capacity}</span></td>
+                <td><span style={{ background: "#ecfdf5", padding: "4px 8px", borderRadius: 4, color: "#059669", fontWeight: 600 }}>🟢 {b.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function VirtualClassroomPage() {
+  const [classes, setClasses] = useState([
+    { id: 1, name: "Advanced Mathematics", instructor: "Prof. Mensah", students: 45, status: "Live", duration: "90 min" },
+    { id: 2, name: "English Literature", instructor: "Dr. Owusu", students: 32, status: "Scheduled", duration: "60 min" },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">🏫 Virtual Classroom</div>
+        <div className="page-sub">Interactive online learning environment</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, marginBottom: 24 }}>
+        {classes.map((c) => (
+          <div key={c.id} className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>{c.name}</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 4 }}>👨‍🏫 {c.instructor}</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>👥 {c.students} students • ⏱️ {c.duration}</div>
+            <button className="btn btn-blue" style={{ width: "100%" }}>
+              {c.status === "Live" ? "Join Class" : "View Details"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CourseMarketplacePage() {
+  const [courses, setCourses] = useState([
+    { id: 1, title: "Data Science Fundamentals", instructor: "Dr. Tech", price: "GHS 250", rating: 4.8, students: 1250, category: "Technology" },
+    { id: 2, title: "Creative Writing", instructor: "Prof. Arts", price: "Free", rating: 4.9, students: 890, category: "Arts" },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">🛒 Course Marketplace</div>
+        <div className="page-sub">Browse and enroll in courses from global educators</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+        {courses.map((c) => (
+          <div key={c.id} className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>{c.title}</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 4 }}>👨‍🏫 {c.instructor}</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 8 }}>📚 {c.category} • ⭐ {c.rating} • 👥 {c.students}</div>
+            <div style={{ fontSize: "1.2em", fontWeight: 700, color: "#059669", marginBottom: 12 }}>{c.price}</div>
+            <button className="btn btn-blue" style={{ width: "100%" }}>Enroll Now</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LiveStreamingPage() {
+  const [streams, setStreams] = useState([
+    { id: 1, title: "Physics Lecture: Quantum Mechanics", instructor: "Dr. Physics", viewers: 156, status: "Live", duration: "45 min" },
+    { id: 2, title: "Chemistry Lab Demo", instructor: "Prof. Chem", viewers: 89, status: "Scheduled", duration: "30 min" },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">📺 Live Streaming</div>
+        <div className="page-sub">Real-time educational broadcasts</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+        {streams.map((s) => (
+          <div key={s.id} className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>{s.title}</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 4 }}>👨‍🏫 {s.instructor}</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>👁️ {s.viewers} viewers • ⏱️ {s.duration}</div>
+            <button className="btn btn-blue" style={{ width: "100%" }}>
+              {s.status === "Live" ? "Watch Live" : "Set Reminder"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InteractiveWhiteboardPage() {
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">🎨 Interactive Whiteboard</div>
+        <div className="page-sub">Collaborative digital drawing and annotation tools</div>
+      </div>
+      <div className="card" style={{ padding: 24, textAlign: "center" }}>
+        <div style={{ fontSize: "4em", marginBottom: 16 }}>🎨</div>
+        <div style={{ fontSize: "1.2em", fontWeight: 700, marginBottom: 8 }}>Interactive Whiteboard</div>
+        <div style={{ color: "#64748b", marginBottom: 24 }}>Digital drawing tools, annotations, and collaborative workspace</div>
+        <button className="btn btn-blue">Launch Whiteboard</button>
+      </div>
+    </div>
+  );
+}
+
+function VideoConferencingPage() {
+  const [meetings, setMeetings] = useState([
+    { id: 1, title: "Math Study Group", participants: 8, time: "14:00", status: "Active" },
+    { id: 2, title: "Science Project Discussion", participants: 5, time: "16:30", status: "Scheduled" },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">📹 Video Conferencing</div>
+        <div className="page-sub">HD video meetings and collaboration</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+        {meetings.map((m) => (
+          <div key={m.id} className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>{m.title}</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>👥 {m.participants} participants • 🕐 {m.time}</div>
+            <button className="btn btn-blue" style={{ width: "100%" }}>
+              {m.status === "Active" ? "Join Meeting" : "Schedule Meeting"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LearningAnalyticsPage() {
+  const [analytics, setAnalytics] = useState({
+    totalStudents: 1250,
+    activeCourses: 45,
+    completionRate: 78,
+    averageScore: 82
+  });
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">📊 Learning Analytics</div>
+        <div className="page-sub">Advanced insights into learning patterns and performance</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16, marginBottom: 24 }}>
+        <div className="card" style={{ padding: 16, background: "#f0f9ff" }}>
+          <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 4 }}>Total Students</div>
+          <div style={{ fontSize: "2em", fontWeight: 700, color: "#0369a1" }}>{analytics.totalStudents}</div>
+        </div>
+        <div className="card" style={{ padding: 16, background: "#ecfdf5" }}>
+          <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 4 }}>Active Courses</div>
+          <div style={{ fontSize: "2em", fontWeight: 700, color: "#059669" }}>{analytics.activeCourses}</div>
+        </div>
+        <div className="card" style={{ padding: 16, background: "#fef3c7" }}>
+          <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 4 }}>Completion Rate</div>
+          <div style={{ fontSize: "2em", fontWeight: 700, color: "#d97706" }}>{analytics.completionRate}%</div>
+        </div>
+        <div className="card" style={{ padding: 16, background: "#fce7f3" }}>
+          <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 4 }}>Average Score</div>
+          <div style={{ fontSize: "2em", fontWeight: 700, color: "#be185d" }}>{analytics.averageScore}%</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GamificationPage() {
+  const [achievements, setAchievements] = useState([
+    { id: 1, name: "First Quiz Master", description: "Complete your first quiz", unlocked: true, points: 100 },
+    { id: 2, name: "Study Streak", description: "Study for 7 consecutive days", unlocked: false, points: 500 },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">🏆 Gamification</div>
+        <div className="page-sub">Earn badges, points, and achievements</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+        {achievements.map((a) => (
+          <div key={a.id} className="card" style={{ padding: 16, border: "1px solid #e2e8f0", opacity: a.unlocked ? 1 : 0.6 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>{a.name}</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 8 }}>{a.description}</div>
+            <div style={{ fontSize: "1.1em", fontWeight: 600, color: "#059669" }}>⭐ {a.points} points</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AdaptiveLearningPage() {
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">🎯 Adaptive Learning</div>
+        <div className="page-sub">Personalized learning paths based on performance</div>
+      </div>
+      <div className="card" style={{ padding: 24, textAlign: "center" }}>
+        <div style={{ fontSize: "4em", marginBottom: 16 }}>🎯</div>
+        <div style={{ fontSize: "1.2em", fontWeight: 700, marginBottom: 8 }}>Adaptive Learning Engine</div>
+        <div style={{ color: "#64748b", marginBottom: 24 }}>AI-powered personalized learning recommendations</div>
+        <button className="btn btn-blue">Start Adaptive Learning</button>
+      </div>
+    </div>
+  );
+}
+
+function CollaborativeProjectsPage() {
+  const [projects, setProjects] = useState([
+    { id: 1, name: "Climate Change Research", team: 6, deadline: "2026-06-15", status: "Active" },
+    { id: 2, name: "Digital Art Exhibition", team: 4, deadline: "2026-07-01", status: "Planning" },
+  ]);
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">🤝 Collaborative Projects</div>
+        <div className="page-sub">Team-based learning and project management</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+        {projects.map((p) => (
+          <div key={p.id} className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>{p.name}</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 4 }}>👥 {p.team} members</div>
+            <div style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>📅 Due: {p.deadline}</div>
+            <button className="btn btn-blue" style={{ width: "100%" }}>Join Project</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MobileLearningPage() {
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">📱 Mobile Learning</div>
+        <div className="page-sub">Learn anywhere with mobile-optimized content</div>
+      </div>
+      <div className="card" style={{ padding: 24, textAlign: "center" }}>
+        <div style={{ fontSize: "4em", marginBottom: 16 }}>📱</div>
+        <div style={{ fontSize: "1.2em", fontWeight: 700, marginBottom: 8 }}>Mobile Learning Platform</div>
+        <div style={{ color: "#64748b", marginBottom: 24 }}>Access courses, quizzes, and resources on any device</div>
+        <button className="btn btn-blue">Download Mobile App</button>
+      </div>
+    </div>
+  );
+}
+
+function AITutorPage() {
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">🤖 AI Tutor</div>
+        <div className="page-sub">24/7 intelligent tutoring and support</div>
+      </div>
+      <div className="card" style={{ padding: 24, textAlign: "center" }}>
+        <div style={{ fontSize: "4em", marginBottom: 16 }}>🤖</div>
+        <div style={{ fontSize: "1.2em", fontWeight: 700, marginBottom: 8 }}>AI-Powered Tutor</div>
+        <div style={{ color: "#64748b", marginBottom: 24 }}>Get instant help with homework, explanations, and personalized guidance</div>
+        <button className="btn btn-blue">Start AI Tutoring</button>
+      </div>
+    </div>
+  );
+}
+
+// STUDY CONTENT PAGE (Admin)
+function StudyContentPage({ currentUser }) {
+  const [content, setContent] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [editingContent, setEditingContent] = useState(null);
+  const [showQuestionsModal, setShowQuestionsModal] = useState(false);
+  const [selectedContent, setSelectedContent] = useState(null);
+  const [contentForm, setContentForm] = useState({
+    title: '',
+    description: '',
+    content_type: 'lesson',
+    subject: '',
+    class_level: '',
+    content: '',
+    tags: [],
+    difficulty_level: 'intermediate',
+    estimated_read_time: 15,
+    is_published: false
+  });
+  const [questions, setQuestions] = useState([]);
+  const [questionForm, setQuestionForm] = useState({
+    question_text: '',
+    question_type: 'multiple_choice',
+    points: 1,
+    correct_answer: '',
+    explanation: '',
+    answers: [{ answer_text: '', is_correct: false }, { answer_text: '', is_correct: false }]
+  });
+  const [activity, setActivity] = useState([]);
+  const [quizAttempts, setQuizAttempts] = useState([]);
+  const [questionMap, setQuestionMap] = useState({});
+  const [studentProfiles, setStudentProfiles] = useState({});
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [exportingContentId, setExportingContentId] = useState(null);
+  const [mappedLiveTests, setMappedLiveTests] = useState(new Map());
+  const [originMappingAvailable, setOriginMappingAvailable] = useState(true);
+
+  useEffect(() => {
+    loadContent();
+    loadActivity();
+  }, []);
+
+  const loadMappedLiveTests = async () => {
+    if (!supabase) {
+      setMappedLiveTests(new Map());
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('live_tests')
+        .select('id, title, origin_content_id')
+        .not('origin_content_id', 'is', null);
+
+      if (error) {
+        if (error.message?.includes('origin_content_id')) {
+          setOriginMappingAvailable(false);
+          setMappedLiveTests(new Map());
+          return;
+        }
+        throw error;
+      }
+
+      const map = new Map();
+      data?.forEach((test) => {
+        if (test.origin_content_id) {
+          map.set(test.origin_content_id, test);
+        }
+      });
+      setMappedLiveTests(map);
+    } catch (error) {
+      console.error('Error loading mapped live tests:', error);
+      setMappedLiveTests(new Map());
+      setOriginMappingAvailable(false);
+    }
+  };
+
+  const deriveTestTypeFromStudyQuestions = (questions) => {
+    if (!questions || questions.length === 0) return 'mixed';
+    const normalized = questions.map((question) => {
+      if (question.question_type === 'essay') return 'long_text';
+      return question.question_type;
+    });
+    const uniqueTypes = Array.from(new Set(normalized));
+    if (uniqueTypes.length === 1) return uniqueTypes[0];
+    return 'mixed';
+  };
+
+  const handleExportStudyContentToLiveTest = async (contentItem) => {
+    if (!supabase || !contentItem) return;
+    if (exportingContentId) return;
+
+    const existingTest = mappedLiveTests.get(contentItem.id);
+    if (originMappingAvailable && existingTest) {
+      alert(`This study content is already mapped to a live test:\n${existingTest.title}`);
+      return;
+    }
+
+    setExportingContentId(contentItem.id);
+
+    try {
+      const { data: studyQuestions, error: questionsError } = await supabase
+        .from('study_questions')
+        .select(`*, study_answers (*)`)
+        .eq('content_id', contentItem.id)
+        .order('order_index');
+
+      if (questionsError) throw questionsError;
+
+      const questionsToCopy = studyQuestions || [];
+      const testType = deriveTestTypeFromStudyQuestions(questionsToCopy);
+      const durationMinutes = Math.max(10, contentItem.estimated_read_time || 30);
+
+      const liveTestPayload = {
+        title: `Live Test: ${contentItem.title}`,
+        description: contentItem.description || `Quiz from study content: ${contentItem.title}`,
+        subject: contentItem.subject || '',
+        class: contentItem.class_level || '',
+        test_type: testType,
+        duration_minutes: durationMinutes,
+        total_questions: questionsToCopy.length,
+        is_active: true,
+        created_by: currentUser?.id
+      };
+
+      if (originMappingAvailable) {
+        liveTestPayload.origin_content_id = contentItem.id;
+      }
+
+      const { data: createdTest, error: createTestError } = await supabase
+        .from('live_tests')
+        .insert([liveTestPayload])
+        .select()
+        .single();
+
+      if (createTestError) throw createTestError;
+
+      if (questionsToCopy.length > 0) {
+        const questionInserts = questionsToCopy.map((question, index) => ({
+          test_id: createdTest.id,
+          question_text: question.question_text,
+          question_type: question.question_type === 'essay' ? 'long_text' : question.question_type,
+          points: question.points,
+          correct_answer: question.correct_answer,
+          explanation: question.explanation,
+          order_index: index
+        }));
+
+        const { data: createdQuestions, error: createQuestionsError } = await supabase
+          .from('test_questions')
+          .insert(questionInserts)
+          .select();
+
+        if (createQuestionsError) throw createQuestionsError;
+
+        const answersToInsert = [];
+        createdQuestions?.forEach((createdQuestion, index) => {
+          const sourceQuestion = questionsToCopy[index];
+          if (sourceQuestion.question_type === 'multiple_choice') {
+            sourceQuestion.study_answers?.forEach((answer) => {
+              answersToInsert.push({
+                question_id: createdQuestion.id,
+                answer_text: answer.answer_text,
+                is_correct: answer.is_correct,
+                order_index: answer.order_index
+              });
+            });
+          }
+        });
+
+        if (answersToInsert.length > 0) {
+          const { error: createAnswersError } = await supabase
+            .from('test_answers')
+            .insert(answersToInsert);
+          if (createAnswersError) throw createAnswersError;
+        }
+      }
+
+      if (originMappingAvailable) {
+        const newMap = new Map(mappedLiveTests);
+        newMap.set(contentItem.id, createdTest);
+        setMappedLiveTests(newMap);
+      }
+
+      alert(`Live test created from "${contentItem.title}" successfully.`);
+    } catch (error) {
+      console.error('Error exporting study content to live test:', error);
+      alert(`Failed to create live test: ${error?.message || error}`);
+    } finally {
+      setExportingContentId(null);
+    }
+  };
+
+  const loadContent = async () => {
+    if (!supabase) {
+      setContent([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('study_content')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setContent(data || []);
+      await loadMappedLiveTests();
+    } catch (error) {
+      console.error('Error loading content:', error);
+      setContent([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateContent = async () => {
+    if (!supabase || !contentForm.title.trim()) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('study_content')
+        .insert([{
+          ...contentForm,
+          created_by: currentUser?.id
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setContent([data, ...content]);
+      setShowCreateModal(false);
+      resetContentForm();
+    } catch (error) {
+      console.error('Error creating content:', error);
+      alert(`Failed to create content: ${error.message}`);
+    }
+  };
+
+  const handleImportContent = async (file) => {
+    if (!supabase || !file) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const importedData = JSON.parse(text);
+
+      // Validate the imported data structure
+      if (!Array.isArray(importedData)) {
+        throw new Error('Import data must be an array of content items');
+      }
+
+      const validItems = [];
+      const errors = [];
+
+      for (const item of importedData) {
+        if (!item.title || typeof item.title !== 'string') {
+          errors.push(`Invalid title for item: ${JSON.stringify(item)}`);
+          continue;
+        }
+
+        const contentItem = {
+          title: item.title,
+          description: item.description || '',
+          content_type: item.content_type || 'lesson',
+          subject: item.subject || '',
+          class_level: item.class_level || '',
+          content: item.content || '',
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          difficulty_level: item.difficulty_level || 'intermediate',
+          estimated_read_time: item.estimated_read_time || 15,
+          is_published: item.is_published || false,
+          created_by: currentUser?.id
+        };
+
+        validItems.push(contentItem);
+      }
+
+      if (validItems.length === 0) {
+        throw new Error('No valid content items found to import');
+      }
+
+      // Insert the content items
+      const { data, error } = await supabase
+        .from('study_content')
+        .insert(validItems)
+        .select();
+
+      if (error) throw error;
+
+      // Import questions if they exist
+      for (let i = 0; i < importedData.length; i++) {
+        const importedItem = importedData[i];
+        const createdItem = data[i];
+
+        if (importedItem.questions && Array.isArray(importedItem.questions)) {
+          const questionsToInsert = importedItem.questions.map((q, qIndex) => ({
+            content_id: createdItem.id,
+            question_text: q.question_text,
+            question_type: q.question_type || 'multiple_choice',
+            points: q.points || 1,
+            correct_answer: q.correct_answer || '',
+            explanation: q.explanation || '',
+            order_index: qIndex
+          }));
+
+          if (questionsToInsert.length > 0) {
+            const { data: createdQuestions, error: questionsError } = await supabase
+              .from('study_questions')
+              .insert(questionsToInsert)
+              .select();
+
+            if (questionsError) {
+              console.error('Error importing questions for content:', createdItem.title, questionsError);
+              continue;
+            }
+
+            // Import answers for multiple choice questions
+            for (let qIndex = 0; qIndex < importedItem.questions.length; qIndex++) {
+              const importedQuestion = importedItem.questions[qIndex];
+              const createdQuestion = createdQuestions[qIndex];
+
+              if (importedQuestion.answers && Array.isArray(importedQuestion.answers) && importedQuestion.question_type === 'multiple_choice') {
+                const answersToInsert = importedQuestion.answers.map((a, aIndex) => ({
+                  question_id: createdQuestion.id,
+                  answer_text: a.answer_text,
+                  is_correct: a.is_correct || false,
+                  order_index: aIndex
+                }));
+
+                if (answersToInsert.length > 0) {
+                  const { error: answersError } = await supabase
+                    .from('study_answers')
+                    .insert(answersToInsert);
+
+                  if (answersError) {
+                    console.error('Error importing answers for question:', createdQuestion.question_text, answersError);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      setContent([...data, ...content]);
+      setShowImportModal(false);
+
+      alert(`Successfully imported ${validItems.length} content items${errors.length > 0 ? `. ${errors.length} items had errors and were skipped.` : ''}`);
+
+      if (errors.length > 0) {
+        console.warn('Import errors:', errors);
+      }
+
+    } catch (error) {
+      console.error('Error importing content:', error);
+      alert(`Failed to import content: ${error.message}`);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleUpdateContent = async () => {
+    if (!supabase || !editingContent || !contentForm.title.trim()) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('study_content')
+        .update(contentForm)
+        .eq('id', editingContent.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setContent(content.map(item => item.id === editingContent.id ? data : item));
+      setEditingContent(null);
+      setShowCreateModal(false);
+      resetContentForm();
+    } catch (error) {
+      console.error('Error updating content:', error);
+      alert(`Failed to update content: ${error.message}`);
+    }
+  };
+
+  const handleDeleteContent = async (contentId) => {
+    if (!supabase || !confirm('Are you sure you want to delete this content?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('study_content')
+        .delete()
+        .eq('id', contentId);
+
+      if (error) throw error;
+
+      setContent(content.filter(item => item.id !== contentId));
+    } catch (error) {
+      console.error('Error deleting content:', error);
+      alert(`Failed to delete content: ${error.message}`);
+    }
+  };
+
+  const handleTogglePublish = async (contentId, isPublished) => {
+    if (!supabase) return;
+
+    try {
+      const { error } = await supabase
+        .from('study_content')
+        .update({ is_published: isPublished })
+        .eq('id', contentId);
+
+      if (error) throw error;
+
+      setContent(content.map(item =>
+        item.id === contentId ? { ...item, is_published: isPublished } : item
+      ));
+    } catch (error) {
+      console.error('Error updating publish status:', error);
+      alert(`Failed to update publish status: ${error.message}`);
+    }
+  };
+
+  const resetContentForm = () => {
+    setContentForm({
+      title: '',
+      description: '',
+      content_type: 'lesson',
+      subject: '',
+      class_level: '',
+      content: '',
+      tags: [],
+      difficulty_level: 'intermediate',
+      estimated_read_time: 15,
+      is_published: false
+    });
+  };
+
+  const loadQuestions = async (contentId) => {
+    if (!supabase) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('study_questions')
+        .select(`
+          *,
+          study_answers (*)
+        `)
+        .eq('content_id', contentId)
+        .order('order_index');
+
+      if (error) throw error;
+      setQuestions(data || []);
+    } catch (error) {
+      console.error('Error loading questions:', error);
+      setQuestions([]);
+    }
+  };
+
+  const handleAddQuestion = async () => {
+    if (!supabase || !selectedContent || !questionForm.question_text.trim()) return;
+
+    try {
+      // Insert question
+      const { data: questionData, error: questionError } = await supabase
+        .from('study_questions')
+        .insert([{
+          content_id: selectedContent.id,
+          question_text: questionForm.question_text,
+          question_type: questionForm.question_type,
+          points: questionForm.points,
+          correct_answer: questionForm.correct_answer,
+          explanation: questionForm.explanation,
+          order_index: questions.length
+        }])
+        .select()
+        .single();
+
+      if (questionError) throw questionError;
+
+      // Insert answers for multiple choice
+      if (questionForm.question_type === 'multiple_choice') {
+        const answersToInsert = questionForm.answers
+          .filter(answer => answer.answer_text.trim())
+          .map((answer, index) => ({
+            question_id: questionData.id,
+            answer_text: answer.answer_text,
+            is_correct: answer.is_correct,
+            order_index: index
+          }));
+
+        if (answersToInsert.length > 0) {
+          const { error: answersError } = await supabase
+            .from('study_answers')
+            .insert(answersToInsert);
+
+          if (answersError) throw answersError;
+        }
+      }
+
+      // Reload questions
+      await loadQuestions(selectedContent.id);
+      resetQuestionForm();
+    } catch (error) {
+      console.error('Error adding question:', error);
+      alert(`Failed to add question: ${error.message}`);
+    }
+  };
+
+  const resetQuestionForm = () => {
+    setQuestionForm({
+      question_text: '',
+      question_type: 'multiple_choice',
+      points: 1,
+      correct_answer: '',
+      explanation: '',
+      answers: [{ answer_text: '', is_correct: false }, { answer_text: '', is_correct: false }]
+    });
+  };
+
+  const openEditModal = (item) => {
+    setEditingContent(item);
+    setContentForm({
+      title: item.title,
+      description: item.description || '',
+      content_type: item.content_type,
+      subject: item.subject || '',
+      class_level: item.class_level || '',
+      content: item.content || '',
+      tags: item.tags || [],
+      difficulty_level: item.difficulty_level,
+      estimated_read_time: item.estimated_read_time || 15,
+      is_published: item.is_published
+    });
+    setShowCreateModal(true);
+  };
+
+  const openQuestionsModal = async (item) => {
+    setSelectedContent(item);
+    await loadQuestions(item.id);
+    setShowQuestionsModal(true);
+  };
+
+  const loadActivity = async () => {
+    if (!supabase) {
+      setActivity([]);
+      setQuizAttempts([]);
+      setQuestionMap({});
+      setStudentProfiles({});
+      setActivityLoading(false);
+      return;
+    }
+
+    try {
+      const [progressResp, attemptsResp] = await Promise.all([
+        supabase
+          .from('student_study_progress')
+          .select('*')
+          .order('last_accessed_at', { ascending: false }),
+        supabase
+          .from('student_question_attempts')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50),
+      ]);
+
+      if (progressResp.error) throw progressResp.error;
+      if (attemptsResp.error) throw attemptsResp.error;
+
+      const progressRecords = progressResp.data || [];
+      const attemptRows = attemptsResp.data || [];
+      const studentIds = Array.from(
+        new Set(progressRecords.map((record) => record.student_id).concat(attemptRows.map((record) => record.student_id)).filter(Boolean))
+      );
+      const profilesMap = {};
+
+      if (profilesTableAvailable && studentIds.length > 0) {
+        const { data: profileRows, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, role')
+          .in('id', studentIds);
+
+        if (profileError) {
+          if (isProfilesTableMissingError(profileError)) {
+            profilesTableAvailable = false;
+          } else {
+            throw profileError;
+          }
+        } else {
+          profileRows?.forEach((profile) => {
+            profilesMap[profile.id] = profile;
+          });
+        }
+      }
+
+      const questionIds = Array.from(
+        new Set(attemptRows.map((record) => record.question_id).filter(Boolean))
+      );
+      const questionsMap = {};
+
+      if (questionIds.length > 0) {
+        const { data: questionRows, error: questionError } = await supabase
+          .from('study_questions')
+          .select('id, content_id, question_text')
+          .in('id', questionIds);
+
+        if (questionError) throw questionError;
+        questionRows?.forEach((question) => {
+          questionsMap[question.id] = question;
+        });
+      }
+
+      setActivity(progressRecords);
+      setQuizAttempts(attemptRows);
+      setQuestionMap(questionsMap);
+      setStudentProfiles(profilesMap);
+    } catch (error) {
+      console.error('Error loading lesson activity:', error);
+      setActivity([]);
+      setQuizAttempts([]);
+      setQuestionMap({});
+      setStudentProfiles({});
+    } finally {
+      setActivityLoading(false);
+    }
+  };
+
+  const getStudentName = (studentId) => {
+    const profile = studentProfiles[studentId];
+    return profile?.full_name || profile?.email || studentId || 'Unknown student';
+  };
+
+  const contentActivityMap = useMemo(() => {
+    const map = new Map();
+    activity.forEach((record) => {
+      const items = map.get(record.content_id) || [];
+      items.push(record);
+      map.set(record.content_id, items);
+    });
+    return map;
+  }, [activity]);
+
+  const quizContentActivityMap = useMemo(() => {
+    const map = new Map();
+    quizAttempts.forEach((attempt) => {
+      const question = questionMap[attempt.question_id];
+      if (!question?.content_id) return;
+      const items = map.get(question.content_id) || [];
+      items.push({ ...attempt, question });
+      map.set(question.content_id, items);
+    });
+    return map;
+  }, [quizAttempts, questionMap]);
+
+  const recentActivity = useMemo(() => activity.slice(0, 8), [activity]);
+  const recentQuizActivity = useMemo(() => quizAttempts.slice(0, 8), [quizAttempts]);
+
+  const totalActiveStudents = useMemo(
+    () => new Set(activity.map((record) => record.student_id).filter(Boolean)).size,
+    [activity],
+  );
+
+  const totalQuizStudents = useMemo(
+    () => new Set(quizAttempts.map((record) => record.student_id).filter(Boolean)).size,
+    [quizAttempts],
+  );
+
+  if (loading) {
+    return (
+      <div className="fade-in">
+        <div className="page-header">
+          <div className="page-title">📚 Study Content</div>
+          <div className="page-sub">Loading content...</div>
+        </div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <div className="spinner"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in study-content-page">
+      <div className="page-header">
+        <div className="page-title">📚 Study Content</div>
+        <div className="page-sub">Create and manage educational content for students</div>
+      </div>
+
+      <div className="page-actions-row">
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-blue"
+            onClick={() => setShowCreateModal(true)}
+          >
+            + Add Content
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={() => setShowImportModal(true)}
+          >
+            📁 Import Content
+          </button>
+        </div>
+      </div>
+
+      <div className="activity-panel">
+        <div className="activity-header">
+          <div>
+            <h3>Student Lesson Activity</h3>
+            <p style={{ margin: 0, color: '#64748b' }}>
+              Track which lessons students are taking, who accessed them, and how far they progressed.
+            </p>
+          </div>
+        </div>
+
+        <div className="activity-summary-grid">
+          <div className="activity-summary-card">
+            <div className="summary-label">Lessons Published</div>
+            <div className="summary-value">{content.length}</div>
+          </div>
+          <div className="activity-summary-card">
+            <div className="summary-label">Progress Records</div>
+            <div className="summary-value">{activity.length}</div>
+          </div>
+          <div className="activity-summary-card">
+            <div className="summary-label">Quiz Attempts</div>
+            <div className="summary-value">{quizAttempts.length}</div>
+          </div>
+          <div className="activity-summary-card">
+            <div className="summary-label">Students in Quizzes</div>
+            <div className="summary-value">{totalQuizStudents}</div>
+          </div>
+          <div className="activity-summary-card">
+            <div className="summary-label">Mapped Live Tests</div>
+            <div className="summary-value">{mappedLiveTests.size}</div>
+          </div>
+        </div>
+
+        {activityLoading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <div className="spinner"></div>
+          </div>
+        ) : activity.length === 0 ? (
+          <div className="empty-state" style={{ padding: '24px 12px' }}>
+            No student lesson activity yet. Students will appear here as they begin lessons.
+          </div>
+        ) : (
+          <div className="activity-table-wrap">
+            <table className="activity-table">
+              <thead>
+                <tr>
+                  <th>Lesson</th>
+                  <th>Student</th>
+                  <th>Progress</th>
+                  <th>Last accessed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentActivity.map((record) => (
+                  <tr key={`${record.student_id}-${record.content_id}-${record.last_accessed_at}`}>
+                    <td>{content.find((item) => item.id === record.content_id)?.title || 'Unknown lesson'}</td>
+                    <td>{getStudentName(record.student_id)}</td>
+                    <td>{`${record.progress_percentage || 0}%`}</td>
+                    <td>{record.last_accessed_at ? new Date(record.last_accessed_at).toLocaleString() : 'Unknown'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+        <div className="activity-table-card" style={{ marginTop: 20 }}>
+          <div style={{ marginBottom: 12, fontWeight: 600 }}>Recent Quiz Attempts</div>
+          {activityLoading ? (
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <div className="spinner"></div>
+            </div>
+          ) : quizAttempts.length === 0 ? (
+            <div className="empty-state" style={{ padding: '24px 12px' }}>
+              No quiz attempts yet. Students will appear here as they start a quiz.
+            </div>
+          ) : (
+            <div className="activity-table-wrap">
+              <table className="activity-table">
+                <thead>
+                  <tr>
+                    <th>Lesson</th>
+                    <th>Student</th>
+                    <th>Question</th>
+                    <th>Correct</th>
+                    <th>Points</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentQuizActivity.map((attempt) => (
+                    <tr key={`${attempt.student_id}-${attempt.question_id}-${attempt.id}`}>
+                      <td>{content.find((item) => item.id === questionMap[attempt.question_id]?.content_id)?.title || 'Unknown lesson'}</td>
+                      <td>{getStudentName(attempt.student_id)}</td>
+                      <td>{questionMap[attempt.question_id]?.question_text || 'Unknown question'}</td>
+                      <td>{attempt.is_correct ? 'Yes' : 'No'}</td>
+                      <td>{attempt.points_earned ?? 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+      <div className="tests-grid">
+        {content.map((item) => {
+          const itemActivity = contentActivityMap.get(item.id) || [];
+          const itemQuizActivity = quizContentActivityMap.get(item.id) || [];
+          const topStudents = itemActivity
+            .slice(0, 3)
+            .map((record) => getStudentName(record.student_id));
+
+          return (
+            <div key={item.id} className="test-card">
+              <div className="test-header">
+                <div className="test-title">{item.title}</div>
+                <div className="test-status" style={{
+                  background: item.is_published ? '#dcfce7' : '#fef3c7',
+                  color: item.is_published ? '#166534' : '#92400e'
+                }}>
+                  {item.is_published ? 'Published' : 'Draft'}
+                </div>
+              </div>
+              <div className="test-meta">
+                <div className="test-subject">Type: {item.content_type}</div>
+                {item.subject && <div className="test-subject">Subject: {item.subject}</div>}
+                {item.class_level && <div className="test-class">Class: {item.class_level}</div>}
+                <div className="test-duration">Read time: {item.estimated_read_time} min</div>
+              </div>
+              <div className="test-description">{item.description}</div>
+              {(itemActivity.length > 0 || itemQuizActivity.length > 0) && (
+                <div className="lesson-activity-summary">
+                  <div>{itemActivity.length} lesson view{itemActivity.length !== 1 ? 's' : ''}</div>
+                  {itemQuizActivity.length > 0 && (
+                    <div>{itemQuizActivity.length} quiz attempt{itemQuizActivity.length !== 1 ? 's' : ''}</div>
+                  )}
+                  {topStudents.length > 0 && (
+                    <div style={{ marginTop: 6, color: '#475569', fontSize: '0.9rem' }}>
+                      {topStudents.join(', ')}{itemActivity.length > 3 ? ` +${itemActivity.length - 3} more` : ''}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="test-actions">
+                <button
+                  className="btn btn-sm"
+                  onClick={() => handleExportStudyContentToLiveTest(item)}
+                  disabled={exportingContentId === item.id}
+                  style={{ backgroundColor: exportingContentId === item.id ? '#94a3b8' : '#7c3aed', color: '#fff' }}
+                >
+                  {exportingContentId === item.id ? 'Exporting...' : 'Export to Live Test'}
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => openEditModal(item)}
+                >
+                  Edit
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => openQuestionsModal(item)}
+                >
+                  Questions ({questions.filter(q => q.content_id === item.id).length})
+                </button>
+                <button
+                  className={`btn btn-sm ${item.is_published ? 'btn-danger' : 'btn-success'}`}
+                  onClick={() => handleTogglePublish(item.id, !item.is_published)}
+                >
+                  {item.is_published ? 'Unpublish' : 'Publish'}
+                </button>
+                <button
+                  className="btn btn-sm btn-danger"
+                  onClick={() => handleDeleteContent(item.id)}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {content.length === 0 && (
+        <div className="empty-state">
+          <div className="empty-title">No Study Content Yet</div>
+          <div className="empty-subtitle">Create your first lesson or article to get started</div>
+        </div>
+      )}
+
+      {/* Create/Edit Content Modal */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => { setShowCreateModal(false); setEditingContent(null); resetContentForm(); }}>
+          <div className="modal-content large-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editingContent ? 'Edit Content' : 'Create New Content'}</h3>
+              <button className="modal-close" onClick={() => { setShowCreateModal(false); setEditingContent(null); resetContentForm(); }}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Title *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={contentForm.title}
+                  onChange={(e) => setContentForm({...contentForm, title: e.target.value})}
+                  placeholder="Enter content title"
+                />
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  className="form-input"
+                  value={contentForm.description}
+                  onChange={(e) => setContentForm({...contentForm, description: e.target.value})}
+                  placeholder="Brief description of the content"
+                  rows={3}
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Content Type</label>
+                  <select
+                    className="form-input"
+                    value={contentForm.content_type}
+                    onChange={(e) => setContentForm({...contentForm, content_type: e.target.value})}
+                  >
+                    <option value="lesson">Lesson</option>
+                    <option value="article">Article</option>
+                    <option value="video">Video</option>
+                    <option value="document">Document</option>
+                    <option value="interactive">Interactive</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Difficulty Level</label>
+                  <select
+                    className="form-input"
+                    value={contentForm.difficulty_level}
+                    onChange={(e) => setContentForm({...contentForm, difficulty_level: e.target.value})}
+                  >
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Subject</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={contentForm.subject}
+                    onChange={(e) => setContentForm({...contentForm, subject: e.target.value})}
+                    placeholder="e.g., Mathematics, Science"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Class Level</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={contentForm.class_level}
+                    onChange={(e) => setContentForm({...contentForm, class_level: e.target.value})}
+                    placeholder="e.g., JHS 1, SHS 2"
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Estimated Read Time (minutes)</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={contentForm.estimated_read_time}
+                    onChange={(e) => setContentForm({...contentForm, estimated_read_time: parseInt(e.target.value) || 15})}
+                    min={1}
+                  />
+                </div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ margin: 0 }}>Publish Content</label>
+                  <input
+                    type="checkbox"
+                    checked={contentForm.is_published}
+                    onChange={(e) => setContentForm({...contentForm, is_published: e.target.checked})}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Content (HTML/Markdown)</label>
+                <textarea
+                  className="form-input"
+                  value={contentForm.content}
+                  onChange={(e) => setContentForm({...contentForm, content: e.target.value})}
+                  placeholder="Enter the main content here..."
+                  rows={10}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setShowCreateModal(false); setEditingContent(null); resetContentForm(); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-blue"
+                onClick={editingContent ? handleUpdateContent : handleCreateContent}
+              >
+                {editingContent ? 'Update Content' : 'Create Content'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Questions Modal */}
+      {showQuestionsModal && selectedContent && (
+        <div className="modal-overlay" onClick={() => { setShowQuestionsModal(false); setSelectedContent(null); setQuestions([]); }}>
+          <div className="modal-content large-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Questions for: {selectedContent.title}</h3>
+              <button className="modal-close" onClick={() => { setShowQuestionsModal(false); setSelectedContent(null); setQuestions([]); }}>×</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '20px' }}>
+                <h4>Add New Question</h4>
+                <div className="form-group">
+                  <label>Question Text *</label>
+                  <textarea
+                    className="form-input"
+                    value={questionForm.question_text}
+                    onChange={(e) => setQuestionForm({...questionForm, question_text: e.target.value})}
+                    placeholder="Enter the question"
+                    rows={3}
+                  />
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Question Type</label>
+                    <select
+                      className="form-input"
+                      value={questionForm.question_type}
+                      onChange={(e) => setQuestionForm({...questionForm, question_type: e.target.value})}
+                    >
+                      <option value="multiple_choice">Multiple Choice</option>
+                      <option value="true_false">True/False</option>
+                      <option value="short_answer">Short Answer</option>
+                      <option value="essay">Essay</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Points</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={questionForm.points}
+                      onChange={(e) => setQuestionForm({...questionForm, points: parseInt(e.target.value) || 1})}
+                      min={1}
+                    />
+                  </div>
+                </div>
+
+                {questionForm.question_type === 'multiple_choice' && (
+                  <div className="form-group">
+                    <label>Answer Options</label>
+                    {questionForm.answers.map((answer, index) => (
+                      <div key={index} style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={answer.answer_text}
+                          onChange={(e) => {
+                            const newAnswers = [...questionForm.answers];
+                            newAnswers[index].answer_text = e.target.value;
+                            setQuestionForm({...questionForm, answers: newAnswers});
+                          }}
+                          placeholder={`Option ${index + 1}`}
+                        />
+                        <input
+                          type="checkbox"
+                          checked={answer.is_correct}
+                          onChange={(e) => {
+                            const newAnswers = [...questionForm.answers];
+                            newAnswers[index].is_correct = e.target.checked;
+                            setQuestionForm({...questionForm, answers: newAnswers});
+                          }}
+                        />
+                        <label>Correct</label>
+                        {questionForm.answers.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newAnswers = questionForm.answers.filter((_, i) => i !== index);
+                              setQuestionForm({...questionForm, answers: newAnswers});
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => setQuestionForm({
+                        ...questionForm,
+                        answers: [...questionForm.answers, { answer_text: '', is_correct: false }]
+                      })}
+                    >
+                      + Add Option
+                    </button>
+                  </div>
+                )}
+
+                {questionForm.question_type === 'true_false' && (
+                  <div className="form-group">
+                    <label>Correct Answer</label>
+                    <select
+                      className="form-input"
+                      value={questionForm.correct_answer}
+                      onChange={(e) => setQuestionForm({...questionForm, correct_answer: e.target.value})}
+                    >
+                      <option value="">Select answer</option>
+                      <option value="true">True</option>
+                      <option value="false">False</option>
+                    </select>
+                  </div>
+                )}
+
+                {(questionForm.question_type === 'short_answer' || questionForm.question_type === 'essay') && (
+                  <div className="form-group">
+                    <label>Expected Answer</label>
+                    <textarea
+                      className="form-input"
+                      value={questionForm.correct_answer}
+                      onChange={(e) => setQuestionForm({...questionForm, correct_answer: e.target.value})}
+                      placeholder="Enter the expected answer or keywords"
+                      rows={2}
+                    />
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label>Explanation (Optional)</label>
+                  <textarea
+                    className="form-input"
+                    value={questionForm.explanation}
+                    onChange={(e) => setQuestionForm({...questionForm, explanation: e.target.value})}
+                    placeholder="Explain the correct answer"
+                    rows={2}
+                  />
+                </div>
+
+                <button
+                  className="btn btn-blue"
+                  onClick={handleAddQuestion}
+                  disabled={!questionForm.question_text.trim()}
+                >
+                  Add Question
+                </button>
+              </div>
+
+              <div>
+                <h4>Existing Questions ({questions.length})</h4>
+                {questions.length === 0 ? (
+                  <p>No questions added yet.</p>
+                ) : (
+                  <div className="questions-list">
+                    {questions.map((question, index) => (
+                      <div key={question.id} className="question-item">
+                        <div className="question-header">
+                          <div className="question-number">Q{index + 1}</div>
+                          <div className="question-text">{question.question_text}</div>
+                          <div className="question-meta">
+                            <span className="question-type">{question.question_type.replace('_', ' ')}</span>
+                            <span className="question-points">{question.points} pts</span>
+                          </div>
+                        </div>
+                        {question.question_type === 'multiple_choice' && question.study_answers && (
+                          <div className="question-answers">
+                            {question.study_answers.map((answer) => (
+                              <div key={answer.id} className={`answer-option ${answer.is_correct ? 'correct' : ''}`}>
+                                <div className="answer-label">
+                                  <span className="answer-letter">{String.fromCharCode(65 + answer.order_index)}</span>
+                                  {answer.answer_text}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {question.explanation && (
+                          <div className="question-explanation">
+                            <strong>Explanation:</strong> {question.explanation}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ADMIN NAV
 const ADMIN_NAV = [
   { section: "Overview" },
   { key: "dashboard", icon: "dashboard", label: "Dashboard", color: "#6366f1" },
+  { key: "super-admin-control", icon: "settings", label: "Super Admin Control", color: "#dc2626", superAdminOnly: true },
   { section: "Admissions & Mock Placement" },
   { key: "students", icon: "students", label: "Students", color: "#3b82f6" },
   { key: "enroll", icon: "enroll", label: "Enroll Student", color: "#0ea5e9" },
@@ -15199,6 +19980,18 @@ const ADMIN_NAV = [
   },
   { key: "results", icon: "results", label: "Results", color: "#f97316" },
   { key: "grading", icon: "grading", label: "Grade Report", color: "#ec4899" },
+  {
+    key: "live-tests",
+    icon: "quiz",
+    label: "Live Tests",
+    color: "#f59e0b",
+  },
+  {
+    key: "study-content",
+    icon: "docs",
+    label: "Study Content",
+    color: "#10b981",
+  },
   { key: "analytics", icon: "analytics", label: "Analytics", color: "#7c3aed" },
   { section: "Student Services" },
   {
@@ -15302,6 +20095,27 @@ const ADMIN_NAV = [
   { key: "quality", icon: "docs", label: "Data Quality", color: "#991b1b" },
   { key: "sla", icon: "pending", label: "Approval SLA", color: "#d97706" },
   { key: "flags", icon: "lock", label: "Feature Flags", color: "#475569" },
+  { section: "New Features & Services" },
+  { key: "peer-tutoring", icon: "students", label: "Peer Tutoring", color: "#7c3aed" },
+  { key: "counseling", icon: "support", label: "Mental Health & Counseling", color: "#06b6d4" },
+  { key: "library", icon: "docs", label: "Library Management", color: "#8b5cf6" },
+  { key: "alumni", icon: "schools", label: "Alumni Portal", color: "#0ea5e9" },
+  { key: "scholarships", icon: "finance", label: "Scholarships", color: "#f59e0b" },
+  { key: "conferences", icon: "events", label: "Parent-Teacher Conferences", color: "#ec4899" },
+  { key: "medical", icon: "profile", label: "Medical Records", color: "#ef4444" },
+  { key: "transport", icon: "events", label: "Transport & Hostel", color: "#14b8a6" },
+  { section: "Virtual Learning Environment" },
+  { key: "virtual-classroom", icon: "schools", label: "Virtual Classroom", color: "#7c3aed" },
+  { key: "course-marketplace", icon: "finance", label: "Course Marketplace", color: "#f59e0b" },
+  { key: "live-streaming", icon: "events", label: "Live Streaming", color: "#ef4444" },
+  { key: "interactive-whiteboard", icon: "docs", label: "Interactive Whiteboard", color: "#ec4899" },
+  { key: "video-conferencing", icon: "profile", label: "Video Conferencing", color: "#8b5cf6" },
+  { key: "learning-analytics", icon: "analytics", label: "Learning Analytics", color: "#06b6d4" },
+  { key: "gamification", icon: "support", label: "Gamification", color: "#f97316" },
+  { key: "adaptive-learning", icon: "chat", label: "Adaptive Learning", color: "#0ea5e9" },
+  { key: "collaborative-projects", icon: "students", label: "Collaborative Projects", color: "#22c55e" },
+  { key: "mobile-learning", icon: "profile", label: "Mobile Learning", color: "#d97706" },
+  { key: "ai-tutor", icon: "chat", label: "AI Tutor", color: "#7c2d12" },
 ];
 
 const ADMIN_SUBPAGE_MAP = {
@@ -15333,6 +20147,21 @@ const dedupeSubpageKeys = (keys) => {
     seen.add(key);
     return true;
   });
+};
+
+const getPriorityBottomKeys = (priorityKeys, navItems, blockedKeys = new Set(), limit = 5) => {
+  const selected = [];
+  const seen = new Set();
+
+  const addKey = (key) => {
+    if (!key || seen.has(key) || blockedKeys.has(key)) return;
+    selected.push(key);
+    seen.add(key);
+  };
+
+  priorityKeys.forEach(addKey);
+  navItems.forEach((item) => addKey(item.key));
+  return selected.slice(0, limit);
 };
 
 const SCHOOL_ADMIN_EXCLUDED_KEYS = new Set([
@@ -15386,29 +20215,1118 @@ const SCHOOL_ADMIN_NAV = (() => {
   return dedupeNavEntries(items);
 })();
 
+// STUDENT STUDY CONTENT PAGE
+function StudentStudyContentPage({ user, studentData }) {
+  const [content, setContent] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedContent, setSelectedContent] = useState(null);
+  const [showContentModal, setShowContentModal] = useState(false);
+  const [questions, setQuestions] = useState([]);
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
+  const [progress, setProgress] = useState({});
+
+  useEffect(() => {
+    loadContent();
+    loadProgress();
+  }, []);
+
+  const loadContent = async () => {
+    if (!supabase) {
+      setContent([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('study_content')
+        .select('*')
+        .eq('is_published', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setContent(data || []);
+    } catch (error) {
+      console.error('Error loading content:', error);
+      setContent([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStoredProgressKey = () =>
+    `student_study_progress_${studentData?.id || "anonymous"}`;
+
+  const readStoredProgress = () => {
+    try {
+      const raw = localStorage.getItem(getStoredProgressKey());
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const writeStoredProgress = (progressMap) => {
+    try {
+      localStorage.setItem(getStoredProgressKey(), JSON.stringify(progressMap));
+    } catch {}
+  };
+
+  const loadProgress = async () => {
+    if (!studentData?.id) return;
+
+    const storedProgress = readStoredProgress();
+    if (!supabase) {
+      setProgress(storedProgress);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('student_study_progress')
+        .select('*')
+        .eq('student_id', studentData.id);
+
+      if (error) throw error;
+
+      const progressMap = {};
+      data.forEach((item) => {
+        progressMap[item.content_id] = item;
+      });
+      const merged = { ...storedProgress, ...progressMap };
+      setProgress(merged);
+      writeStoredProgress(merged);
+    } catch (error) {
+      console.error('Error loading progress:', error);
+      setProgress(storedProgress);
+    }
+  };
+
+  const openContent = async (item) => {
+    setSelectedContent(item);
+    setShowContentModal(true);
+
+    const newProgress = {
+      ...progress,
+      [item.id]: {
+        ...progress[item.id],
+        student_id: studentData?.id,
+        content_id: item.id,
+        progress_percentage: 100,
+        last_accessed_at: new Date().toISOString(),
+      },
+    };
+    setProgress(newProgress);
+    writeStoredProgress(newProgress);
+
+    if (supabase && studentData?.id) {
+      try {
+        const { error } = await supabase
+          .from('student_study_progress')
+          .upsert({
+            student_id: studentData.id,
+            content_id: item.id,
+            progress_percentage: 100, // Mark as read
+            last_accessed_at: new Date().toISOString(),
+          });
+
+        if (error) throw error;
+      } catch (error) {
+        console.warn('Progress saved locally due to Supabase restriction:', error);
+      }
+    }
+  };
+
+  const startQuiz = async (contentId) => {
+    const contentProgress = progress[contentId]?.progress_percentage || 0;
+    if (contentProgress < 100) {
+      alert('Please finish the lesson before taking the quiz.');
+      return;
+    }
+    if (!supabase) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('study_questions')
+        .select(`
+          *,
+          study_answers (*)
+        `)
+        .eq('content_id', contentId)
+        .order('order_index');
+
+      if (error) throw error;
+
+      setQuestions(data || []);
+      setShowQuiz(true);
+      setQuizAnswers({});
+      setQuizSubmitted(false);
+      setQuizScore(0);
+    } catch (error) {
+      console.error('Error loading questions:', error);
+      alert('Failed to load quiz questions');
+    }
+  };
+
+  const submitQuiz = async () => {
+    if (!supabase || !studentData?.id || !selectedContent) return;
+
+    let totalScore = 0;
+    let maxScore = 0;
+
+    // Calculate score
+    questions.forEach(question => {
+      maxScore += question.points;
+      const userAnswer = quizAnswers[question.id];
+
+      if (question.question_type === 'multiple_choice') {
+        const correctAnswer = question.study_answers?.find(a => a.is_correct);
+        if (correctAnswer && userAnswer === correctAnswer.id) {
+          totalScore += question.points;
+        }
+      } else if (question.question_type === 'true_false') {
+        if (userAnswer === question.correct_answer) {
+          totalScore += question.points;
+        }
+      } else {
+        // For short answer and essay, we'll need manual grading
+        // For now, just record the attempt
+      }
+    });
+
+    setQuizScore(totalScore);
+    setQuizSubmitted(true);
+
+    // Save attempts to database
+    try {
+      const attempts = questions.map(question => ({
+        student_id: studentData.id,
+        question_id: question.id,
+        answer_text: quizAnswers[question.id] || '',
+        is_correct: false, // Will be updated based on question type
+        points_earned: 0 // Will be updated
+      }));
+
+      // For multiple choice, check correctness
+      attempts.forEach(attempt => {
+        const question = questions.find(q => q.id === attempt.question_id);
+        if (question.question_type === 'multiple_choice') {
+          const correctAnswer = question.study_answers?.find(a => a.is_correct);
+          attempt.is_correct = correctAnswer && attempt.answer_text === correctAnswer.id;
+          attempt.points_earned = attempt.is_correct ? question.points : 0;
+        }
+      });
+
+      const { error } = await supabase
+        .from('student_question_attempts')
+        .insert(attempts);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving quiz attempts:', error);
+    }
+  };
+
+  const getDifficultyColor = (level) => {
+    switch (level) {
+      case 'beginner': return '#10b981';
+      case 'intermediate': return '#f59e0b';
+      case 'advanced': return '#ef4444';
+      default: return '#6b7280';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="fade-in">
+        <div className="page-header">
+          <div className="page-title">📚 Study Content</div>
+          <div className="page-sub">Loading content...</div>
+        </div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <div className="spinner"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">📚 Study Content</div>
+        <div className="page-sub">Learn and practice with educational content</div>
+      </div>
+
+      <div className="tests-grid">
+        {content.map((item) => {
+          const userProgress = progress[item.id];
+          const isCompleted = userProgress?.progress_percentage === 100;
+
+          return (
+            <div key={item.id} className="test-card">
+              <div className="test-header">
+                <div className="test-title">{item.title}</div>
+                <div
+                  className="test-status"
+                  style={{
+                    background: getDifficultyColor(item.difficulty_level),
+                    color: 'white'
+                  }}
+                >
+                  {item.difficulty_level}
+                </div>
+              </div>
+              <div className="test-meta">
+                <div className="test-subject">Type: {item.content_type}</div>
+                {item.subject && <div className="test-subject">Subject: {item.subject}</div>}
+                {item.class_level && <div className="test-class">Class: {item.class_level}</div>}
+                <div className="test-duration">Read time: {item.estimated_read_time} min</div>
+              </div>
+              <div className="test-description">{item.description}</div>
+              {isCompleted && (
+                <div style={{ color: '#10b981', fontWeight: 'bold', marginBottom: '12px' }}>
+                  ✓ Completed
+                </div>
+              )}
+              <div className="test-actions">
+                <button
+                  className="btn btn-sm btn-blue"
+                  onClick={() => openContent(item)}
+                >
+                  {isCompleted ? 'Review' : 'Read'}
+                </button>
+                <button
+                  className="btn btn-sm btn-green"
+                  onClick={() => startQuiz(item.id)}
+                  disabled={!isCompleted}
+                  title={!isCompleted ? 'Finish the lesson first' : 'Take the quiz'}
+                  style={{ opacity: !isCompleted ? 0.65 : 1, cursor: !isCompleted ? 'not-allowed' : 'pointer' }}
+                >
+                  {isCompleted ? 'Take Quiz' : 'Finish Lesson'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {content.length === 0 && (
+        <div className="empty-state">
+          <div className="empty-title">No Study Content Available</div>
+          <div className="empty-subtitle">Check back later for new educational content</div>
+        </div>
+      )}
+
+      {/* Content Modal */}
+      {showContentModal && selectedContent && (
+        <div className="modal-overlay" onClick={() => setShowContentModal(false)}>
+          <div className="modal-content large-modal fullscreen-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{selectedContent.title}</h3>
+              <button className="modal-close" onClick={() => setShowContentModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
+                  <span><strong>Type:</strong> {selectedContent.content_type}</span>
+                  <span><strong>Subject:</strong> {selectedContent.subject || 'N/A'}</span>
+                  <span><strong>Class:</strong> {selectedContent.class_level || 'N/A'}</span>
+                  <span><strong>Difficulty:</strong> {selectedContent.difficulty_level}</span>
+                </div>
+                <p>{selectedContent.description}</p>
+              </div>
+
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
+                <div dangerouslySetInnerHTML={{ __html: selectedContent.content }} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn btn-blue"
+                onClick={() => startQuiz(selectedContent.id)}
+              >
+                Take Quiz
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowContentModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quiz Modal */}
+      {showQuiz && (
+        <div className="modal-overlay" onClick={() => { setShowQuiz(false); setQuestions([]); }}>
+          <div className="modal-content large-modal fullscreen-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Quiz: {selectedContent?.title}</h3>
+              <button className="modal-close" onClick={() => { setShowQuiz(false); setQuestions([]); }}>×</button>
+            </div>
+            <div className="modal-body">
+              {!quizSubmitted ? (
+                <div>
+                  <div style={{ marginBottom: '20px' }}>
+                    <p>Answer the following questions. You can retake this quiz anytime.</p>
+                  </div>
+
+                  {questions.map((question, index) => (
+                    <div key={question.id} style={{ marginBottom: '24px', padding: '16px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                      <div style={{ fontWeight: 'bold', marginBottom: '12px' }}>
+                        Question {index + 1}: {question.question_text}
+                      </div>
+
+                      {question.question_type === 'multiple_choice' && question.study_answers && (
+                        <div>
+                          {question.study_answers.map((answer) => (
+                            <div key={answer.id} style={{ marginBottom: '8px' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <input
+                                  type="radio"
+                                  name={`question-${question.id}`}
+                                  value={answer.id}
+                                  checked={quizAnswers[question.id] === answer.id}
+                                  onChange={(e) => setQuizAnswers({...quizAnswers, [question.id]: e.target.value})}
+                                />
+                                <span>{String.fromCharCode(65 + answer.order_index)}. {answer.answer_text}</span>
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {question.question_type === 'true_false' && (
+                        <div>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="radio"
+                              name={`question-${question.id}`}
+                              value="true"
+                              checked={quizAnswers[question.id] === 'true'}
+                              onChange={(e) => setQuizAnswers({...quizAnswers, [question.id]: e.target.value})}
+                            />
+                            <span>True</span>
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="radio"
+                              name={`question-${question.id}`}
+                              value="false"
+                              checked={quizAnswers[question.id] === 'false'}
+                              onChange={(e) => setQuizAnswers({...quizAnswers, [question.id]: e.target.value})}
+                            />
+                            <span>False</span>
+                          </label>
+                        </div>
+                      )}
+
+                      {(question.question_type === 'short_answer' || question.question_type === 'essay') && (
+                        <textarea
+                          className="form-input"
+                          value={quizAnswers[question.id] || ''}
+                          onChange={(e) => setQuizAnswers({...quizAnswers, [question.id]: e.target.value})}
+                          placeholder="Enter your answer here..."
+                          rows={question.question_type === 'essay' ? 4 : 2}
+                        />
+                      )}
+
+                      <div style={{ fontSize: '0.9em', color: '#64748b', marginTop: '8px' }}>
+                        {question.points} point{question.points !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    className="btn btn-blue"
+                    onClick={submitQuiz}
+                    disabled={Object.keys(quizAnswers).length < questions.length}
+                  >
+                    Submit Quiz
+                  </button>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '2em', marginBottom: '16px' }}>
+                    {quizScore >= questions.reduce((sum, q) => sum + q.points, 0) * 0.7 ? '🎉' : '📚'}
+                  </div>
+                  <h3>Quiz Completed!</h3>
+                  <div style={{ fontSize: '1.2em', margin: '16px 0' }}>
+                    Your Score: {quizScore} / {questions.reduce((sum, q) => sum + q.points, 0)} points
+                  </div>
+                  <div style={{ color: '#64748b', marginBottom: '24px' }}>
+                    {quizScore >= questions.reduce((sum, q) => sum + q.points, 0) * 0.7
+                      ? 'Great job! You passed the quiz.'
+                      : 'Keep studying and try again!'}
+                  </div>
+
+                  {questions.map((question, index) => {
+                    const userAnswer = quizAnswers[question.id];
+                    let isCorrect = false;
+
+                    if (question.question_type === 'multiple_choice') {
+                      const correctAnswer = question.study_answers?.find(a => a.is_correct);
+                      isCorrect = correctAnswer && userAnswer === correctAnswer.id;
+                    } else if (question.question_type === 'true_false') {
+                      isCorrect = userAnswer === question.correct_answer;
+                    }
+
+                    return (
+                      <div key={question.id} style={{
+                        marginBottom: '16px',
+                        padding: '12px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        background: isCorrect ? '#f0fdf4' : '#fef2f2'
+                      }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>
+                          Question {index + 1}: {question.question_text}
+                        </div>
+                        <div style={{ color: isCorrect ? '#166534' : '#dc2626' }}>
+                          Your answer: {
+                            question.question_type === 'multiple_choice'
+                              ? question.study_answers?.find(a => a.id === userAnswer)?.answer_text || 'Not answered'
+                              : userAnswer || 'Not answered'
+                          }
+                        </div>
+                        {!isCorrect && question.explanation && (
+                          <div style={{ marginTop: '8px', padding: '8px', background: '#f9fafb', borderRadius: '4px' }}>
+                            <strong>Explanation:</strong> {question.explanation}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <button
+                    className="btn btn-blue"
+                    onClick={() => { setShowQuiz(false); setQuestions([]); }}
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StudentStudyGroupsPage({ user, studentData }) {
+  const [groups, setGroups] = useState([]);
+  const [myGroups, setMyGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupMessages, setGroupMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [groupForm, setGroupForm] = useState({
+    name: '',
+    description: '',
+    subject: '',
+    class_level: '',
+    max_members: 10,
+    is_private: false
+  });
+  const [joinCode, setJoinCode] = useState('');
+
+  useEffect(() => {
+    loadGroups();
+    loadMyGroups();
+  }, []);
+
+  const loadGroups = async () => {
+    if (!supabase) {
+      setGroups([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('study_groups')
+        .select(`
+          *,
+          study_group_members(count)
+        `)
+        .eq('is_private', false)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setGroups(data || []);
+    } catch (error) {
+      console.error('Error loading groups:', error);
+      setGroups([]);
+    }
+  };
+
+  const loadMyGroups = async () => {
+    if (!supabase || !studentData?.id) {
+      setMyGroups([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('study_group_members')
+        .select(`
+          *,
+          study_groups(*)
+        `)
+        .eq('student_id', studentData.id);
+
+      if (error) throw error;
+      setMyGroups(data?.map(item => item.study_groups).filter(Boolean) || []);
+    } catch (error) {
+      console.error('Error loading my groups:', error);
+      setMyGroups([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createGroup = async () => {
+    if (!supabase || !studentData?.id || !groupForm.name.trim()) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('study_groups')
+        .insert([{
+          ...groupForm,
+          created_by: studentData.id
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add creator as admin member
+      const { error: memberError } = await supabase
+        .from('study_group_members')
+        .insert([{
+          group_id: data.id,
+          student_id: studentData.id,
+          role: 'admin'
+        }]);
+
+      if (memberError) throw memberError;
+
+      setGroups([data, ...groups]);
+      setMyGroups([data, ...myGroups]);
+      setShowCreateModal(false);
+      resetGroupForm();
+    } catch (error) {
+      console.error('Error creating group:', error);
+      alert(`Failed to create group: ${error.message}`);
+    }
+  };
+
+  const joinGroup = async (groupId) => {
+    if (!supabase || !studentData?.id) return;
+
+    try {
+      const { error } = await supabase
+        .from('study_group_members')
+        .insert([{
+          group_id: groupId,
+          student_id: studentData.id,
+          role: 'member'
+        }]);
+
+      if (error) throw error;
+
+      // Reload groups
+      await loadGroups();
+      await loadMyGroups();
+      alert('Successfully joined the group!');
+    } catch (error) {
+      console.error('Error joining group:', error);
+      alert(`Failed to join group: ${error.message}`);
+    }
+  };
+
+  const joinGroupByCode = async () => {
+    if (!supabase || !studentData?.id || !joinCode.trim()) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('study_groups')
+        .select('*')
+        .eq('group_code', joinCode.toUpperCase())
+        .eq('is_private', true)
+        .single();
+
+      if (error) throw error;
+
+      await joinGroup(data.id);
+      setShowJoinModal(false);
+      setJoinCode('');
+    } catch (error) {
+      console.error('Error joining group by code:', error);
+      alert('Invalid group code or group not found');
+    }
+  };
+
+  const leaveGroup = async (groupId) => {
+    if (!supabase || !studentData?.id) return;
+    if (!confirm('Are you sure you want to leave this group?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('study_group_members')
+        .delete()
+        .eq('group_id', groupId)
+        .eq('student_id', studentData.id);
+
+      if (error) throw error;
+
+      setMyGroups(myGroups.filter(g => g.id !== groupId));
+      await loadGroups();
+    } catch (error) {
+      console.error('Error leaving group:', error);
+      alert(`Failed to leave group: ${error.message}`);
+    }
+  };
+
+  const loadGroupMessages = async (groupId) => {
+    if (!supabase) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('study_group_messages')
+        .select(`
+          *,
+          students(full_name)
+        `)
+        .eq('group_id', groupId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setGroupMessages(data || []);
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      setGroupMessages([]);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!supabase || !studentData?.id || !selectedGroup || !newMessage.trim()) return;
+
+    try {
+      const { error } = await supabase
+        .from('study_group_messages')
+        .insert([{
+          group_id: selectedGroup.id,
+          student_id: studentData.id,
+          message_type: 'text',
+          content: newMessage.trim()
+        }]);
+
+      if (error) throw error;
+
+      setNewMessage('');
+      await loadGroupMessages(selectedGroup.id);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert(`Failed to send message: ${error.message}`);
+    }
+  };
+
+  const resetGroupForm = () => {
+    setGroupForm({
+      name: '',
+      description: '',
+      subject: '',
+      class_level: '',
+      max_members: 10,
+      is_private: false
+    });
+  };
+
+  const openGroupChat = (group) => {
+    setSelectedGroup(group);
+    setShowGroupModal(true);
+    loadGroupMessages(group.id);
+  };
+
+  if (loading) {
+    return (
+      <div className="fade-in">
+        <div className="page-header">
+          <div className="page-title">👥 Study Groups</div>
+          <div className="page-sub">Loading study groups...</div>
+        </div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <div className="spinner"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">👥 Study Groups</div>
+        <div className="page-sub">Collaborate with fellow students in study groups</div>
+      </div>
+
+      <div className="page-actions-row">
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-blue"
+            onClick={() => setShowCreateModal(true)}
+          >
+            + Create Group
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={() => setShowJoinModal(true)}
+          >
+            🔗 Join Private Group
+          </button>
+        </div>
+      </div>
+
+      {/* My Groups Section */}
+      {myGroups.length > 0 && (
+        <div className="activity-panel" style={{ marginBottom: '28px' }}>
+          <div className="activity-header">
+            <div>
+              <h3>My Study Groups</h3>
+              <p style={{ margin: 0, color: '#64748b' }}>
+                Groups you're currently a member of
+              </p>
+            </div>
+          </div>
+
+          <div className="tests-grid">
+            {myGroups.map((group) => (
+              <div key={group.id} className="test-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <div>
+                    <h4 style={{ margin: '0 0 8px 0', color: '#1e293b' }}>{group.name}</h4>
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.9em' }}>{group.description}</p>
+                  </div>
+                  {group.is_private && (
+                    <span style={{
+                      background: '#fef3c7',
+                      color: '#92400e',
+                      padding: '4px 8px',
+                      borderRadius: '12px',
+                      fontSize: '0.75em',
+                      fontWeight: '600'
+                    }}>
+                      Private
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', fontSize: '0.9em', color: '#64748b' }}>
+                  <span>📚 {group.subject || 'General'}</span>
+                  <span>👥 {group.class_level || 'All Levels'}</span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className="btn btn-sm btn-blue"
+                    onClick={() => openGroupChat(group)}
+                  >
+                    💬 Chat
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline"
+                    onClick={() => leaveGroup(group.id)}
+                  >
+                    Leave Group
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Public Groups Section */}
+      <div className="activity-panel">
+        <div className="activity-header">
+          <div>
+            <h3>Public Study Groups</h3>
+            <p style={{ margin: 0, color: '#64748b' }}>
+              Join public groups to study with other students
+            </p>
+          </div>
+        </div>
+
+        {groups.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-title">No Public Groups Yet</div>
+            <div className="empty-subtitle">Be the first to create a study group!</div>
+          </div>
+        ) : (
+          <div className="tests-grid">
+            {groups.map((group) => {
+              const isMember = myGroups.some(g => g.id === group.id);
+              return (
+                <div key={group.id} className="test-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                    <div>
+                      <h4 style={{ margin: '0 0 8px 0', color: '#1e293b' }}>{group.name}</h4>
+                      <p style={{ margin: 0, color: '#64748b', fontSize: '0.9em' }}>{group.description}</p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', fontSize: '0.9em', color: '#64748b' }}>
+                    <span>📚 {group.subject || 'General'}</span>
+                    <span>👥 {group.class_level || 'All Levels'}</span>
+                    <span>👤 {group.max_members} max</span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {isMember ? (
+                      <button
+                        className="btn btn-sm btn-blue"
+                        onClick={() => openGroupChat(group)}
+                      >
+                        💬 Open Chat
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn-sm btn-green"
+                        onClick={() => joinGroup(group.id)}
+                      >
+                        ➕ Join Group
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Create Group Modal */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Create Study Group</h3>
+              <button className="modal-close" onClick={() => setShowCreateModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Group Name *</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={groupForm.name}
+                  onChange={(e) => setGroupForm({...groupForm, name: e.target.value})}
+                  placeholder="Enter group name"
+                />
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  className="form-control"
+                  value={groupForm.description}
+                  onChange={(e) => setGroupForm({...groupForm, description: e.target.value})}
+                  placeholder="Describe your study group"
+                  rows={3}
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Subject</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={groupForm.subject}
+                    onChange={(e) => setGroupForm({...groupForm, subject: e.target.value})}
+                    placeholder="e.g., Mathematics, Science"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Class Level</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={groupForm.class_level}
+                    onChange={(e) => setGroupForm({...groupForm, class_level: e.target.value})}
+                    placeholder="e.g., JHS 1, SHS 2"
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Max Members</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={groupForm.max_members}
+                    onChange={(e) => setGroupForm({...groupForm, max_members: parseInt(e.target.value) || 10})}
+                    min={2}
+                    max={50}
+                  />
+                </div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ margin: 0 }}>Private Group</label>
+                  <input
+                    type="checkbox"
+                    checked={groupForm.is_private}
+                    onChange={(e) => setGroupForm({...groupForm, is_private: e.target.checked})}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setShowCreateModal(false); resetGroupForm(); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-blue"
+                onClick={createGroup}
+              >
+                Create Group
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Join Private Group Modal */}
+      {showJoinModal && (
+        <div className="modal-overlay" onClick={() => setShowJoinModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Join Private Group</h3>
+              <button className="modal-close" onClick={() => setShowJoinModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Group Code *</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  placeholder="Enter group code"
+                  style={{ textTransform: 'uppercase' }}
+                />
+                <small style={{ color: '#64748b', marginTop: '8px', display: 'block' }}>
+                  Ask the group admin for the invitation code
+                </small>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setShowJoinModal(false); setJoinCode(''); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-blue"
+                onClick={joinGroupByCode}
+              >
+                Join Group
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Group Chat Modal */}
+      {showGroupModal && selectedGroup && (
+        <div className="modal-overlay" onClick={() => setShowGroupModal(false)}>
+          <div className="modal-content large-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{selectedGroup.name} - Group Chat</h3>
+              <button className="modal-close" onClick={() => setShowGroupModal(false)}>×</button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', height: '60vh' }}>
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '16px',
+                background: '#f8fafc'
+              }}>
+                {groupMessages.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#64748b', padding: '40px' }}>
+                    No messages yet. Start the conversation!
+                  </div>
+                ) : (
+                  groupMessages.map((message) => (
+                    <div key={message.id} style={{
+                      marginBottom: '12px',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      background: message.student_id === studentData?.id ? '#dbeafe' : '#ffffff',
+                      border: '1px solid #e2e8f0'
+                    }}>
+                      <div style={{ fontWeight: '600', fontSize: '0.9em', color: '#475569', marginBottom: '4px' }}>
+                        {message.students?.full_name || 'Unknown User'}
+                      </div>
+                      <div style={{ color: '#1e293b' }}>{message.content}</div>
+                      <div style={{ fontSize: '0.8em', color: '#64748b', marginTop: '4px' }}>
+                        {new Date(message.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Type your message..."
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  className="btn btn-blue"
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim()}
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STUDENT_NAV = [
   { section: "Overview" },
   { key: "dashboard", icon: "dashboard", label: "Dashboard", color: "#6366f1" },
   { key: "profile", icon: "profile", label: "Profile", color: "#3b82f6" },
   { section: "Academics" },
-  { key: "results", icon: "results", label: "Results", color: "#f97316" },
-  {
-    key: "analytics-student",
-    icon: "analytics",
-    label: "Analytics",
-    color: "#7c3aed",
-  },
+  { key: "results", icon: "analytics", label: "Results & Analytics", color: "#f97316" },
   {
     key: "report-card",
     icon: "results",
     label: "Report Card",
     color: "#7c3aed",
-  },
-  {
-    key: "subject-progress",
-    icon: "analytics",
-    label: "Subject Progress",
-    color: "#4338ca",
   },
   {
     key: "study-planner",
@@ -15421,6 +21339,24 @@ const STUDENT_NAV = [
     icon: "events",
     label: "Exam Schedule",
     color: "#0369a1",
+  },
+  {
+    key: "live-tests",
+    icon: "quiz",
+    label: "Live Tests",
+    color: "#f59e0b",
+  },
+  {
+    key: "study-content",
+    icon: "docs",
+    label: "Study Content",
+    color: "#10b981",
+  },
+  {
+    key: "study-groups",
+    icon: "groups",
+    label: "Study Groups",
+    color: "#ec4899",
   },
   { key: "goals", icon: "grading", label: "Goals", color: "#8b5cf6" },
   { section: "Mock Placement" },
@@ -15494,13 +21430,22 @@ const STUDENT_NAV = [
     label: "Calendar Sync",
     color: "#1e40af",
   },
+  { section: "Virtual Learning" },
+  { key: "learning-resources", icon: "docs", label: "Learning Resources", color: "#7c3aed" },
+  { key: "virtual-classroom", icon: "schools", label: "Virtual Classroom", color: "#7c3aed" },
+  { key: "course-marketplace", icon: "finance", label: "Course Marketplace", color: "#f59e0b" },
+  { key: "live-streaming", icon: "events", label: "Live Streaming", color: "#ef4444" },
+  { key: "video-conferencing", icon: "profile", label: "Video Conferencing", color: "#8b5cf6" },
+  { key: "gamification", icon: "support", label: "Gamification", color: "#f97316" },
+  { key: "adaptive-learning", icon: "chat", label: "Adaptive Learning", color: "#0ea5e9" },
+  { key: "collaborative-projects", icon: "students", label: "Collaborative Projects", color: "#22c55e" },
+  { key: "mobile-learning", icon: "profile", label: "Mobile Learning", color: "#d97706" },
+  { key: "ai-tutor", icon: "chat", label: "AI Tutor", color: "#7c2d12" },
 ];
 
 const STUDENT_SUBPAGE_MAP = {
   results: [
-    "analytics-student",
     "report-card",
-    "subject-progress",
     "study-planner",
     "exam-schedule",
     "goals",
@@ -15587,17 +21532,56 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     },
   ]);
   const totalChatUnread = chatUsers.reduce((sum, u) => sum + u.unread, 0);
-  const BOTTOM = ["dashboard", "students", "pending", "analytics", "settings"];
+  // Determine if user is super admin
+  const isSuperAdminUser = useMemo(() => 
+    normalizeRoleKey(user?.role || "") === "super_admin",
+    [user?.role]
+  );
+
+  // Features restricted to super admins only
+  const SUPER_ADMIN_ONLY_KEYS = useMemo(() => 
+    new Set([
+      "registered-schools",
+      "school-register",
+      "permissions",
+      "audit",
+      "privacy",
+      "recovery",
+      "integrations",
+      "tenants",
+      "flags",
+      "auto-rules",
+      "sla"
+    ]),
+    []
+  );
+
   const blockedAdminFeeKeys = useMemo(
     () => (adminFeesPortalEnabled ? [] : ["fees", "payments", "installments"]),
     [adminFeesPortalEnabled],
   );
+
   const filteredAdminNav = useMemo(
     () =>
-      ADMIN_NAV.filter((item) =>
-        item.section ? true : !blockedAdminFeeKeys.includes(item.key),
+      ADMIN_NAV.filter((item) => {
+        if (item.section) return true;
+        // Block if fees disabled
+        if (blockedAdminFeeKeys.includes(item.key)) return false;
+        // Block if super admin only feature and user is not super admin
+        if (item.superAdminOnly && !isSuperAdminUser) return false;
+        if (!isSuperAdminUser && SUPER_ADMIN_ONLY_KEYS.has(item.key)) return false;
+        return true;
+      }),
+    [blockedAdminFeeKeys, isSuperAdminUser, SUPER_ADMIN_ONLY_KEYS],
+  );
+  const BOTTOM = useMemo(
+    () =>
+      getPriorityBottomKeys(
+        ["dashboard", "students", "live-tests", "study-content", "settings"],
+        filteredAdminNav,
+        new Set([...blockedAdminFeeKeys, ...(isSuperAdminUser ? [] : Array.from(SUPER_ADMIN_ONLY_KEYS))]),
       ),
-    [blockedAdminFeeKeys],
+    [filteredAdminNav, blockedAdminFeeKeys, isSuperAdminUser, SUPER_ADMIN_ONLY_KEYS],
   );
 
   const goTab = (key, closeSidebar = true) => {
@@ -15658,6 +21642,47 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     const normalized = normalizeSchoolRow(insertedRow);
     setRegisteredSchools((current) =>
       sortSchoolsByCategory([...(current || []), normalized]),
+    );
+    return normalized;
+  };
+
+  const updateSchool = async (schoolId, schoolForm) => {
+    const payload = {
+      name: schoolForm.name,
+      location: schoolForm.location,
+      region: schoolForm.region,
+      category: schoolForm.category,
+      type: schoolForm.type,
+      active: !!schoolForm.active,
+    };
+
+    let updatedRow = { id: schoolId, ...payload };
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("registered_schools")
+        .update(payload)
+        .eq("id", schoolId)
+        .select("*")
+        .single();
+      if (error) {
+        if (isMissingTableError(error, "registered_schools")) {
+          throw new Error(
+            "Registered school setup is not available yet. Run backend/supabase/migrations/003_registered_schools_and_school_admins.sql in Supabase, then refresh.",
+          );
+        }
+        throw error;
+      }
+      updatedRow = data || updatedRow;
+    }
+
+    const normalized = normalizeSchoolRow(updatedRow);
+    setRegisteredSchools((current) =>
+      sortSchoolsByCategory(
+        (current || []).map((school) =>
+          school.id === schoolId ? normalized : school,
+        ),
+      ),
     );
     return normalized;
   };
@@ -15738,16 +21763,20 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       );
     }
 
+    const selectedSchool = registeredSchools.find(
+      (s) => s.id === normalizedRegisteredSchoolId,
+    );
     const payload = {
       full_name: draft.full_name.trim(),
       index: draft.index.trim(),
       class: draft.class,
-      region: draft.region,
+      region: selectedSchool?.region || draft.region,
       parent_contact: draft.parent_contact?.trim() || null,
       registered_school_id: normalizedRegisteredSchoolId,
       aggregate: Number(draft.aggregate || 0),
       status: draft.status || "pending",
       photo_url: draft.photo_url?.trim() || null,
+      date_of_birth: draft.date_of_birth || null,
     };
 
     let savedRow = normalizeStudentRecord({
@@ -16026,26 +22055,7 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       .order("id", { ascending: true });
     const normalizedStudents =
       Array.isArray(students) && students.length
-        ? students.map((s, i) => ({
-            id: s.id ?? i + 1,
-            full_name: s.full_name || s.name || "Unnamed Student",
-            index: s.index || s.index_number || s.index_no || `AUTO${i + 1}`,
-            class: s.class || s.class_name || "",
-            region: s.region || "Unknown",
-            aggregate: Number(s.aggregate ?? 0),
-            status: s.status || "pending",
-            email: s.email || null,
-            parent_contact:
-              s.parent_contact ||
-              s.parent_phone ||
-              s.guardian_phone ||
-              s.guardian_contact ||
-              "",
-            photo_url: resolveStudentPhotoUrl(s),
-            registered_school_id: s.registered_school_id ?? null,
-            created_at: s.created_at || null,
-            updated_at: s.updated_at || null,
-          }))
+        ? students.map((s, i) => normalizeStudentRecord(s, i))
         : [];
     setAdminStudents(sortStudentsByIndex(normalizedStudents));
 
@@ -16297,6 +22307,28 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   };
 
   const renderPage = () => {
+    const isSuperAdminUser = normalizeRoleKey(user?.role || "") === "super_admin";
+    
+    // Check if current page is restricted to super admin
+    if (SUPER_ADMIN_ONLY_KEYS.has(tab) && !isSuperAdminUser) {
+      return (
+        <div
+          className="card card-padded"
+          style={{ textAlign: "center", padding: 48 }}
+        >
+          <div style={{ fontWeight: 700, fontSize: "1.2em", marginBottom: 16, color: "#dc2626" }}>
+            🔒 Super Admin Only
+          </div>
+          <div style={{ fontSize: ".95em", color: "#64748b", marginBottom: 24 }}>
+            This feature is restricted to Super Administrators. Contact your system administrator for access.
+          </div>
+          <button className="btn btn-blue" onClick={() => goTab("dashboard")}>
+            Return to Dashboard
+          </button>
+        </div>
+      );
+    }
+
     if (tab === "enroll")
       return (
         <EnrollPage
@@ -16305,6 +22337,8 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
             goTab("students");
             loadAdminPortalData();
           }}
+          registeredSchools={registeredSchools}
+          isSuperAdmin={isSuperAdminUser}
         />
       );
     const pages = {
@@ -16327,6 +22361,9 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
           onReloadStudents={loadAdminPortalData}
           registeredSchools={registeredSchools}
           canAssignRegisteredSchool={
+            normalizeRoleKey(user?.role || "") === "super_admin"
+          }
+          isSuperAdmin={
             normalizeRoleKey(user?.role || "") === "super_admin"
           }
         />
@@ -16352,6 +22389,8 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
           tableInfo={databaseTables.results}
         />
       ),
+      "live-tests": <LiveTestsPage currentUser={user} />,
+      "study-content": <StudyContentPage currentUser={user} />,
       grading: <GradingPage />,
       attendance: (
         <AttendancePage
@@ -16388,6 +22427,7 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
           admins={schoolAdmins}
           onRegisterNew={() => goTab("school-register")}
           onCreateSchoolAdmin={createSchoolAdmin}
+          onUpdateSchool={updateSchool}
           setupError={registrySetupError}
           currentUser={user}
         />
@@ -16449,6 +22489,157 @@ function AdminPortal({ user, onLogout, darkMode, onToggleDark }) {
       quality: <DataQualityPage />,
       sla: <ApprovalSlaPage />,
       flags: <FeatureFlagsPage />,
+      "peer-tutoring": <PeerTutoringPage />,
+      counseling: <MentalHealthPortal currentUser={user} />,
+      library: <LibraryManagementPage />,
+      alumni: <AlumniPortalPage />,
+      scholarships: <ScholarshipManagementPage />,
+      conferences: <ParentTeacherConferencePage />,
+      medical: <MedicalRecordsPage />,
+      transport: <TransportHostelPage />,
+      "virtual-classroom": <VirtualClassroomPage />,
+      "course-marketplace": <CourseMarketplacePage />,
+      "live-streaming": <LiveStreamingPage />,
+      "interactive-whiteboard": <InteractiveWhiteboardPage />,
+      "video-conferencing": <VideoConferencingPage />,
+      "learning-analytics": <LearningAnalyticsPage />,
+      gamification: <GamificationPage />,
+      "adaptive-learning": <AdaptiveLearningPage />,
+      "collaborative-projects": <CollaborativeProjectsPage />,
+      "mobile-learning": <MobileLearningPage />,
+      "ai-tutor": <AITutorPage />,
+      "super-admin-control": (
+        <div className="card card-padded">
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: "1.5em", marginBottom: 8 }}>🔒 Super Admin Control Center</h2>
+            <p style={{ color: "#64748b" }}>Manage all system features, permissions, and admin access</p>
+          </div>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, marginBottom: 24 }}>
+            {/* Feature Access Control */}
+            <div className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: 12 }}>📋 Feature Access Control</h3>
+              <p style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>
+                Control which features are available to different admin roles
+              </p>
+              <button className="btn btn-blue" style={{ width: "100%" }} onClick={() => goTab("permissions")}>
+                Manage Permissions
+              </button>
+            </div>
+
+            {/* Registered Schools Management */}
+            <div className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: 12 }}>🏫 Registered Schools</h3>
+              <p style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>
+                Register and manage schools across the platform
+              </p>
+              <button className="btn btn-blue" style={{ width: "100%" }} onClick={() => goTab("registered-schools")}>
+                View Schools
+              </button>
+            </div>
+
+            {/* Audit Trail */}
+            <div className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: 12 }}>📊 Audit Trail</h3>
+              <p style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>
+                Review all system activities and changes
+              </p>
+              <button className="btn btn-blue" style={{ width: "100%" }} onClick={() => goTab("audit")}>
+                View Audit Trail
+              </button>
+            </div>
+
+            {/* Data Privacy & Compliance */}
+            <div className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: 12 }}>🔐 Privacy & Compliance</h3>
+              <p style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>
+                Manage data privacy policies and compliance settings
+              </p>
+              <button className="btn btn-blue" style={{ width: "100%" }} onClick={() => goTab("privacy")}>
+                Privacy Settings
+              </button>
+            </div>
+
+            {/* System Recovery */}
+            <div className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: 12 }}>🔄 Disaster Recovery</h3>
+              <p style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>
+                Backup and recovery management
+              </p>
+              <button className="btn btn-blue" style={{ width: "100%" }} onClick={() => goTab("recovery")}>
+                Recovery Options
+              </button>
+            </div>
+
+            {/* Integration Management */}
+            <div className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: 12 }}>🔌 Integrations</h3>
+              <p style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>
+                Manage third-party service integrations
+              </p>
+              <button className="btn btn-blue" style={{ width: "100%" }} onClick={() => goTab("integrations")}>
+                Manage Integrations
+              </button>
+            </div>
+
+            {/* Feature Flags */}
+            <div className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: 12 }}>🚩 Feature Flags</h3>
+              <p style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>
+                Toggle features on/off across the system
+              </p>
+              <button className="btn btn-blue" style={{ width: "100%" }} onClick={() => goTab("flags")}>
+                Feature Flags
+              </button>
+            </div>
+
+            {/* Automation Rules */}
+            <div className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: 12 }}>⚙️ Automation Rules</h3>
+              <p style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>
+                Create and manage system automation rules
+              </p>
+              <button className="btn btn-blue" style={{ width: "100%" }} onClick={() => goTab("auto-rules")}>
+                Automation Rules
+              </button>
+            </div>
+
+            {/* Multi-Tenant Management */}
+            <div className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: 12 }}>🏢 Multi-Tenant</h3>
+              <p style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>
+                Manage multiple tenant instances
+              </p>
+              <button className="btn btn-blue" style={{ width: "100%" }} onClick={() => goTab("tenants")}>
+                Tenant Settings
+              </button>
+            </div>
+
+            {/* Approval SLA */}
+            <div className="card" style={{ padding: 16, border: "1px solid #e2e8f0" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: 12 }}>⏱️ Approval SLA</h3>
+              <p style={{ fontSize: ".9em", color: "#64748b", marginBottom: 12 }}>
+                Set SLA targets for approvals
+              </p>
+              <button className="btn btn-blue" style={{ width: "100%" }} onClick={() => goTab("sla")}>
+                SLA Settings
+              </button>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding: 16, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8 }}>
+            <h4 style={{ fontWeight: 700, marginBottom: 8, color: "#dc2626" }}>⚠️ Super Admin Responsibilities</h4>
+            <ul style={{ margin: 0, paddingLeft: 20, color: "#64748b", fontSize: ".9em", lineHeight: 1.6 }}>
+              <li>Ensure only trusted users have super admin access</li>
+              <li>Monitor audit trails regularly for unusual activities</li>
+              <li>Keep disaster recovery plans updated</li>
+              <li>Review and update privacy policies periodically</li>
+              <li>Test integrations thoroughly before production deployment</li>
+              <li>Document all critical system changes</li>
+            </ul>
+          </div>
+        </div>
+      ),
     };
     return (
       pages[tab] || (
@@ -16793,13 +22984,6 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
     { id: 3, name: "Support Team", avatar: "S", unread: 0, status: "away" },
   ]);
   const totalChatUnread = chatUsers.reduce((sum, item) => sum + item.unread, 0);
-  const BOTTOM = [
-    "dashboard",
-    "students",
-    "analytics",
-    "pending",
-    "school-profile",
-  ];
   const blockedAdminFeeKeys = useMemo(
     () => (adminFeesPortalEnabled ? [] : ["fees", "payments", "installments"]),
     [adminFeesPortalEnabled],
@@ -16810,6 +22994,15 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
         item.section ? true : !blockedAdminFeeKeys.includes(item.key),
       ),
     [blockedAdminFeeKeys],
+  );
+  const BOTTOM = useMemo(
+    () =>
+      getPriorityBottomKeys(
+        ["dashboard", "students", "analytics", "pending", "school-profile"],
+        filteredSchoolAdminNav,
+        new Set(blockedAdminFeeKeys),
+      ),
+    [filteredSchoolAdminNav, blockedAdminFeeKeys],
   );
 
   const goTab = (key, closeSidebar = true) => {
@@ -17244,23 +23437,9 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
             results: { ...current.results, error: scopeColumnMessage },
           }));
         } else if (Array.isArray(scopedStudentsData)) {
-          normalizedScopedStudents = scopedStudentsData.map((s, i) => ({
-            id: s.id ?? i + 1,
-            full_name: s.full_name || s.name || "Unnamed Student",
-            index: s.index || s.index_number || s.index_no || `AUTO${i + 1}`,
-            class: s.class || s.class_name || "",
-            region: s.region || "Unknown",
-            aggregate: Number(s.aggregate ?? 0),
-            status: s.status || "pending",
-            email: s.email || null,
-            parent_contact:
-              s.parent_contact ||
-              s.parent_phone ||
-              s.guardian_phone ||
-              s.guardian_contact ||
-              "",
-            photo_url: resolveStudentPhotoUrl(s),
-          }));
+          normalizedScopedStudents = scopedStudentsData.map((s, i) =>
+            normalizeStudentRecord(s, i),
+          );
         }
       }
       setSchoolStudents(sortStudentsByIndex(normalizedScopedStudents));
@@ -17409,17 +23588,7 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
         .order("id", { ascending: true });
       const normalizedStudents =
         Array.isArray(students) && students.length
-          ? students.map((s, i) => ({
-              id: s.id ?? i + 1,
-              full_name: s.full_name || s.name || "Unnamed Student",
-              index: s.index || s.index_number || s.index_no || `AUTO${i + 1}`,
-              class: s.class || s.class_name || "",
-              region: s.region || "Unknown",
-              aggregate: Number(s.aggregate ?? 0),
-              status: s.status || "pending",
-              email: s.email || null,
-              photo_url: resolveStudentPhotoUrl(s),
-            }))
+          ? students.map((s, i) => normalizeStudentRecord(s, i))
           : [];
       const studentsMap = new Map();
       normalizedStudents.forEach((student) => {
@@ -17839,12 +24008,502 @@ function SchoolAdminPortal({ user, onLogout, darkMode, onToggleDark }) {
   );
 }
 
+// STUDENT LIVE TESTS PAGE
+function StudentLiveTestsPage({ user, studentData }) {
+  const [availableTests, setAvailableTests] = useState([]);
+  const [activeSession, setActiveSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [takingTest, setTakingTest] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [testData, setTestData] = useState(null);
+
+  useEffect(() => {
+    if (studentData?.id) {
+      loadAvailableTests();
+    }
+  }, [studentData]);
+
+  useEffect(() => {
+    let timer;
+    if (takingTest && timeRemaining > 0) {
+      timer = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            handleSubmitTest();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [takingTest, timeRemaining]);
+
+  const loadAvailableTests = async () => {
+    if (!supabase || !studentData?.id) {
+      setAvailableTests([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Get active tests
+      const { data: tests, error: testsError } = await supabase
+        .from('live_tests')
+        .select('*')
+        .eq('is_active', true);
+
+      if (testsError) throw testsError;
+
+      // Get student's existing sessions
+      const { data: sessions, error: sessionsError } = await supabase
+        .from('student_test_sessions')
+        .select('test_id, is_completed, score, max_score')
+        .eq('student_id', studentData?.id);
+
+      if (sessionsError) throw sessionsError;
+
+      const sessionMap = new Map();
+      sessions?.forEach(session => {
+        sessionMap.set(session.test_id, session);
+      });
+
+      // Combine test data with session status
+      const testsWithStatus = tests?.map(test => ({
+        ...test,
+        session: sessionMap.get(test.id) || null
+      })) || [];
+
+      setAvailableTests(testsWithStatus);
+    } catch (error) {
+      console.error('Error loading tests:', error);
+      setAvailableTests([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startTest = async (test) => {
+    if (!supabase || !studentData?.id) return;
+
+    try {
+      // Create test session
+      const { data: session, error: sessionError } = await supabase
+        .from('student_test_sessions')
+        .insert([{
+          test_id: test.id,
+          student_id: studentData.id,
+          time_remaining_seconds: test.duration_minutes * 60
+        }])
+        .select()
+        .single();
+
+      if (sessionError) throw sessionError;
+
+      // Load test questions and answers
+      const { data: questions, error: questionsError } = await supabase
+        .from('test_questions')
+        .select(`
+          *,
+          test_answers (*)
+        `)
+        .eq('test_id', test.id)
+        .order('order_index');
+
+      if (questionsError) throw questionsError;
+
+      setTestData({
+        ...test,
+        questions: questions || []
+      });
+      setActiveSession(session);
+      setTimeRemaining(test.duration_minutes * 60);
+      setTakingTest(true);
+      setCurrentQuestionIndex(0);
+      setAnswers({});
+    } catch (error) {
+      console.error('Error starting test:', error);
+      alert('Failed to start test. Please try again.');
+    }
+  };
+
+  const handleAnswerChange = (questionId, answer) => {
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: answer
+    }));
+  };
+
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < testData.questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    }
+  };
+
+  const handlePrevQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+    }
+  };
+
+  const handleSubmitTest = async () => {
+    if (!supabase || !activeSession || !testData) return;
+
+    try {
+      // Calculate score
+      let totalScore = 0;
+      let maxScore = 0;
+
+      const answerInserts = testData.questions.map(question => {
+        maxScore += question.points;
+        const studentAnswer = answers[question.id];
+        let isCorrect = false;
+        let pointsEarned = 0;
+
+        if (question.question_type === 'multiple_choice') {
+          // Find the correct answer
+          const correctAnswer = question.test_answers?.find(ans => ans.is_correct);
+          isCorrect = studentAnswer === correctAnswer?.id;
+        } else if (question.question_type === 'true_false') {
+          isCorrect = studentAnswer === question.correct_answer;
+        } else if (question.question_type === 'short_answer') {
+          isCorrect = studentAnswer?.toLowerCase().trim() === question.correct_answer?.toLowerCase().trim();
+        } else if (question.question_type === 'fill_in') {
+          // Allow multiple acceptable answers separated by |
+          const acceptableAnswers = question.correct_answer?.split('|').map(ans => ans.toLowerCase().trim()) || [];
+          isCorrect = acceptableAnswers.includes(studentAnswer?.toLowerCase().trim());
+        } else if (question.question_type === 'long_text') {
+          // Long text questions are typically manually graded
+          isCorrect = false; // Will be graded manually later
+        }
+
+        if (isCorrect) {
+          pointsEarned = question.points;
+          totalScore += pointsEarned;
+        }
+
+        return {
+          session_id: activeSession.id,
+          question_id: question.id,
+          answer_text: studentAnswer || '',
+          is_correct: isCorrect,
+          points_earned: pointsEarned
+        };
+      });
+
+      // Insert answers
+      const { error: answersError } = await supabase
+        .from('student_answers')
+        .insert(answerInserts);
+
+      if (answersError) throw answersError;
+
+      // Update session
+      const { error: sessionError } = await supabase
+        .from('student_test_sessions')
+        .update({
+          submitted_at: new Date().toISOString(),
+          time_remaining_seconds: timeRemaining,
+          score: totalScore,
+          max_score: maxScore,
+          is_completed: true
+        })
+        .eq('id', activeSession.id);
+
+      if (sessionError) throw sessionError;
+
+      setTakingTest(false);
+      setActiveSession(null);
+      setTestData(null);
+      loadAvailableTests();
+      alert(`Test submitted! Your score: ${totalScore}/${maxScore}`);
+    } catch (error) {
+      console.error('Error submitting test:', error);
+      alert('Failed to submit test. Please try again.');
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="fade-in">
+        <div className="page-header">
+          <div className="page-title">Live Tests</div>
+        </div>
+        <div className="loading-spinner">Loading tests...</div>
+      </div>
+    );
+  }
+
+  if (takingTest && testData) {
+    const currentQuestion = testData.questions[currentQuestionIndex];
+    const progress = ((currentQuestionIndex + 1) / testData.questions.length) * 100;
+
+    return (
+      <div className="fade-in test-taking">
+        <div className="test-header">
+          <div className="test-title">{testData.title}</div>
+          <div className="test-timer" style={{ color: timeRemaining < 300 ? '#ef4444' : '#374151' }}>
+            <Ico name="clock" size={16} color="currentColor" />
+            {formatTime(timeRemaining)}
+          </div>
+        </div>
+
+        <div className="test-progress">
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${progress}%` }}></div>
+          </div>
+          <div className="progress-text">
+            Question {currentQuestionIndex + 1} of {testData.questions.length}
+          </div>
+        </div>
+
+        <div className="question-card">
+          <div className="question-header">
+            <span className="question-points">{currentQuestion.points} points</span>
+          </div>
+
+          <div className="question-text">
+            {currentQuestion.question_text}
+          </div>
+
+          <div className="question-answers">
+            {currentQuestion.question_type === 'multiple_choice' && currentQuestion.test_answers?.map((answer, index) => (
+              <label key={answer.id} className="answer-option">
+                <input
+                  type="radio"
+                  name={`question-${currentQuestion.id}`}
+                  value={answer.id}
+                  checked={answers[currentQuestion.id] === answer.id}
+                  onChange={() => handleAnswerChange(currentQuestion.id, answer.id)}
+                />
+                <span className="answer-label">
+                  <span className="answer-letter">{String.fromCharCode(65 + index)}</span>
+                  <span className="answer-text">{answer.answer_text}</span>
+                </span>
+              </label>
+            ))}
+
+            {currentQuestion.question_type === 'true_false' && (
+              <div className="true-false-options">
+                <label className="answer-option">
+                  <input
+                    type="radio"
+                    name={`question-${currentQuestion.id}`}
+                    value="true"
+                    checked={answers[currentQuestion.id] === 'true'}
+                    onChange={() => handleAnswerChange(currentQuestion.id, 'true')}
+                  />
+                  <span className="answer-label">True</span>
+                </label>
+                <label className="answer-option">
+                  <input
+                    type="radio"
+                    name={`question-${currentQuestion.id}`}
+                    value="false"
+                    checked={answers[currentQuestion.id] === 'false'}
+                    onChange={() => handleAnswerChange(currentQuestion.id, 'false')}
+                  />
+                  <span className="answer-label">False</span>
+                </label>
+              </div>
+            )}
+
+            {(currentQuestion.question_type === 'short_answer' || currentQuestion.question_type === 'fill_in') && (
+              <div className="short-answer-input">
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder={currentQuestion.question_type === 'fill_in' ? "Fill in the blank" : "Enter your answer"}
+                  value={answers[currentQuestion.id] || ''}
+                  onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+                />
+              </div>
+            )}
+
+            {currentQuestion.question_type === 'long_text' && (
+              <div className="long-text-input">
+                <textarea
+                  className="form-input"
+                  placeholder="Write your essay answer here..."
+                  value={answers[currentQuestion.id] || ''}
+                  onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+                  rows={8}
+                  style={{ resize: 'vertical', minHeight: '120px' }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="test-navigation">
+          <button
+            className="btn-secondary"
+            onClick={handlePrevQuestion}
+            disabled={currentQuestionIndex === 0}
+          >
+            <Ico name="back" size={16} color="#374151" />
+            Previous
+          </button>
+
+          {currentQuestionIndex < testData.questions.length - 1 ? (
+            <button
+              className="btn-primary"
+              onClick={handleNextQuestion}
+            >
+              Next
+              <Ico name="next" size={16} color="#fff" />
+            </button>
+          ) : (
+            <button
+              className="btn-success"
+              onClick={() => {
+                if (confirm('Are you sure you want to submit this test?')) {
+                  handleSubmitTest();
+                }
+              }}
+            >
+              <Ico name="check" size={16} color="#fff" />
+              Submit Test
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-title">Live Tests</div>
+      </div>
+
+      {!supabase && (
+        <div className="alert alert-warning">
+          Supabase is not configured. Live tests require database connectivity.
+        </div>
+      )}
+
+      <div className="tests-grid">
+        {availableTests.length === 0 ? (
+          <div className="empty-state">
+            <Ico name="quiz" size={48} color="#9ca3af" />
+            <div className="empty-title">No live tests available</div>
+            <div className="empty-subtitle">Check back later for new tests</div>
+          </div>
+        ) : (
+          availableTests.map(test => {
+            const hasCompleted = test.session?.is_completed;
+            const score = test.session ? `${test.session.score}/${test.session.max_score}` : null;
+
+            return (
+              <div key={test.id} className="test-card">
+                <div className="test-header">
+                  <div className="test-title">
+                    {test.title}
+                    {test.origin_content_id && (
+                      <span className="origin-badge" title="Created from study content">
+                        <Ico name="link" size={12} color="#6366f1" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="test-status" style={{ color: hasCompleted ? '#16a34a' : '#f59e0b' }}>
+                    {hasCompleted ? 'Completed' : 'Available'}
+                  </div>
+                </div>
+
+                <div className="test-meta">
+                  {test.subject && <span className="test-subject">{test.subject}</span>}
+                  {test.class && <span className="test-class">{test.class}</span>}
+                  <span className="test-type">{test.test_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                  <span className="test-duration">{test.duration_minutes} min</span>
+                  <span className="test-questions">{test.total_questions} questions</span>
+                </div>
+
+                {test.description && (
+                  <div className="test-description">{test.description}</div>
+                )}
+
+                {hasCompleted && score && (
+                  <div className="test-score">
+                    <Ico name="grade" size={16} color="#16a34a" />
+                    Your Score: {score}
+                  </div>
+                )}
+
+                <div className="test-actions">
+                  {!hasCompleted ? (
+                    <button
+                      className="btn-primary"
+                      onClick={() => startTest(test)}
+                      style={{ backgroundColor: '#f59e0b' }}
+                    >
+                      <Ico name="play" size={16} color="#fff" />
+                      Start Test
+                    </button>
+                  ) : (
+                    <button
+                      className="btn-secondary"
+                      onClick={() => alert(`Your score: ${score}`)}
+                    >
+                      <Ico name="eye" size={16} color="#374151" />
+                      View Results
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 // STUDENT PORTAL
 function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
   const { cfg: appCfg } = useContext(SettingsContext);
+  const studentDashboardEnabled = appCfg.studentDashboardEnabled !== false;
+  const studentProfileEnabled = appCfg.studentProfileEnabled !== false;
+  const studentResultsEnabled = appCfg.studentResultsEnabled !== false;
+  const studentAnalyticsEnabled = appCfg.studentAnalyticsEnabled !== false;
+  const studentReportCardEnabled = appCfg.studentReportCardEnabled !== false;
+  const studentStudyPlannerEnabled = appCfg.studentStudyPlannerEnabled !== false;
+  const studentExamScheduleEnabled = appCfg.studentExamScheduleEnabled !== false;
+  const studentLiveTestsEnabled = appCfg.studentLiveTestsEnabled !== false;
+  const studentGoalsEnabled = appCfg.studentGoalsEnabled !== false;
+  const studentAttendanceEnabled = appCfg.studentAttendanceEnabled !== false;
+  const studentAttendanceCorrectionsEnabled =
+    appCfg.studentAttendanceCorrectionsEnabled !== false;
+  const studentAnnouncementsEnabled =
+    appCfg.studentAnnouncementsEnabled !== false;
+  const studentAnnouncementsProEnabled =
+    appCfg.studentAnnouncementsProEnabled !== false;
+  const studentSupportTicketsEnabled =
+    appCfg.studentSupportTicketsEnabled !== false;
+  const studentChatEnabled = appCfg.studentChatEnabled !== false;
+  const studentDocsEnabled = appCfg.studentDocsEnabled !== false;
+  const studentUploadDocsEnabled = appCfg.studentUploadDocsEnabled !== false;
+  const studentResourcesEnabled = appCfg.studentResourcesEnabled !== false;
+  const studentAssignmentsEnabled = appCfg.studentAssignmentsEnabled !== false;
+  const studentCalendarSyncEnabled =
+    appCfg.studentCalendarSyncEnabled !== false;
   const studentFeesPortalEnabled = appCfg.studentFeesPortalEnabled !== false;
   const studentSelectionPortalEnabled =
     appCfg.studentSelectionPortalEnabled !== false;
+  const studentSelectSchoolsEnabled =
+    appCfg.studentSelectSchoolsEnabled !== false;
+  const studentMySelectionEnabled =
+    appCfg.studentMySelectionEnabled !== false;
   const childToParent = useMemo(() => {
     const map = {};
     Object.entries(STUDENT_SUBPAGE_MAP).forEach(([parent, children]) => {
@@ -17893,30 +24552,98 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
     },
   ]);
   const totalChatUnread = chatUsers.reduce((sum, u) => sum + u.unread, 0);
-  const BOTTOM = studentFeesPortalEnabled
-    ? ["dashboard", "selection", "my-selection", "fees"]
-    : ["dashboard", "selection", "my-selection", "results"];
-  const blockedStudentFeeKeys = useMemo(
-    () => (studentFeesPortalEnabled ? [] : ["fees", "pay-fees", "payment-plan"]),
-    [studentFeesPortalEnabled],
-  );
-  const blockedStudentSelectionKeys = useMemo(
-    () =>
-      studentSelectionPortalEnabled
-        ? []
-        : ["selection", "my-selection", "predictor", "scholarships"],
-    [studentSelectionPortalEnabled],
-  );
-  const blockedStudentNavKeys = useMemo(
-    () => [...blockedStudentFeeKeys, ...blockedStudentSelectionKeys],
-    [blockedStudentFeeKeys, blockedStudentSelectionKeys],
-  );
+  const blockedStudentNavKeys = useMemo(() => {
+    const blocked = [];
+    const resultsGroupVisible =
+      studentResultsEnabled ||
+      studentAnalyticsEnabled ||
+      studentReportCardEnabled ||
+      studentStudyPlannerEnabled ||
+      studentExamScheduleEnabled ||
+      studentGoalsEnabled;
+    const selectionGroupVisible =
+      studentSelectSchoolsEnabled ||
+      studentMySelectionEnabled ||
+      studentSelectionPortalEnabled;
+    const attendanceGroupVisible =
+      studentAttendanceEnabled || studentAttendanceCorrectionsEnabled;
+    const announcementsGroupVisible =
+      studentAnnouncementsEnabled ||
+      studentAnnouncementsProEnabled ||
+      studentSupportTicketsEnabled;
+    const docsGroupVisible =
+      studentDocsEnabled ||
+      studentUploadDocsEnabled ||
+      studentResourcesEnabled ||
+      studentAssignmentsEnabled ||
+      studentCalendarSyncEnabled;
+
+    if (!studentDashboardEnabled) blocked.push("dashboard");
+    if (!studentProfileEnabled) blocked.push("profile");
+    if (!resultsGroupVisible) blocked.push("results");
+    if (!studentReportCardEnabled) blocked.push("report-card");
+    if (!studentStudyPlannerEnabled) blocked.push("study-planner");
+    if (!studentExamScheduleEnabled) blocked.push("exam-schedule");
+    if (!studentLiveTestsEnabled) blocked.push("live-tests");
+    if (!studentGoalsEnabled) blocked.push("goals");
+    if (!selectionGroupVisible) blocked.push("selection");
+    if (!studentMySelectionEnabled) blocked.push("my-selection");
+    if (!studentSelectionPortalEnabled) {
+      blocked.push("predictor", "scholarships");
+    }
+    if (!attendanceGroupVisible) blocked.push("attendance");
+    if (!studentAttendanceCorrectionsEnabled)
+      blocked.push("attendance-corrections");
+    if (!studentFeesPortalEnabled) blocked.push("fees");
+    if (!studentFeesPortalEnabled) blocked.push("pay-fees", "payment-plan");
+    if (!announcementsGroupVisible) blocked.push("announcements");
+    if (!studentAnnouncementsProEnabled) blocked.push("announcements-pro");
+    if (!studentSupportTicketsEnabled) blocked.push("support-tickets");
+    if (!studentChatEnabled) blocked.push("chat");
+    if (!docsGroupVisible) blocked.push("docs");
+    if (!studentUploadDocsEnabled) blocked.push("upload-docs");
+    if (!studentResourcesEnabled) blocked.push("resources");
+    if (!studentAssignmentsEnabled) blocked.push("assignments");
+    if (!studentCalendarSyncEnabled) blocked.push("calendar-sync");
+    return blocked;
+  }, [
+    studentAnalyticsEnabled,
+    studentAnnouncementsEnabled,
+    studentAnnouncementsProEnabled,
+    studentAssignmentsEnabled,
+    studentAttendanceCorrectionsEnabled,
+    studentAttendanceEnabled,
+    studentCalendarSyncEnabled,
+    studentChatEnabled,
+    studentDocsEnabled,
+    studentExamScheduleEnabled,
+    studentFeesPortalEnabled,
+    studentGoalsEnabled,
+    studentLiveTestsEnabled,
+    studentMySelectionEnabled,
+    studentProfileEnabled,
+    studentReportCardEnabled,
+    studentResourcesEnabled,
+    studentResultsEnabled,
+    studentSelectSchoolsEnabled,
+    studentSelectionPortalEnabled,
+    studentStudyPlannerEnabled,
+  ]);
   const filteredStudentNav = useMemo(
     () =>
       STUDENT_NAV.filter((item) =>
         item.section ? true : !blockedStudentNavKeys.includes(item.key),
       ),
     [blockedStudentNavKeys],
+  );
+  const BOTTOM = useMemo(
+    () =>
+      getPriorityBottomKeys(
+        ["dashboard", "study-content", "study-groups", "live-tests", "results", "fees"],
+        filteredStudentNav,
+        new Set(blockedStudentNavKeys),
+      ),
+    [filteredStudentNav, blockedStudentNavKeys],
   );
   const selectionNoticeKey = `student_selection_notice_seen_${String(user?.email || user?.index || "student")}`;
   const selectionStatus = String(selectionRow?.status || "").toLowerCase();
@@ -17958,9 +24685,71 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
     selectionNoticeKey,
   ]);
 
+  const resolveStudentGroupTab = useCallback(
+    (key) => {
+      if (key === "results" && !studentResultsEnabled) {
+        return [
+          "report-card",
+          "study-planner",
+          "exam-schedule",
+          "goals",
+        ].find((childKey) => !blockedStudentNavKeys.includes(childKey)) || "dashboard";
+      }
+      if (key === "selection" && !studentSelectSchoolsEnabled) {
+        return ["my-selection", "predictor", "scholarships"].find(
+          (childKey) => !blockedStudentNavKeys.includes(childKey),
+        ) || "dashboard";
+      }
+      if (key === "attendance" && !studentAttendanceEnabled) {
+        return !blockedStudentNavKeys.includes("attendance-corrections")
+          ? "attendance-corrections"
+          : "dashboard";
+      }
+      if (key === "fees" && !studentFeesPortalEnabled) {
+        return !blockedStudentNavKeys.includes("pay-fees")
+          ? "pay-fees"
+          : !blockedStudentNavKeys.includes("payment-plan")
+          ? "payment-plan"
+          : !blockedStudentNavKeys.includes("results")
+          ? "results"
+          : "dashboard";
+      }
+      if (key === "announcements" && !studentAnnouncementsEnabled) {
+        return !blockedStudentNavKeys.includes("announcements-pro")
+          ? "announcements-pro"
+          : !blockedStudentNavKeys.includes("support-tickets")
+          ? "support-tickets"
+          : "dashboard";
+      }
+      if (key === "docs" && !studentDocsEnabled) {
+        return !blockedStudentNavKeys.includes("upload-docs")
+          ? "upload-docs"
+          : !blockedStudentNavKeys.includes("resources")
+          ? "resources"
+          : !blockedStudentNavKeys.includes("assignments")
+          ? "assignments"
+          : !blockedStudentNavKeys.includes("calendar-sync")
+          ? "calendar-sync"
+          : "dashboard";
+      }
+      return key;
+    },
+    [
+      blockedStudentNavKeys,
+      studentAnnouncementsEnabled,
+      studentAttendanceCorrectionsEnabled,
+      studentAttendanceEnabled,
+      studentDocsEnabled,
+      studentFeesPortalEnabled,
+      studentResultsEnabled,
+      studentSelectSchoolsEnabled,
+    ],
+  );
+
   const goTab = (key, closeSidebar = true) => {
-    setTab(key);
-    writeStoredTab(STUDENT_TAB_KEY, key);
+    const resolvedKey = resolveStudentGroupTab(key);
+    setTab(resolvedKey);
+    writeStoredTab(STUDENT_TAB_KEY, resolvedKey);
     if (closeSidebar) setSidebarOpen(false);
   };
   const reloadApp = () => window.location.reload();
@@ -17972,11 +24761,40 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
     }
   }, [tab, childToParent]);
   useEffect(() => {
-    if (blockedStudentNavKeys.includes(tab)) {
-      setTab("dashboard");
-      writeStoredTab(STUDENT_TAB_KEY, "dashboard");
+    if (!blockedStudentNavKeys.includes(tab)) {
+      const groupTabRedirects = [
+        "results",
+        "selection",
+        "attendance",
+        "fees",
+        "announcements",
+        "docs",
+      ];
+
+      if (groupTabRedirects.includes(tab)) {
+        const resolved = resolveStudentGroupTab(tab);
+        if (resolved !== tab) {
+          setTab(resolved);
+          writeStoredTab(STUDENT_TAB_KEY, resolved);
+        }
+      }
+      return;
     }
-  }, [blockedStudentNavKeys, tab]);
+
+    const firstVisibleTab = STUDENT_NAV.find(
+      (item) => !item.section && !blockedStudentNavKeys.includes(item.key),
+    )?.key;
+    const resolved = resolveStudentGroupTab(tab);
+    const nextTab =
+      resolved && !blockedStudentNavKeys.includes(resolved)
+        ? resolved
+        : firstVisibleTab || "dashboard";
+
+    if (nextTab !== tab) {
+      setTab(nextTab);
+      writeStoredTab(STUDENT_TAB_KEY, nextTab);
+    }
+  }, [blockedStudentNavKeys, resolveStudentGroupTab, tab]);
 
   useEffect(() => {
     const loadStudentPortalData = async () => {
@@ -18248,14 +25066,10 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
         />
       ),
       profile: <StudentProfile user={user} studentData={studentData} />,
-      results: <StudentResultsPage scoreValues={scoreValues} />,
-      "analytics-student": (
-        <StudentAnalyticsPage
-          scoreValues={scoreValues}
-          attendanceData={attendanceData}
-          feesData={feesData}
-        />
-      ),
+      results: <StudentResultsPage scoreValues={scoreValues} attendanceData={attendanceData} feesData={feesData} />,
+      "live-tests": <StudentLiveTestsPage user={user} studentData={studentData} />,
+      "study-content": <StudentStudyContentPage user={user} studentData={studentData} />,
+      "study-groups": <StudentStudyGroupsPage user={user} studentData={studentData} />,
       attendance: <StudentAttendance attendanceData={attendanceData} />,
       fees: <StudentFees feesData={feesData} />,
       docs: <DocumentsPage />,
@@ -18334,7 +25148,6 @@ function StudentPortal({ user, onLogout, darkMode, onToggleDark }) {
           feesData={feesData}
         />
       ),
-      "subject-progress": <SubjectProgressPage />,
       "study-planner": <StudyPlannerPage />,
       "attendance-corrections": (
         <AttendanceCorrectionPage attendanceData={attendanceData} />
@@ -18608,6 +25421,10 @@ function GhanaCampus() {
       } else {
         profile = profileData;
       }
+
+      if (!profile && authUser.id) {
+        profile = await ensureSupabaseProfile(authUser, role);
+      }
     }
 
     if (profile?.full_name) displayName = profile.full_name;
@@ -18645,7 +25462,14 @@ function GhanaCampus() {
 
   const login = async (portal, user, password) => {
     if (supabase) {
-      const identifier = String(user.email || "").trim();
+      const rawIdentifier = String(user.email || "").trim();
+      const digitsOnly = portal === "student"
+        ? rawIdentifier.replace(/\D/g, "")
+        : rawIdentifier;
+      const identifier =
+        portal === "student" && /^\d{10}$/.test(digitsOnly)
+          ? getStudentIdFromParentContact(digitsOnly, "")
+          : digitsOnly;
 
       if (portal === "student" && /^\d{12}$/.test(identifier)) {
         const indexColumns = [
@@ -18674,6 +25498,55 @@ function GhanaCampus() {
           if (studentRow) {
             matchedStudent = studentRow;
             break;
+          }
+        }
+
+        if (!matchedStudent) {
+          const fallbackMatch =
+            identifier.length === 12 && identifier.endsWith("27")
+              ? identifier.slice(0, 10)
+              : null;
+
+          if (fallbackMatch) {
+            const contactVariants = [fallbackMatch];
+            if (fallbackMatch.startsWith("0")) {
+              const noZero = fallbackMatch.slice(1);
+              contactVariants.push(`233${noZero}`);
+              contactVariants.push(`+233${noZero}`);
+            }
+
+            const contactColumns = [
+              "parent_contact",
+              "parent_phone",
+              "guardian_phone",
+              "guardian_contact",
+              "phone",
+              "parent_password",
+            ];
+
+            for (const col of contactColumns) {
+              for (const contactValue of contactVariants) {
+                const { data: studentRow, error: studentErr } = await supabase
+                  .from("students")
+                  .select("*")
+                  .eq(col, contactValue)
+                  .limit(1)
+                  .maybeSingle();
+
+                if (studentErr) {
+                  if (isMissingColumnError(studentErr)) continue;
+                  return {
+                    ok: false,
+                    error: studentErr.message || "Student validation failed.",
+                  };
+                }
+                if (studentRow) {
+                  matchedStudent = studentRow;
+                  break;
+                }
+              }
+              if (matchedStudent) break;
+            }
           }
         }
 
@@ -18723,6 +25596,69 @@ function GhanaCampus() {
         return { ok: true };
       }
 
+      // Parent login logic
+      if (portal === "parent") {
+        const { data: parentData, error: parentError } = await supabase
+          .from("parents")
+          .select("*")
+          .eq("email", rawIdentifier)
+          .limit(1)
+          .maybeSingle();
+
+        if (parentError && !isMissingTableError(parentError)) {
+          return { ok: false, error: parentError.message || "Parent authentication failed." };
+        }
+
+        if (!parentData) {
+          return { ok: false, error: "Parent account not found. Please contact the school administration." };
+        }
+
+        // For now, we'll use a simple password check. In production, this should be hashed
+        // TODO: Implement proper password hashing for parents
+        if (String(parentData.password || "") !== String(password || "")) {
+          return { ok: false, error: "Invalid email or password." };
+        }
+
+        await supabase.auth.signOut();
+        const parentSession = {
+          authSource: "custom",
+          portal: "parent",
+          user: {
+            id: parentData.id,
+            email: parentData.email,
+            role: "parent",
+            name: `${parentData.first_name} ${parentData.last_name}`,
+          },
+        };
+        setSession(parentSession);
+        writeAppSession(parentSession);
+        return { ok: true };
+      }
+
+      let authSignInError = null;
+      if (portal !== "student" && portal !== "parent") {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password,
+        });
+        if (!authError && authData?.user) {
+          const authUser = authData.user;
+          const roleFromProfile = normalizeRoleKey(portal);
+
+          if (authUser?.id && profilesTableAvailable) {
+            await ensureSupabaseProfile(authUser, roleFromProfile);
+          }
+
+          await hydrateSessionFromSupabase();
+          return { ok: true };
+        }
+        authSignInError = authError;
+        // For admin and school-admin portals, require Supabase auth for content creation permissions
+        if (portal === "admin" || portal === "school-admin") {
+          return { ok: false, error: authSignInError?.message || "Supabase authentication required for this role. Please ensure you have a Supabase account." };
+        }
+      }
+
       const { data: tableUsers, error: tableUsersError } = await supabase
         .from("users")
         .select("*")
@@ -18762,106 +25698,18 @@ function GhanaCampus() {
         return { ok: true };
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password,
-      });
-      if (error) return { ok: false, error: error.message };
-
-      const authUser = data?.user;
-      let displayName = user.name;
-      let roleFromProfile = normalizeRoleKey(portal);
-      let profile = null;
-
-      if (authUser?.id && profilesTableAvailable) {
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", authUser.id)
-          .maybeSingle();
-        if (profileError && isProfilesTableMissingError(profileError)) {
-          profilesTableAvailable = false;
-        } else {
-          profile = profileData;
-          if (profile?.full_name) displayName = profile.full_name;
-          if (profile?.role) roleFromProfile = normalizeRoleKey(profile.role);
-        }
+      if (portal !== "student" && portal !== "parent" && authSignInError) {
+        return { ok: false, error: authSignInError.message || "Invalid email or password." };
       }
 
-      const resolvedPortal = resolvePortalFromAccount(
-        profile || { role: roleFromProfile },
-        roleFromProfile,
-      );
-      const s = {
-        authSource: "supabase",
-        portal: resolvedPortal,
-        user: {
-          ...user,
-          name: displayName,
-          id: authUser?.id || user.id,
-          email: authUser?.email || user.email,
-          role: roleFromProfile,
-          registered_school_id: profile?.registered_school_id ?? null,
-          managed_school_name: profile?.managed_school_name || "",
-        },
-      };
+      const s = { authSource: "custom", portal, user };
       setSession(s);
       writeAppSession(s);
       return { ok: true };
     }
-
-    const s = { authSource: "custom", portal, user };
-    setSession(s);
-    writeAppSession(s);
-    return { ok: true };
   };
 
-  const signUp = async (portal, user, password) => {
-    if (!supabase) {
-      return { ok: false, error: "Supabase is not configured for sign-up." };
-    }
 
-    const { data, error } = await supabase.auth.signUp({
-      email: user.email,
-      password,
-      options: {
-        data: { full_name: user.name, role: portal },
-      },
-    });
-    if (error) return { ok: false, error: error.message };
-
-    const authUser = data?.user;
-    if (authUser?.id && profilesTableAvailable) {
-      const { error: profileError } = await supabase.from("profiles").upsert({
-        id: authUser.id,
-        email: user.email,
-        full_name: user.name,
-        role: portal,
-      });
-      if (profileError && isProfilesTableMissingError(profileError)) {
-        profilesTableAvailable = false;
-      }
-    }
-
-    const hasSession = !!data?.session;
-    if (hasSession && authUser) {
-      const signedUpSession = {
-        authSource: "supabase",
-        portal,
-        user: {
-          id: authUser.id,
-          email: authUser.email,
-          role: portal,
-          name: user.name,
-        },
-      };
-      setSession(signedUpSession);
-      writeAppSession(signedUpSession);
-      return { ok: true, requiresEmailVerification: false };
-    }
-
-    return { ok: true, requiresEmailVerification: true };
-  };
   const logout = () => {
     if (supabase) supabase.auth.signOut();
     setSession(null);
@@ -18870,7 +25718,7 @@ function GhanaCampus() {
 
   useEffect(() => {
     globalThis.__campus_user_email =
-      session?.user?.email || "demo@campus.local";
+      session?.user?.email || "";
   }, [session]);
 
   useEffect(() => {
@@ -18951,6 +25799,13 @@ function GhanaCampus() {
           darkMode={darkMode}
           onToggleDark={() => setDarkMode((d) => !d)}
         />
+      ) : session.portal === "parent" ? (
+        <ParentPortal
+          user={session.user}
+          onLogout={logout}
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode((d) => !d)}
+        />
       ) : (
         <StudentPortal
           user={session.user}
@@ -18960,6 +25815,480 @@ function GhanaCampus() {
         />
       )}
     </SettingsContext.Provider>
+  );
+}
+
+// Parent Portal Component
+function ParentPortal({ user, onLogout, darkMode, onToggleDark }) {
+  const [tab, setTab] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [children, setChildren] = useState([]);
+  const [selectedChild, setSelectedChild] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [messages, setMessages] = useState([]);
+
+  // Parent navigation
+  const PARENT_NAV = [
+    { section: "Overview" },
+    { key: "dashboard", icon: "dashboard", label: "Dashboard", color: "#6366f1" },
+    { key: "children", icon: "family", label: "My Children", color: "#059669" },
+    { section: "Academic Monitoring" },
+    { key: "progress", icon: "analytics", label: "Academic Progress", color: "#f97316" },
+    { key: "attendance", icon: "attendance", label: "Attendance", color: "#14b8a6" },
+    { key: "fees", icon: "fees", label: "Fees & Payments", color: "#22c55e" },
+    { key: "results", icon: "results", label: "Exam Results", color: "#7c3aed" },
+    { section: "Communication" },
+    { key: "messages", icon: "chat", label: "Messages", color: "#ec4899" },
+    { key: "notifications", icon: "bell", label: "Notifications", color: "#f59e0b" },
+  ];
+
+  const BOTTOM = useMemo(
+    () => ["dashboard", "children", "progress", "messages"],
+    []
+  );
+
+  useEffect(() => {
+    loadParentData();
+  }, []);
+
+  const loadParentData = async () => {
+    if (!supabase) return;
+
+    try {
+      setLoading(true);
+
+      // Load children
+      const { data: childrenData, error: childrenError } = await supabase
+        .from("parent_students")
+        .select(`
+          student_id,
+          relationship,
+          is_primary,
+          students (
+            id,
+            full_name,
+            index_number,
+            class,
+            photo_url
+          )
+        `)
+        .eq("parent_id", user.id);
+
+      if (childrenError) {
+        console.error("Error loading children:", childrenError);
+      } else {
+        const formattedChildren = childrenData.map(item => ({
+          ...item.students,
+          relationship: item.relationship,
+          is_primary: item.is_primary
+        }));
+        setChildren(formattedChildren);
+        if (formattedChildren.length > 0 && !selectedChild) {
+          setSelectedChild(formattedChildren[0]);
+        }
+      }
+
+      // Load notifications
+      const { data: notificationsData, error: notificationsError } = await supabase
+        .from("parent_notifications")
+        .select("*")
+        .eq("parent_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (!notificationsError) {
+        setNotifications(notificationsData || []);
+      }
+
+      // Load messages
+      const { data: messagesData, error: messagesError } = await supabase
+        .from("parent_teacher_messages")
+        .select(`
+          *,
+          students (full_name),
+          teachers (full_name)
+        `)
+        .eq("parent_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (!messagesError) {
+        setMessages(messagesData || []);
+      }
+
+    } catch (error) {
+      console.error("Error loading parent data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const goTab = (key, closeSidebar = true) => {
+    setTab(key);
+    if (closeSidebar) setSidebarOpen(false);
+  };
+
+  const renderDashboard = () => (
+    <div className="portal-content">
+      <div className="page-header">
+        <h1>Parent Dashboard</h1>
+        <p>Welcome back, {user.name}</p>
+      </div>
+
+      <div className="dashboard-grid">
+        <div className="dashboard-card">
+          <div className="card-icon"><Ico name="family" size={24} color="#059669" /></div>
+          <div className="card-content">
+            <h3>{children.length}</h3>
+            <p>Children</p>
+          </div>
+        </div>
+
+        <div className="dashboard-card">
+          <div className="card-icon"><Ico name="bell" size={24} color="#f59e0b" /></div>
+          <div className="card-content">
+            <h3>{notifications.filter(n => !n.is_read).length}</h3>
+            <p>Unread Notifications</p>
+          </div>
+        </div>
+
+        <div className="dashboard-card">
+          <div className="card-icon"><Ico name="chat" size={24} color="#ec4899" /></div>
+          <div className="card-content">
+            <h3>{messages.length}</h3>
+            <p>Messages</p>
+          </div>
+        </div>
+      </div>
+
+      {children.length > 0 && (
+        <div className="children-overview">
+          <h2>My Children</h2>
+          <div className="children-grid">
+            {children.map(child => (
+              <div key={child.id} className="child-card" onClick={() => { setSelectedChild(child); goTab("progress"); }}>
+                <div className="child-avatar">
+                  {child.photo_url ? (
+                    <img src={child.photo_url} alt={child.full_name} />
+                  ) : (
+                    <Ico name="profile" size={32} color="#64748b" />
+                  )}
+                </div>
+                <div className="child-info">
+                  <h4>{child.full_name}</h4>
+                  <p>{child.class} • {child.relationship}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderChildren = () => (
+    <div className="portal-content">
+      <div className="page-header">
+        <h1>My Children</h1>
+      </div>
+
+      {children.length === 0 ? (
+        <div className="empty-state">
+          <Ico name="family" size={48} color="#64748b" />
+          <h3>No children linked</h3>
+          <p>Please contact the school administration to link your children to your account.</p>
+        </div>
+      ) : (
+        <div className="children-list">
+          {children.map(child => (
+            <div key={child.id} className="child-detail-card">
+              <div className="child-header">
+                <div className="child-avatar-large">
+                  {child.photo_url ? (
+                    <img src={child.photo_url} alt={child.full_name} />
+                  ) : (
+                    <Ico name="profile" size={48} color="#64748b" />
+                  )}
+                </div>
+                <div className="child-details">
+                  <h3>{child.full_name}</h3>
+                  <p>Class: {child.class}</p>
+                  <p>Index: {child.index_number}</p>
+                  <p>Relationship: {child.relationship}</p>
+                </div>
+              </div>
+              <div className="child-actions">
+                <button className="btn-secondary" onClick={() => { setSelectedChild(child); goTab("progress"); }}>
+                  <Ico name="analytics" size={16} /> View Progress
+                </button>
+                <button className="btn-secondary" onClick={() => { setSelectedChild(child); goTab("attendance"); }}>
+                  <Ico name="attendance" size={16} /> View Attendance
+                </button>
+                <button className="btn-secondary" onClick={() => { setSelectedChild(child); goTab("fees"); }}>
+                  <Ico name="fees" size={16} /> View Fees
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderProgress = () => {
+    if (!selectedChild) {
+      return (
+        <div className="portal-content">
+          <div className="empty-state">
+            <Ico name="analytics" size={48} color="#64748b" />
+            <h3>Select a child</h3>
+            <p>Please select a child from the dashboard or children tab to view their progress.</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="portal-content">
+        <div className="page-header">
+          <h1>Academic Progress - {selectedChild.full_name}</h1>
+          <button className="btn-secondary" onClick={() => goTab("children")}>
+            <Ico name="back" size={16} /> Change Child
+          </button>
+        </div>
+
+        <div className="progress-content">
+          <p>Academic progress tracking for {selectedChild.full_name} will be implemented here.</p>
+          <p>This will include grades, subject performance, and progress reports.</p>
+        </div>
+      </div>
+    );
+  };
+
+  const renderAttendance = () => {
+    if (!selectedChild) {
+      return (
+        <div className="portal-content">
+          <div className="empty-state">
+            <Ico name="attendance" size={48} color="#64748b" />
+            <h3>Select a child</h3>
+            <p>Please select a child to view their attendance records.</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="portal-content">
+        <div className="page-header">
+          <h1>Attendance - {selectedChild.full_name}</h1>
+          <button className="btn-secondary" onClick={() => goTab("children")}>
+            <Ico name="back" size={16} /> Change Child
+          </button>
+        </div>
+
+        <div className="attendance-content">
+          <p>Attendance records for {selectedChild.full_name} will be displayed here.</p>
+          <p>This will show attendance percentage, absences, and tardiness.</p>
+        </div>
+      </div>
+    );
+  };
+
+  const renderFees = () => {
+    if (!selectedChild) {
+      return (
+        <div className="portal-content">
+          <div className="empty-state">
+            <Ico name="fees" size={48} color="#64748b" />
+            <h3>Select a child</h3>
+            <p>Please select a child to view their fee information.</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="portal-content">
+        <div className="page-header">
+          <h1>Fees & Payments - {selectedChild.full_name}</h1>
+          <button className="btn-secondary" onClick={() => goTab("children")}>
+            <Ico name="back" size={16} /> Change Child
+          </button>
+        </div>
+
+        <div className="fees-content">
+          <p>Fee information and payment history for {selectedChild.full_name} will be displayed here.</p>
+          <p>This will include outstanding balances, payment plans, and transaction history.</p>
+        </div>
+      </div>
+    );
+  };
+
+  const renderResults = () => {
+    if (!selectedChild) {
+      return (
+        <div className="portal-content">
+          <div className="empty-state">
+            <Ico name="results" size={48} color="#64748b" />
+            <h3>Select a child</h3>
+            <p>Please select a child to view their exam results.</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="portal-content">
+        <div className="page-header">
+          <h1>Exam Results - {selectedChild.full_name}</h1>
+          <button className="btn-secondary" onClick={() => goTab("children")}>
+            <Ico name="back" size={16} /> Change Child
+          </button>
+        </div>
+
+        <div className="results-content">
+          <p>Exam results and grades for {selectedChild.full_name} will be displayed here.</p>
+          <p>This will include subject-wise grades, overall performance, and trends.</p>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMessages = () => (
+    <div className="portal-content">
+      <div className="page-header">
+        <h1>Messages</h1>
+      </div>
+
+      <div className="messages-content">
+        <p>Communication with teachers will be implemented here.</p>
+        <p>Parents can send messages to teachers and receive responses.</p>
+      </div>
+    </div>
+  );
+
+  const renderNotifications = () => (
+    <div className="portal-content">
+      <div className="page-header">
+        <h1>Notifications</h1>
+      </div>
+
+      {notifications.length === 0 ? (
+        <div className="empty-state">
+          <Ico name="bell" size={48} color="#64748b" />
+          <h3>No notifications</h3>
+          <p>You don't have any notifications at the moment.</p>
+        </div>
+      ) : (
+        <div className="notifications-list">
+          {notifications.map(notification => (
+            <div key={notification.id} className={`notification-item ${!notification.is_read ? 'unread' : ''}`}>
+              <div className="notification-header">
+                <h4>{notification.title}</h4>
+                <span className="notification-date">
+                  {new Date(notification.created_at).toLocaleDateString()}
+                </span>
+              </div>
+              <p>{notification.message}</p>
+              {notification.student_id && (
+                <small>Regarding: {children.find(c => c.id === notification.student_id)?.full_name}</small>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderContent = () => {
+    switch (tab) {
+      case "dashboard": return renderDashboard();
+      case "children": return renderChildren();
+      case "progress": return renderProgress();
+      case "attendance": return renderAttendance();
+      case "fees": return renderFees();
+      case "results": return renderResults();
+      case "messages": return renderMessages();
+      case "notifications": return renderNotifications();
+      default: return renderDashboard();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="portal-loading">
+        <div className="loading-spinner"></div>
+        <p>Loading your dashboard...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`portal-container ${darkMode ? "dark-mode" : ""}`}>
+      <Topbar
+        user={user}
+        onLogout={onLogout}
+        darkMode={darkMode}
+        onToggleDark={onToggleDark}
+        onMenuClick={() => setSidebarOpen(true)}
+      />
+
+      <div className="portal-main">
+        <div className={`portal-sidebar ${sidebarOpen ? "open" : ""}`}>
+          <div className="sidebar-content">
+            <nav className="portal-nav">
+              {PARENT_NAV.map((item, index) => {
+                if (item.section) {
+                  return (
+                    <div key={index} className="nav-section">
+                      {item.section}
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    key={item.key}
+                    className={`nav-item ${tab === item.key ? "active" : ""}`}
+                    onClick={() => goTab(item.key)}
+                    style={{ "--nav-color": item.color }}
+                  >
+                    <Ico name={item.icon} size={20} color={tab === item.key ? item.color : "#64748b"} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+
+        <div className="portal-content-area">
+          {renderContent()}
+        </div>
+      </div>
+
+      <div className="portal-bottom-nav">
+        {BOTTOM.map((key) => {
+          const item = PARENT_NAV.find((n) => n.key === key);
+          if (!item) return null;
+          return (
+            <button
+              key={key}
+              className={`bottom-nav-item ${tab === key ? "active" : ""}`}
+              onClick={() => goTab(key)}
+              title={item.label}
+            >
+              <Ico name={item.icon} size={20} color={tab === key ? item.color : "#64748b"} />
+            </button>
+          );
+        })}
+      </div>
+
+      {sidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+      )}
+    </div>
   );
 }
 

@@ -56,8 +56,10 @@ export function Landing({ onSelect, hasSupabase }) {
       return;
     }
     if (mode === "student") {
-      if (!/^\d{12}$/.test(email)) {
-        setErr("Student ID must be exactly 12 digits.");
+      if (!/^\d{10}$/.test(email) && !/^\d{12}$/.test(email)) {
+        setErr(
+          "Enter a 10-digit parent contact or the 12-digit generated student ID.",
+        );
         return;
       }
       if (!/^\d{10}$/.test(pwd)) {
@@ -65,10 +67,20 @@ export function Landing({ onSelect, hasSupabase }) {
         return;
       }
     }
+    if (mode === "parent") {
+      if (!email.includes("@")) {
+        setErr("Please enter a valid email address.");
+        return;
+      }
+      if (pwd.length < 6) {
+        setErr("Password must be at least 6 characters.");
+        return;
+      }
+    }
     setErr("");
     setLoading(true);
     try {
-      const payloadUser = { name: mode === "admin" ? "Admin User" : "Student User", role: mode, email };
+      const payloadUser = { name: mode === "admin" ? "Admin User" : mode === "parent" ? "Parent User" : "Student User", role: mode, email };
       const result = await onSelect(mode, payloadUser, pwd);
       if (!result?.ok) {
         const rawErr = String(result?.error || "");
@@ -92,7 +104,7 @@ export function Landing({ onSelect, hasSupabase }) {
             <div className="landing-logo"><img src="https://image2url.com/r2/default/images/1773576400522-25d9d22b-3e79-4a9a-adc2-eae0031fbfe1.png" alt="Campus Ghana" /></div>
           </button>
           <div className="landing-title">Sign In</div>
-          <div className="landing-sub">{mode === "admin" ? "Admin Portal" : "Student Portal"}</div>
+          <div className="landing-sub">{mode === "admin" ? "Admin Portal" : mode === "parent" ? "Parent Portal" : "Student Portal"}</div>
           <div className="login-form">
             <button className="login-back" onClick={() => { setMode(null); setErr(""); }}><Ico name="back" size={16} color="#1a56db" /> Back</button>
             {err && <div className="alert alert-danger">{err}</div>}
@@ -100,7 +112,13 @@ export function Landing({ onSelect, hasSupabase }) {
               <span className="auth-input-icon"><Ico name="email" size={18} color="#64748b" /></span>
               <input
                 className="form-input"
-                placeholder={mode === "admin" ? "admin@campus.edu" : "12-digit student ID"}
+                placeholder={
+                  mode === "admin"
+                    ? "admin@campus.edu"
+                    : mode === "parent"
+                    ? "parent@email.com"
+                    : "Student ID or guardian phone"
+                }
                 value={email}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -111,7 +129,7 @@ export function Landing({ onSelect, hasSupabase }) {
                   }
                 }}
                 maxLength={mode === "student" ? 12 : 254}
-                inputMode={mode === "student" ? "numeric" : "email"}
+                inputMode={mode === "student" ? "numeric" : mode === "parent" ? "email" : "email"}
               />
             </div>
             <div className="auth-input-wrap">
@@ -120,7 +138,7 @@ export function Landing({ onSelect, hasSupabase }) {
                 className="form-input"
                 type={showPwd ? "text" : "password"}
                 data-has-toggle="true"
-                placeholder={mode === "admin" ? "Password" : "Parent contact"}
+                placeholder={mode === "admin" ? "Password" : mode === "parent" ? "Password" : "Parent contact"}
                 value={pwd}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -144,7 +162,6 @@ export function Landing({ onSelect, hasSupabase }) {
               </button>
             </div>
             <button className="btn-primary" onClick={handle} disabled={loading}><Ico name="signin" size={18} color="#fff" />{loading ? "Signing In..." : "Sign In"}</button>
-            {!hasSupabase && <div className="demo-hint">Demo: use any email + any password</div>}
           </div>
         </div>
       </div>
@@ -185,6 +202,11 @@ export function Landing({ onSelect, hasSupabase }) {
             <div className="portal-btn-icon"><Ico name="profile" size={24} color="#7c3aed" /></div>
             <div className="portal-btn-label">Student</div>
             <div className="portal-btn-sub">Students & parents</div>
+          </button>
+          <button className="portal-btn" onClick={() => setMode("parent")}>
+            <div className="portal-btn-icon"><Ico name="family" size={24} color="#059669" /></div>
+            <div className="portal-btn-label">Parent</div>
+            <div className="portal-btn-sub">Monitor your children</div>
           </button>
         </div>
       </div>
