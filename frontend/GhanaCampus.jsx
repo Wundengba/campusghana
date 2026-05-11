@@ -18750,6 +18750,7 @@ function StudyContentPage({ currentUser }) {
     class_level: '',
     content: '',
     tags: [],
+    chapters: [],
     difficulty_level: 'intermediate',
     estimated_read_time: 15,
     is_published: false
@@ -19006,6 +19007,7 @@ function StudyContentPage({ currentUser }) {
           class_level: item.class_level || '',
           content: item.content || '',
           tags: Array.isArray(item.tags) ? item.tags : [],
+          chapters: Array.isArray(item.chapters) ? item.chapters : [],
           difficulty_level: item.difficulty_level || 'intermediate',
           estimated_read_time: item.estimated_read_time || 15,
           is_published: item.is_published || false,
@@ -19169,6 +19171,7 @@ function StudyContentPage({ currentUser }) {
       class_level: '',
       content: '',
       tags: [],
+      chapters: [],
       difficulty_level: 'intermediate',
       estimated_read_time: 15,
       is_published: false
@@ -19267,6 +19270,7 @@ function StudyContentPage({ currentUser }) {
       class_level: item.class_level || '',
       content: item.content || '',
       tags: item.tags || [],
+      chapters: item.chapters || [],
       difficulty_level: item.difficulty_level,
       estimated_read_time: item.estimated_read_time || 15,
       is_published: item.is_published
@@ -19570,6 +19574,7 @@ function StudyContentPage({ currentUser }) {
                 <div className="test-subject">Type: {item.content_type}</div>
                 {item.subject && <div className="test-subject">Subject: {item.subject}</div>}
                 {item.class_level && <div className="test-class">Class: {item.class_level}</div>}
+                {item.chapters?.length > 0 && <div className="test-subject">Chapters: {item.chapters.length}</div>}
                 <div className="test-duration">Read time: {item.estimated_read_time} min</div>
               </div>
               <div className="test-description">{item.description}</div>
@@ -19731,6 +19736,75 @@ function StudyContentPage({ currentUser }) {
                   />
                 </div>
               </div>
+
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <label style={{ margin: 0 }}>Chapters</label>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => setContentForm({
+                      ...contentForm,
+                      chapters: [...(contentForm.chapters || []), { title: '', content: '' }]
+                    })}
+                  >
+                    + Add Chapter
+                  </button>
+                </div>
+                {(contentForm.chapters || []).length === 0 ? (
+                  <div style={{ color: '#64748b', fontSize: '0.95rem', marginBottom: 10 }}>
+                    Add chapters for this content item to break it into sections.
+                  </div>
+                ) : null}
+                {(contentForm.chapters || []).map((chapter, index) => (
+                  <div key={index} style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 14, marginBottom: 12 }}>
+                    <div className="form-row" style={{ alignItems: 'flex-start' }}>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label>Chapter Title</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={chapter.title}
+                          onChange={(e) => {
+                            const chapters = [...(contentForm.chapters || [])];
+                            chapters[index] = { ...chapters[index], title: e.target.value };
+                            setContentForm({ ...contentForm, chapters });
+                          }}
+                          placeholder="Chapter title"
+                        />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', marginTop: 24 }}>
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          style={{ height: 36 }}
+                          onClick={() => {
+                            const chapters = (contentForm.chapters || []).filter((_, i) => i !== index);
+                            setContentForm({ ...contentForm, chapters });
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Chapter Content</label>
+                      <textarea
+                        className="form-input"
+                        value={chapter.content}
+                        onChange={(e) => {
+                          const chapters = [...(contentForm.chapters || [])];
+                          chapters[index] = { ...chapters[index], content: e.target.value };
+                          setContentForm({ ...contentForm, chapters });
+                        }}
+                        placeholder="Enter chapter content"
+                        rows={4}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <div className="form-group">
                 <label>Content (HTML/Markdown)</label>
                 <textarea
