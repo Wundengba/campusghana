@@ -22,7 +22,7 @@ alter table public.teachers add constraint teachers_role_check
 
 alter table public.school_admins drop constraint if exists school_admins_role_check;
 alter table public.school_admins add constraint school_admins_role_check 
-  check (role in ('admin', 'teacher', 'staff', 'student'));
+  check (role in ('admin', 'school_admin', 'teacher', 'staff', 'student'));
 
 -- Step 3: Update the portal visibility restriction to check for admin role only
 create or replace function public.enforce_portal_visibility_admin()
