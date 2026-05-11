@@ -18759,6 +18759,7 @@ function StudyContentPage({ currentUser }) {
   const [questionForm, setQuestionForm] = useState({
     question_text: '',
     question_type: 'multiple_choice',
+    chapter_index: 0,
     points: 1,
     correct_answer: '',
     explanation: '',
@@ -19039,6 +19040,7 @@ function StudyContentPage({ currentUser }) {
             content_id: createdItem.id,
             question_text: q.question_text,
             question_type: q.question_type || 'multiple_choice',
+            chapter_index: typeof q.chapter_index === 'number' ? q.chapter_index : 0,
             points: q.points || 1,
             correct_answer: q.correct_answer || '',
             explanation: q.explanation || '',
@@ -19189,7 +19191,8 @@ function StudyContentPage({ currentUser }) {
           study_answers (*)
         `)
         .eq('content_id', contentId)
-        .order('order_index');
+        .order('chapter_index', { ascending: true })
+        .order('order_index', { ascending: true });
 
       if (error) throw error;
       setQuestions(data || []);
@@ -19204,17 +19207,23 @@ function StudyContentPage({ currentUser }) {
 
     try {
       // Insert question
+      const questionPayload = {
+        content_id: selectedContent.id,
+        question_text: questionForm.question_text,
+        question_type: questionForm.question_type,
+        points: questionForm.points,
+        correct_answer: questionForm.correct_answer,
+        explanation: questionForm.explanation,
+        order_index: questions.length
+      };
+
+      if (typeof questionForm.chapter_index === 'number') {
+        questionPayload.chapter_index = questionForm.chapter_index;
+      }
+
       const { data: questionData, error: questionError } = await supabase
         .from('study_questions')
-        .insert([{
-          content_id: selectedContent.id,
-          question_text: questionForm.question_text,
-          question_type: questionForm.question_type,
-          points: questionForm.points,
-          correct_answer: questionForm.correct_answer,
-          explanation: questionForm.explanation,
-          order_index: questions.length
-        }])
+        .insert([questionPayload])
         .select()
         .single();
 
@@ -19253,6 +19262,7 @@ function StudyContentPage({ currentUser }) {
     setQuestionForm({
       question_text: '',
       question_type: 'multiple_choice',
+      chapter_index: 0,
       points: 1,
       correct_answer: '',
       explanation: '',
@@ -19870,6 +19880,17 @@ function StudyContentPage({ currentUser }) {
                     </select>
                   </div>
                   <div className="form-group">
+                    <label>Chapter</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={questionForm.chapter_index}
+                      onChange={(e) => setQuestionForm({...questionForm, chapter_index: parseInt(e.target.value) >= 0 ? parseInt(e.target.value) : 0})}
+                      min={0}
+                    />
+                    <small style={{ color: '#64748b' }}>Enter the chapter number for this question</small>
+                  </div>
+                  <div className="form-group">
                     <label>Points</label>
                     <input
                       type="number"
@@ -19995,6 +20016,7 @@ function StudyContentPage({ currentUser }) {
                           <div className="question-meta">
                             <span className="question-type">{question.question_type.replace('_', ' ')}</span>
                             <span className="question-points">{question.points} pts</span>
+                            <span className="question-chapter">Chapter {question.chapter_index ?? 0}</span>
                           </div>
                         </div>
                         {question.question_type === 'multiple_choice' && question.study_answers && (
@@ -20294,12 +20316,14 @@ function StudentStudyContentPage({ user, studentData }) {
   const [content, setContent] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedContent, setSelectedContent] = useState(null);
+  const [activeChapterIndex, setActiveChapterIndex] = useState(0);
   const [showContentModal, setShowContentModal] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [showQuiz, setShowQuiz] = useState(false);
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
+  const [quizPassed, setQuizPassed] = useState(false);
   const [progress, setProgress] = useState({});
 
   useEffect(() => {
@@ -20349,6 +20373,69 @@ function StudentStudyContentPage({ user, studentData }) {
     } catch {}
   };
 
+  const getProgressKey = (contentId, chapterIndex) => {
+    return typeof chapterIndex === 'number' ? `${contentId}:${chapterIndex}` : contentId;
+  };
+
+  const hasChapters = (item) => Array.isArray(item?.chapters) && item.chapters.length > 0;
+
+  const isChapterCompleted = (contentId, chapterIndex) => {
+    return !!progress[getProgressKey(contentId, chapterIndex)]?.completed;
+  };
+
+  const isContentCompleted = (item) => {
+    if (!hasChapters(item)) {
+      return progress[item.id]?.progress_percentage === 100;
+    }
+    return item.chapters.every((_, index) => isChapterCompleted(item.id, index));
+  };
+
+  const getNextIncompleteChapter = (item) => {
+    if (!hasChapters(item)) return -1;
+    return item.chapters.findIndex((_, index) => !isChapterCompleted(item.id, index));
+  };
+
+  const saveProgressEntry = async (contentId, chapterIndex, entry) => {
+    const key = getProgressKey(contentId, chapterIndex);
+    const newProgress = {
+      ...progress,
+      [key]: {
+        ...progress[key],
+        ...entry,
+        student_id: studentData?.id,
+        content_id: contentId,
+        chapter_index: typeof chapterIndex === 'number' ? chapterIndex : null,
+        last_accessed_at: new Date().toISOString(),
+      },
+    };
+
+    setProgress(newProgress);
+    writeStoredProgress(newProgress);
+
+    if (!supabase || !studentData?.id) return;
+
+    try {
+      const payload = {
+        student_id: studentData.id,
+        content_id: contentId,
+        progress_percentage: entry.progress_percentage ?? 100,
+        last_accessed_at: new Date().toISOString(),
+      };
+
+      if (typeof chapterIndex === 'number') {
+        payload.chapter_index = chapterIndex;
+      }
+
+      const { error } = await supabase
+        .from('student_study_progress')
+        .upsert(payload, { onConflict: ['student_id', 'content_id', 'chapter_index'] });
+
+      if (error) throw error;
+    } catch (error) {
+      console.warn('Progress saved locally due to Supabase restriction:', error);
+    }
+  };
+
   const loadProgress = async () => {
     if (!studentData?.id) return;
 
@@ -20368,8 +20455,12 @@ function StudentStudyContentPage({ user, studentData }) {
 
       const progressMap = {};
       data.forEach((item) => {
-        progressMap[item.content_id] = item;
+        const key = typeof item.chapter_index === 'number'
+          ? getProgressKey(item.content_id, item.chapter_index)
+          : getProgressKey(item.content_id);
+        progressMap[key] = item;
       });
+
       const merged = { ...storedProgress, ...progressMap };
       setProgress(merged);
       writeStoredProgress(merged);
@@ -20380,50 +20471,24 @@ function StudentStudyContentPage({ user, studentData }) {
   };
 
   const openContent = async (item) => {
+    const nextChapter = getNextIncompleteChapter(item);
     setSelectedContent(item);
+    setActiveChapterIndex(nextChapter >= 0 ? nextChapter : 0);
     setShowContentModal(true);
 
-    const newProgress = {
-      ...progress,
-      [item.id]: {
-        ...progress[item.id],
-        student_id: studentData?.id,
-        content_id: item.id,
+    if (!hasChapters(item)) {
+      await saveProgressEntry(item.id, null, {
         progress_percentage: 100,
-        last_accessed_at: new Date().toISOString(),
-      },
-    };
-    setProgress(newProgress);
-    writeStoredProgress(newProgress);
-
-    if (supabase && studentData?.id) {
-      try {
-        const { error } = await supabase
-          .from('student_study_progress')
-          .upsert({
-            student_id: studentData.id,
-            content_id: item.id,
-            progress_percentage: 100, // Mark as read
-            last_accessed_at: new Date().toISOString(),
-          });
-
-        if (error) throw error;
-      } catch (error) {
-        console.warn('Progress saved locally due to Supabase restriction:', error);
-      }
+        completed: true,
+      });
     }
   };
 
-  const startQuiz = async (contentId) => {
-    const contentProgress = progress[contentId]?.progress_percentage || 0;
-    if (contentProgress < 100) {
-      alert('Please finish the lesson before taking the quiz.');
-      return;
-    }
+  const startQuiz = async (contentId, chapterIndex = null) => {
     if (!supabase) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('study_questions')
         .select(`
           *,
@@ -20432,13 +20497,25 @@ function StudentStudyContentPage({ user, studentData }) {
         .eq('content_id', contentId)
         .order('order_index');
 
+      if (typeof chapterIndex === 'number') {
+        query = query.eq('chapter_index', chapterIndex);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
-      setQuestions(data || []);
+      const quizQuestions = data || [];
+      if (quizQuestions.length === 0) {
+        alert('No quiz questions found for this chapter. Please ask the instructor to add chapter-specific questions.');
+        return;
+      }
+
+      setQuestions(quizQuestions);
       setShowQuiz(true);
       setQuizAnswers({});
       setQuizSubmitted(false);
       setQuizScore(0);
+      setQuizPassed(false);
     } catch (error) {
       console.error('Error loading questions:', error);
       alert('Failed to load quiz questions');
@@ -20449,54 +20526,69 @@ function StudentStudyContentPage({ user, studentData }) {
     if (!supabase || !studentData?.id || !selectedContent) return;
 
     let totalScore = 0;
-    let maxScore = 0;
+    let earnedScore = 0;
 
-    // Calculate score
-    questions.forEach(question => {
-      maxScore += question.points;
+    questions.forEach((question) => {
+      totalScore += question.points;
       const userAnswer = quizAnswers[question.id];
+      let questionCorrect = false;
 
       if (question.question_type === 'multiple_choice') {
-        const correctAnswer = question.study_answers?.find(a => a.is_correct);
-        if (correctAnswer && userAnswer === correctAnswer.id) {
-          totalScore += question.points;
-        }
+        const correctAnswer = question.study_answers?.find((a) => a.is_correct);
+        questionCorrect = correctAnswer && userAnswer === correctAnswer.id;
       } else if (question.question_type === 'true_false') {
-        if (userAnswer === question.correct_answer) {
-          totalScore += question.points;
-        }
-      } else {
-        // For short answer and essay, we'll need manual grading
-        // For now, just record the attempt
+        questionCorrect = userAnswer === question.correct_answer;
+      } else if (question.question_type === 'short_answer' || question.question_type === 'essay') {
+        questionCorrect = Boolean(userAnswer && String(userAnswer).trim());
+      }
+
+      if (questionCorrect) {
+        earnedScore += question.points;
       }
     });
 
-    setQuizScore(totalScore);
+    const passingScore = Math.ceil(totalScore * 0.7);
+    const passed = earnedScore >= passingScore;
+
+    setQuizScore(earnedScore);
     setQuizSubmitted(true);
+    setQuizPassed(passed);
 
-    // Save attempts to database
+    const progressEntry = {
+      completed: passed,
+      score: earnedScore,
+      progress_percentage: passed ? 100 : Math.round((earnedScore / Math.max(totalScore, 1)) * 100),
+    };
+
+    const chapterIndex = hasChapters(selectedContent) ? activeChapterIndex : null;
+    await saveProgressEntry(selectedContent.id, chapterIndex, progressEntry);
+
     try {
-      const attempts = questions.map(question => ({
-        student_id: studentData.id,
-        question_id: question.id,
-        answer_text: quizAnswers[question.id] || '',
-        is_correct: false, // Will be updated based on question type
-        points_earned: 0 // Will be updated
-      }));
+      const attempts = questions.map((question) => {
+        const userAnswer = quizAnswers[question.id] || '';
+        let isCorrect = false;
 
-      // For multiple choice, check correctness
-      attempts.forEach(attempt => {
-        const question = questions.find(q => q.id === attempt.question_id);
         if (question.question_type === 'multiple_choice') {
-          const correctAnswer = question.study_answers?.find(a => a.is_correct);
-          attempt.is_correct = correctAnswer && attempt.answer_text === correctAnswer.id;
-          attempt.points_earned = attempt.is_correct ? question.points : 0;
+          const correctAnswer = question.study_answers?.find((a) => a.is_correct);
+          isCorrect = correctAnswer && userAnswer === correctAnswer.id;
+        } else if (question.question_type === 'true_false') {
+          isCorrect = userAnswer === question.correct_answer;
+        } else if (question.question_type === 'short_answer' || question.question_type === 'essay') {
+          isCorrect = Boolean(userAnswer && String(userAnswer).trim());
         }
+
+        return {
+          student_id: studentData.id,
+          question_id: question.id,
+          answer_text: userAnswer,
+          is_correct: isCorrect,
+          points_earned: isCorrect ? question.points : 0,
+        };
       });
 
       const { error } = await supabase
         .from('student_question_attempts')
-        .insert(attempts);
+        .upsert(attempts, { onConflict: ['student_id', 'question_id'] });
 
       if (error) throw error;
     } catch (error) {
@@ -20536,8 +20628,7 @@ function StudentStudyContentPage({ user, studentData }) {
 
       <div className="tests-grid">
         {content.map((item) => {
-          const userProgress = progress[item.id];
-          const isCompleted = userProgress?.progress_percentage === 100;
+          const completed = isContentCompleted(item);
 
           return (
             <div key={item.id} className="test-card">
@@ -20557,10 +20648,13 @@ function StudentStudyContentPage({ user, studentData }) {
                 <div className="test-subject">Type: {item.content_type}</div>
                 {item.subject && <div className="test-subject">Subject: {item.subject}</div>}
                 {item.class_level && <div className="test-class">Class: {item.class_level}</div>}
+                {Array.isArray(item.chapters) && item.chapters.length > 0 && (
+                  <div className="test-subject">Chapters: {item.chapters.length}</div>
+                )}
                 <div className="test-duration">Read time: {item.estimated_read_time} min</div>
               </div>
               <div className="test-description">{item.description}</div>
-              {isCompleted && (
+              {completed && (
                 <div style={{ color: '#10b981', fontWeight: 'bold', marginBottom: '12px' }}>
                   ✓ Completed
                 </div>
@@ -20570,17 +20664,13 @@ function StudentStudyContentPage({ user, studentData }) {
                   className="btn btn-sm btn-blue"
                   onClick={() => openContent(item)}
                 >
-                  {isCompleted ? 'Review' : 'Read'}
+                  {completed ? 'Review' : 'Start'}
                 </button>
-                <button
-                  className="btn btn-sm btn-green"
-                  onClick={() => startQuiz(item.id)}
-                  disabled={!isCompleted}
-                  title={!isCompleted ? 'Finish the lesson first' : 'Take the quiz'}
-                  style={{ opacity: !isCompleted ? 0.65 : 1, cursor: !isCompleted ? 'not-allowed' : 'pointer' }}
-                >
-                  {isCompleted ? 'Take Quiz' : 'Finish Lesson'}
-                </button>
+                {Array.isArray(item.chapters) && item.chapters.length > 0 && (
+                  <div style={{ marginTop: 8, color: '#64748b', fontSize: '0.9rem' }}>
+                    Complete each chapter quiz in order.
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -20604,7 +20694,7 @@ function StudentStudyContentPage({ user, studentData }) {
             </div>
             <div className="modal-body">
               <div style={{ marginBottom: '20px' }}>
-                <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '16px' }}>
                   <span><strong>Type:</strong> {selectedContent.content_type}</span>
                   <span><strong>Subject:</strong> {selectedContent.subject || 'N/A'}</span>
                   <span><strong>Class:</strong> {selectedContent.class_level || 'N/A'}</span>
@@ -20613,17 +20703,86 @@ function StudentStudyContentPage({ user, studentData }) {
                 <p>{selectedContent.description}</p>
               </div>
 
-              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
-                <div dangerouslySetInnerHTML={{ __html: selectedContent.content }} />
-              </div>
+              {Array.isArray(selectedContent.chapters) && selectedContent.chapters.length > 0 ? (
+                <div>
+                  <div style={{ marginBottom: 20, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {selectedContent.chapters.map((chapter, index) => {
+                      const chapterCompleted = isChapterCompleted(selectedContent.id, index);
+                      const unlocked = index <= activeChapterIndex;
+                      return (
+                        <button
+                          key={index}
+                          type="button"
+                          className="btn btn-sm"
+                          disabled={!unlocked}
+                          onClick={() => setActiveChapterIndex(index)}
+                          style={{
+                            background: index === activeChapterIndex ? '#1d4ed8' : chapterCompleted ? '#10b981' : '#f3f4f6',
+                            color: index === activeChapterIndex || chapterCompleted ? '#fff' : '#0f172a',
+                            cursor: unlocked ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          Chapter {index + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginBottom: 12, color: '#64748b', fontSize: '0.95rem' }}>
+                    Complete the chapter quiz before moving to the next chapter.
+                  </div>
+                  <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 20 }}>
+                    <div style={{ marginBottom: 14, fontWeight: 700 }}>
+                      {selectedContent.chapters[activeChapterIndex].title || `Chapter ${activeChapterIndex + 1}`}
+                    </div>
+                    <div dangerouslySetInnerHTML={{ __html: selectedContent.chapters[activeChapterIndex].content || '<p>No chapter content available.</p>' }} />
+                  </div>
+                </div>
+              ) : (
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
+                  <div dangerouslySetInnerHTML={{ __html: selectedContent.content }} />
+                </div>
+              )}
             </div>
-            <div className="modal-footer">
-              <button
-                className="btn btn-blue"
-                onClick={() => startQuiz(selectedContent.id)}
-              >
-                Take Quiz
-              </button>
+            <div className="modal-footer" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              {Array.isArray(selectedContent.chapters) && selectedContent.chapters.length > 0 ? (
+                <>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      className="btn btn-blue"
+                      onClick={() => startQuiz(selectedContent.id, activeChapterIndex)}
+                      disabled={isChapterCompleted(selectedContent.id, activeChapterIndex)}
+                    >
+                      {isChapterCompleted(selectedContent.id, activeChapterIndex) ? 'Chapter Completed' : 'Take Chapter Quiz'}
+                    </button>
+                    <span style={{ color: '#64748b' }}>
+                      {isChapterCompleted(selectedContent.id, activeChapterIndex) ? 'Quiz passed' : 'Quiz required'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setActiveChapterIndex((prev) => Math.max(prev - 1, 0))}
+                      disabled={activeChapterIndex === 0}
+                    >
+                      Previous Chapter
+                    </button>
+                    <button
+                      className="btn btn-green"
+                      onClick={() => setActiveChapterIndex((prev) => Math.min(prev + 1, selectedContent.chapters.length - 1))}
+                      disabled={!isChapterCompleted(selectedContent.id, activeChapterIndex) || activeChapterIndex === selectedContent.chapters.length - 1}
+                    >
+                      Next Chapter
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  className="btn btn-blue"
+                  onClick={() => startQuiz(selectedContent.id)}
+                >
+                  Take Quiz
+                </button>
+              )}
               <button
                 className="btn btn-secondary"
                 onClick={() => setShowContentModal(false)}
@@ -20637,20 +20796,27 @@ function StudentStudyContentPage({ user, studentData }) {
 
       {/* Quiz Modal */}
       {showQuiz && (
-        <div className="modal-overlay" onClick={() => { setShowQuiz(false); setQuestions([]); }}>
+        <div className="modal-overlay" onClick={() => { setShowQuiz(false); setQuestions([]); setQuizAnswers({}); setQuizSubmitted(false); setQuizScore(0); setQuizPassed(false); }}>
           <div className="modal-content large-modal fullscreen-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Quiz: {selectedContent?.title}</h3>
-              <button className="modal-close" onClick={() => { setShowQuiz(false); setQuestions([]); }}>×</button>
+              <h3>
+                Quiz: {selectedContent?.title}
+                {Array.isArray(selectedContent?.chapters) && selectedContent.chapters.length > 0 ? ` — Chapter ${activeChapterIndex + 1}` : ''}
+              </h3>
+              <button className="modal-close" onClick={() => { setShowQuiz(false); setQuestions([]); setQuizAnswers({}); setQuizSubmitted(false); setQuizScore(0); setQuizPassed(false); }}>×</button>
             </div>
             <div className="modal-body">
               {!quizSubmitted ? (
                 <div>
                   <div style={{ marginBottom: '20px' }}>
-                    <p>Answer the following questions. You can retake this quiz anytime.</p>
+                    <p>Answer the following questions to unlock the next chapter.</p>
                   </div>
 
-                  {questions.map((question, index) => (
+                  {questions.length === 0 ? (
+                    <div style={{ color: '#7c3aed' }}>
+                      No quiz questions are available for this chapter. Please ask your instructor to add questions for this chapter.
+                    </div>
+                  ) : questions.map((question, index) => (
                     <div key={question.id} style={{ marginBottom: '24px', padding: '16px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
                       <div style={{ fontWeight: 'bold', marginBottom: '12px' }}>
                         Question {index + 1}: {question.question_text}
@@ -20719,7 +20885,7 @@ function StudentStudyContentPage({ user, studentData }) {
                   <button
                     className="btn btn-blue"
                     onClick={submitQuiz}
-                    disabled={Object.keys(quizAnswers).length < questions.length}
+                    disabled={questions.length === 0 || Object.keys(quizAnswers).length < questions.length}
                   >
                     Submit Quiz
                   </button>
@@ -20727,14 +20893,14 @@ function StudentStudyContentPage({ user, studentData }) {
               ) : (
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '2em', marginBottom: '16px' }}>
-                    {quizScore >= questions.reduce((sum, q) => sum + q.points, 0) * 0.7 ? '🎉' : '📚'}
+                    {quizPassed ? '🎉' : '📚'}
                   </div>
                   <h3>Quiz Completed!</h3>
                   <div style={{ fontSize: '1.2em', margin: '16px 0' }}>
                     Your Score: {quizScore} / {questions.reduce((sum, q) => sum + q.points, 0)} points
                   </div>
                   <div style={{ color: '#64748b', marginBottom: '24px' }}>
-                    {quizScore >= questions.reduce((sum, q) => sum + q.points, 0) * 0.7
+                    {quizPassed
                       ? 'Great job! You passed the quiz.'
                       : 'Keep studying and try again!'}
                   </div>
@@ -20748,6 +20914,8 @@ function StudentStudyContentPage({ user, studentData }) {
                       isCorrect = correctAnswer && userAnswer === correctAnswer.id;
                     } else if (question.question_type === 'true_false') {
                       isCorrect = userAnswer === question.correct_answer;
+                    } else {
+                      isCorrect = Boolean(userAnswer && String(userAnswer).trim());
                     }
 
                     return (
@@ -20779,7 +20947,7 @@ function StudentStudyContentPage({ user, studentData }) {
 
                   <button
                     className="btn btn-blue"
-                    onClick={() => { setShowQuiz(false); setQuestions([]); }}
+                    onClick={() => { setShowQuiz(false); setQuestions([]); setQuizAnswers({}); setQuizSubmitted(false); setQuizScore(0); setQuizPassed(false); }}
                   >
                     Close
                   </button>
